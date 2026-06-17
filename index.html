@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>塗装レシピ録 — Paint Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   塗装レシピ録 v2 — デザインシステム + アプリシェル（1ファイル完結）
+   ※ どんな開き方(ファイル直開き/サーバー)でも同じ表示になるよう、CSSはここに内蔵。
+   ============================================================================ */
+:root{
+  --paper:#FAFAF7; --ink:#1E2430; --sub:#67707F; --line:#C9CFD9; --line-d:#9AA3B2;
+  --bp:#2B4C9B; --bp-bg:#EDF1F9; --accent:#D8442E; --warn:#C8322A;
+  --card:#fff;
+  --topbar-h:52px; --bottomnav-h:60px; --maxw:480px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  background:#E7E7E2; color:var(--ink); line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit}
+
+/* アプリ列 */
+.app{position:relative; max-width:var(--maxw); margin:0 auto; background:var(--paper); min-height:100vh; box-shadow:0 0 0 1px var(--line)}
+
+/* 上バー */
+.topbar{
+  position:fixed; top:0; left:50%; transform:translateX(-50%); width:min(var(--maxw),100%);
+  height:var(--topbar-h); background:rgba(250,250,247,.93); backdrop-filter:saturate(1.3) blur(8px);
+  display:flex; align-items:center; gap:11px; padding:0 12px; z-index:40;
+  transition:box-shadow .2s;
+}
+.topbar.scrolled{box-shadow:0 2px 10px rgba(20,24,32,.06)}
+.avatar-btn{
+  width:34px; height:34px; border-radius:50%; border:1px solid var(--line-d); background:var(--bp-bg);
+  color:var(--bp); font-weight:700; font-size:.95rem; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex:none; padding:0;
+}
+.brand{display:flex; flex-direction:column; line-height:1.05}
+.brand .name{font-size:1rem; font-weight:700; letter-spacing:.05em; display:flex; align-items:center; gap:7px}
+.brand .name::before{content:""; width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
+.brand .tag{font-size:.55rem; letter-spacing:.3em; color:var(--sub); text-transform:uppercase; margin-left:17px}
+.bell-btn{
+  margin-left:auto; width:38px; height:38px; border-radius:50%; border:1px solid var(--line);
+  background:#fff; color:var(--sub); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex:none; padding:0;
+}
+.bell-btn svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7}
+
+/* PC左サイドバー（既定は非表示／PCのみ表示。スタイルはmin-width:900px内） */
+.sidebar{display:none}
+
+/* ビュー領域 */
+.view{padding:calc(var(--topbar-h) + 16px) 14px calc(var(--bottomnav-h) + 30px)}
+.view-title{font-size:1.2rem; margin:0 0 2px; letter-spacing:.03em}
+.view-sub{font-size:.78rem; color:var(--sub); margin:0 0 18px}
+.block{margin:0 0 24px}
+.block > h3{font-size:.92rem; margin:0 0 10px; display:flex; align-items:center; gap:8px}
+.block > h3::before{content:""; width:4px; height:14px; background:var(--accent); flex:none; border-radius:1px}
+
+/* 検索欄 */
+.searchbox{display:flex; align-items:center; gap:9px; border:1px solid var(--line); background:#fff; padding:11px 16px; margin-bottom:22px; margin-top:2px; border-radius:24px}
+.searchbox svg{width:19px; height:19px; stroke:var(--sub); fill:none; stroke-width:1.8; flex:none}
+.searchbox input{border:none; outline:none; font:inherit; width:100%; background:transparent; color:var(--ink)}
+
+/* 仮メッセージ枠 */
+.note-box{border:1px dashed var(--line-d); background:#fff; padding:16px; font-size:.83rem; color:var(--sub); border-radius:14px}
+.note-box strong{color:var(--ink)}
+
+/* おすすめカルーセル */
+.card-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch}
+.card-row::-webkit-scrollbar{display:none}
+.reco-card{flex:none; width:208px; cursor:pointer}
+.reco-thumb{
+  width:100%; aspect-ratio:16/9; border-radius:14px; overflow:hidden;
+  background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px);
+  display:flex; align-items:center; justify-content:center;
+}
+.reco-thumb img{width:100%; height:100%; object-fit:cover; display:block}
+.reco-thumb .ph-ico{font-size:1.7rem; color:var(--line-d)}
+.reco-title{font-size:.86rem; font-weight:700; margin-top:7px; line-height:1.35}
+.reco-author{font-size:.72rem; color:var(--sub); margin-top:1px}
+.dots{display:flex; gap:6px; justify-content:center; margin-top:12px}
+.dot{width:7px; height:7px; border-radius:50%; background:var(--line); transition:background .2s, transform .2s}
+.dot.on{background:var(--accent); transform:scale(1.25)}
+
+/* 人気の塗装方法（画像メイン・左下ラベル・枠なし） */
+.cat-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+.cat-tile{
+  position:relative; width:100%; aspect-ratio:4/3; border:none; padding:0; cursor:pointer;
+  border-radius:14px; overflow:hidden; display:block;
+  background:repeating-linear-gradient(45deg,#E9ECF2,#E9ECF2 9px,#DFE3EB 9px,#DFE3EB 18px);
+}
+.cat-tile img{width:100%; height:100%; object-fit:cover; display:block}
+.cat-tile .cat-label{
+  position:absolute; left:0; right:0; bottom:0; padding:22px 12px 10px; text-align:left;
+  background:linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0));
+  color:#fff; font-weight:700; font-size:.9rem; line-height:1.25;
+}
+
+/* 人気の塗料（よく使われる塗料を使った投稿を写真で引用） */
+.paint-grid{display:flex; gap:12px; overflow-x:auto; padding-bottom:4px}
+.paint-grid::-webkit-scrollbar{display:none}
+.paint-post{
+  flex:none; width:150px; border:none; background:none; padding:0; text-align:left; cursor:pointer;
+}
+.pp-thumb{
+  width:100%; aspect-ratio:1/1; border-radius:14px; overflow:hidden;
+  background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px);
+  display:flex; align-items:center; justify-content:center;
+}
+.pp-thumb img{width:100%; height:100%; object-fit:cover; display:block}
+.pp-thumb .ph-ico{font-size:1.6rem; color:var(--line-d)}
+.pp-cap{font-size:.82rem; font-weight:700; margin-top:7px; line-height:1.3}
+.pp-sub{font-size:.7rem; color:var(--sub); margin-top:1px}
+
+/* 下タブ */
+.bottomnav{
+  position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:min(var(--maxw),100%);
+  height:calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);
+  background:#fff; display:flex; z-index:40; transition:box-shadow .2s;
+}
+.bottomnav.scrolled{box-shadow:0 -1px 10px rgba(20,24,32,.07)}
+.nav-item{flex:1; border:none; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; color:var(--sub); font-size:.62rem; cursor:pointer; padding:7px 0}
+.nav-item svg{width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:1.7}
+.nav-item.active{color:var(--ink)}
+.nav-item.active svg{stroke:var(--accent)}
+.nav-plus{justify-content:flex-start; padding-top:5px}
+.plus-circle{width:46px; height:46px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; box-shadow:0 3px 9px rgba(216,68,46,.38)}
+.plus-circle svg{width:26px; height:26px; stroke:#fff; fill:none; stroke-width:2.3}
+.nav-plus .lbl{margin-top:2px}
+
+/* ドロワー */
+.scrim{position:fixed; inset:0; background:rgba(20,24,32,.45); opacity:0; pointer-events:none; transition:opacity .2s; z-index:50}
+.scrim.show{opacity:1; pointer-events:auto}
+.drawer{
+  position:fixed; top:0; left:0; width:min(312px,82%); height:100%; background:var(--paper);
+  border-right:1px solid var(--line-d); z-index:60; transform:translateX(-100%); transition:transform .22s ease;
+  display:flex; flex-direction:column; overflow-y:auto;
+}
+.drawer.show{transform:translateX(0)}
+.drawer-head{padding:24px 18px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px}
+.drawer-head .av{width:48px; height:48px; border-radius:50%; background:var(--bp-bg); color:var(--bp); font-weight:700; font-size:1.1rem; display:flex; align-items:center; justify-content:center; border:1px solid var(--line-d); flex:none}
+.drawer-head .who .n{font-weight:700}
+.drawer-head .who .s{font-size:.74rem; color:var(--sub)}
+.drawer-list{padding:6px 0; flex:1}
+.drawer-list button{width:100%; text-align:left; background:none; border:none; padding:13px 18px; font:inherit; font-size:.92rem; color:var(--ink); cursor:pointer}
+.drawer-list button:hover{background:var(--bp-bg)}
+.drawer-foot{padding:14px 18px; border-top:1px solid var(--line); font-size:.68rem; color:var(--sub); line-height:1.5}
+
+/* 全画面ビュー(legacy iframe / 空ページ) */
+.fullview{
+  position:fixed; top:0; bottom:0; left:50%; transform:translateX(-50%);
+  width:min(var(--maxw),100%); background:var(--paper); z-index:80;
+  display:flex; flex-direction:column;
+}
+.fullview[hidden]{display:none}
+.fullview-bar{
+  height:var(--topbar-h); flex:none; display:flex; align-items:center; gap:10px; padding:0 10px;
+  border-bottom:1px solid var(--line); background:rgba(250,250,247,.96);
+}
+.fv-back{
+  border:1px solid var(--line); background:#fff; color:var(--ink); font:inherit; font-size:.85rem;
+  padding:7px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; flex:none;
+}
+.fv-title{font-size:.92rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.fullview-body{flex:1; overflow:auto; position:relative}
+.fullview-body iframe{position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff}
+
+/* 空ページ */
+.stub{padding:32px 22px}
+.stub h2{font-size:1.15rem; margin:0 0 8px}
+.stub p{font-size:.86rem; color:var(--sub); margin:0}
+
+/* ============================================================================
+   PC（デスクトップ）レイアウト — クックパッドPC風。横長ヘッダー＋多段カラム。
+   下タブは非表示にし、ナビと検索をヘッダーへ。コンテンツを横に広げる。
+   ============================================================================ */
+@media (min-width:900px){
+  body{background:#fff}
+  .app{max-width:none; background:#fff; box-shadow:none}
+
+  /* モバイル用の上バー・下タブ・本文内検索は隠す */
+  .topbar{display:none}
+  .bottomnav{display:none}
+  #screen-discover > .searchbox{display:none}
+
+  /* 左サイドバー（クックパッドPC風） */
+  .sidebar{
+    display:flex; flex-direction:column; gap:5px;
+    position:fixed; top:0; left:0; bottom:0; width:232px; padding:18px 14px;
+    background:#fff; border-right:1px solid var(--line); z-index:40;
+  }
+  .sb-logo{display:flex; align-items:center; gap:8px; font-weight:700; font-size:1.12rem; padding:6px 8px 14px}
+  .sb-logo .dot{width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
+  .sb-search{display:flex; align-items:center; gap:8px; background:#F1F1ED; border:1px solid var(--line); border-radius:22px; padding:9px 14px; margin-bottom:10px}
+  .sb-search svg{width:17px; height:17px; stroke:var(--sub); fill:none; stroke-width:1.8; flex:none}
+  .sb-search input{border:none; outline:none; background:transparent; font:inherit; width:100%; color:var(--ink)}
+  .sb-nav{display:flex; flex-direction:column; gap:4px}
+  .sb-item{display:flex; align-items:center; gap:12px; border:none; background:none; font:inherit; font-size:.95rem; font-weight:700; color:var(--sub); padding:11px 12px; border-radius:10px; cursor:pointer; text-align:left; text-decoration:none}
+  .sb-item svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; flex:none}
+  .sb-item:hover{background:var(--bp-bg); color:var(--ink)}
+  .sb-item.active{color:var(--ink); background:var(--bp-bg)}
+  .sb-item.active svg{stroke:var(--accent)}
+  .sb-create{color:#fff; background:var(--accent)}
+  .sb-create:hover{color:#fff; background:#c23c2a}
+  .sb-create svg{stroke:#fff}
+  .sb-account{margin-top:auto; display:flex; align-items:center; gap:10px; border:none; background:none; font:inherit; font-weight:700; color:var(--ink); padding:10px 12px; border-radius:10px; cursor:pointer}
+  .sb-account:hover{background:var(--bp-bg)}
+  .sb-av{width:30px; height:30px; border-radius:50%; background:var(--bp-bg); color:var(--bp); border:1px solid var(--line-d); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.85rem; flex:none}
+
+  /* コンテンツはサイドバー分ずらして全幅。グリッドは幅に応じ列数自動増加 */
+  .view{max-width:none; margin-left:232px; padding:30px 36px 72px}
+  .block{margin-bottom:36px}
+  .block > h3{font-size:1.05rem; margin-bottom:16px}
+  .reco-card{width:320px}
+  .cat-grid{grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:20px}
+  .paint-post{width:200px}
+
+  /* 全画面ビュー（準備中スタブ）もサイドバー分ずらす */
+  .fullview{width:auto; left:232px; right:0; transform:none}
+  .fullview-bar{padding:0 30px}
+}
+
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 左サイドバー（PCのみ表示。クックパッドPC風） -->
+  <aside class="sidebar">
+    <div class="sb-logo"><span class="dot"></span>塗装レシピ録</div>
+    <div class="sb-search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" placeholder="探す">
+    </div>
+    <nav class="sb-nav">
+      <button class="sb-item" data-tab="discover">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>探す</span>
+      </button>
+      <button class="sb-item sb-create" id="sbCreate">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>作る</span>
+      </button>
+      <button class="sb-item" data-tab="records">
+        <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg><span>記録</span>
+      </button>
+    </nav>
+    <button class="sb-account" id="sbAccount"><span class="sb-av">K</span><span>ゲスト</span></button>
+  </aside>
+
+  <!-- 上バー（モバイルのみ） -->
+  <header class="topbar">
+    <button class="avatar-btn" id="avatarBtn" aria-label="メニュー">K</button>
+    <div class="brand">
+      <span class="name">塗装レシピ録</span>
+      <span class="tag">Paint Log</span>
+    </div>
+    <button class="bell-btn" id="bellBtn" aria-label="通知">
+      <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>
+    </button>
+  </header>
+
+  <!-- 探す（起動時デフォルト） -->
+  <main class="view" id="screen-discover">
+    <div class="searchbox">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="searchInput" placeholder="作品・塗料・塗装方法を探す" enterkeyhint="search">
+    </div>
+    <section class="block">
+      <h3>おすすめ</h3>
+      <div class="card-row" id="recoRow"></div>
+      <div class="dots" id="recoDots"></div>
+    </section>
+    <section class="block">
+      <h3>人気の塗装方法</h3>
+      <div class="cat-grid" id="catGrid"></div>
+    </section>
+    <section class="block">
+      <h3>人気の塗料</h3>
+      <div class="paint-grid" id="paintGrid"></div>
+    </section>
+  </main>
+
+  <!-- 記録 -->
+  <main class="view" id="screen-records" hidden>
+    <h2 class="view-title">記録</h2>
+    <p class="view-sub">自分が保存・作成したレシピ</p>
+    <div class="note-box">
+      まだ記録がありません。下の <strong>＋</strong> から新しく作るか、気に入った作品を保存するとここに並びます。
+    </div>
+  </main>
+
+  <!-- 下タブ -->
+  <nav class="bottomnav">
+    <button class="nav-item active" data-tab="discover">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span>探す</span>
+    </button>
+    <button class="nav-item nav-plus" id="plusBtn" aria-label="レシピを作る">
+      <span class="plus-circle"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span class="lbl">作る</span>
+    </button>
+    <button class="nav-item" data-tab="records">
+      <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg>
+      <span>記録</span>
+    </button>
+  </nav>
+
+  <!-- ドロワー -->
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="av">K</div>
+      <div class="who"><div class="n">ゲスト</div><div class="s">ログインしていません</div></div>
+    </div>
+    <div class="drawer-list" id="drawerList"></div>
+    <div class="drawer-foot">塗装レシピ録 v2 — 骨組み版<br>記載の商品名は各社の商標です。</div>
+  </aside>
+
+  <!-- 全画面ビュー（編集/閲覧/とは=legacy, 空ページ） -->
+  <div class="fullview" id="fullview" hidden>
+    <header class="fullview-bar">
+      <button class="fv-back" id="fvBack">← 戻る</button>
+      <span class="fv-title" id="fvTitle"></span>
+    </header>
+    <div class="fullview-body" id="fullviewBody"></div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================================
+   塗装レシピ録 v2 — アプリシェルのロジック（モジュール不使用＝どこでも動く）
+   ログイン/DB無し。表示は下の MOCK 仮データのみ。差替えは MOCK だけ直せばよい。
+   ============================================================================ */
+"use strict";
+
+/* ----------------------------- 仮データ(MOCK) ----------------------------- */
+var MOCK = {
+  // おすすめ（みんなの作品）。cardImg は将来「X共有用カード画像」に差し替える。
+  recommendedWorks: [
+    { id:"w1", title:"RX-78-2 ガンダム",        author:"Ku-xii",      cardImg:null },
+    { id:"w2", title:"ザクII シャア専用",       author:"Ku-xii",      cardImg:null },
+    { id:"w3", title:"サザビー キャンディ塗装", author:"ともだち作例", cardImg:null },
+    { id:"w4", title:"ナイチンゲール",          author:"Ku-xii",      cardImg:null },
+    { id:"w5", title:"ウイングガンダムゼロ",    author:"ともだち作例", cardImg:null },
+    { id:"w6", title:"百式 ゴールド仕上げ",     author:"Ku-xii",      cardImg:null }
+  ],
+  // 人気の塗装方法（カテゴリ）。メインは画像。img は後で代表作の写真URLに差し替える。
+  popularCategories: [
+    { id:"c_grad",    label:"グラデーション塗装",       img:null },
+    { id:"c_candy_r", label:"キャンディ塗装 レッド編", img:null },
+    { id:"c_candy_b", label:"キャンディ塗装 ブルー編", img:null },
+    { id:"c_wrap",    label:"ラップ塗装",               img:null },
+    { id:"c_marble",  label:"大理石塗装",               img:null },
+    { id:"c_weather", label:"ウェザリング",             img:null }
+  ],
+  // 人気の塗料：よく使われる塗料を集計し、それを使った投稿を写真で引用する。
+  // img は後でその塗料を使った代表投稿の写真URLに差し替える。
+  popularPaints: [
+    { id:"pt_cdbb41608b8b", brand:"Mr.カラー",     code:"C3",   name:"レッド",         img:null },
+    { id:"pt_xx_surfacer",  brand:"ガイアノーツ",  code:"",     name:"サーフェイサー", img:null },
+    { id:"pt_c1b34f30d474", brand:"Mr.カラー",     code:"C5",   name:"ブルー",         img:null },
+    { id:"pt_bc0ef62b3654", brand:"Mr.カラー",     code:"C8",   name:"シルバー",       img:null },
+    { id:"pt_e2243770195b", brand:"Mr.カラー",     code:"C9",   name:"ゴールド",       img:null },
+    { id:"pt_clear_red",    brand:"Mr.カラー",     code:"C47",  name:"クリアーレッド", img:null }
+  ],
+  // ドロワー項目。kind:"legacy"=legacy.htmlを開く / "stub"=空ページ枠。
+  drawerItems: [
+    { id:"profile",  label:"プロフィール",         kind:"stub" },
+    { id:"about",    label:"塗装レシピ録とは",     kind:"legacy", hash:"#about" },
+    { id:"settings", label:"設定",                 kind:"stub" },
+    { id:"help",     label:"ヘルプ",               kind:"stub" },
+    { id:"feedback", label:"意見を送る",           kind:"stub" },
+    { id:"privacy",  label:"プライバシーポリシー", kind:"stub" }
+  ]
+};
+
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); };
+
+/* ----------------------------- 下タブ切替 ----------------------------- */
+var screens = { discover: $("screen-discover"), records: $("screen-records") };
+function showTab(tab){
+  for (var key in screens) screens[key].hidden = (key !== tab);
+  var items = document.querySelectorAll("[data-tab]");   // 下タブ＋PCヘッダーナビ両方
+  for (var i=0;i<items.length;i++) items[i].classList.toggle("active", items[i].dataset.tab === tab);
+  window.scrollTo(0,0);
+}
+(function(){
+  var items = document.querySelectorAll("[data-tab]");
+  for (var i=0;i<items.length;i++)(function(b){ b.addEventListener("click", function(){ showTab(b.dataset.tab); }); })(items[i]);
+})();
+
+/* ----------------------------- 全画面ビュー ----------------------------- */
+var fullview = $("fullview"), fullviewBody = $("fullviewBody");
+// 編集/閲覧/とは は legacy.html へ「全画面で普通に遷移」する。
+// iframe埋め込みは iOS Safari や file:// で開けない（画面が出ない）不具合があるため使わない。
+// クックパッドも編集は独立した1ページ。戻るは legacy.html 側の「← 戻る」で index.html へ。
+function openLegacy(title, hash){
+  window.location.href = "legacy.html" + hash;
+}
+function openStub(title){
+  $("fvTitle").textContent = title;
+  fullviewBody.innerHTML = '<div class="stub"><h2>'+esc(title)+'</h2>'+
+    '<p>このページは準備中です。骨組みの枠だけ用意しています（後で中身を作ります）。</p></div>';
+  fullview.hidden = false;
+}
+function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; }
+$("fvBack").addEventListener("click", closeFull);
+$("plusBtn").addEventListener("click", function(){ openLegacy("レシピを作る", "#edit"); });
+var sbCreate = $("sbCreate");
+if (sbCreate) sbCreate.addEventListener("click", function(){ openLegacy("レシピを作る", "#edit"); });
+
+/* ----------------------------- ドロワー ----------------------------- */
+var drawer = $("drawer"), scrim = $("scrim");
+function openDrawer(){ drawer.classList.add("show"); scrim.classList.add("show"); drawer.setAttribute("aria-hidden","false"); }
+function closeDrawer(){ drawer.classList.remove("show"); scrim.classList.remove("show"); drawer.setAttribute("aria-hidden","true"); }
+$("avatarBtn").addEventListener("click", openDrawer);
+var sbAccount = $("sbAccount");
+if (sbAccount) sbAccount.addEventListener("click", openDrawer);
+scrim.addEventListener("click", closeDrawer);
+$("bellBtn").addEventListener("click", function(){ openStub("通知"); });
+
+function renderDrawer(){
+  var list = $("drawerList"); list.innerHTML = "";
+  MOCK.drawerItems.forEach(function(item){
+    var b = document.createElement("button");
+    b.textContent = item.label;
+    b.addEventListener("click", function(){
+      closeDrawer();
+      if (item.kind === "legacy") openLegacy(item.label, item.hash);
+      else openStub(item.label);
+    });
+    list.appendChild(b);
+  });
+}
+
+/* ----------------------------- 探す画面の描画 ----------------------------- */
+function renderReco(){
+  var row = $("recoRow"), dots = $("recoDots");
+  row.innerHTML = ""; dots.innerHTML = "";
+  MOCK.recommendedWorks.forEach(function(w, i){
+    var card = document.createElement("div");
+    card.className = "reco-card";
+    var thumb = w.cardImg
+      ? '<div class="reco-thumb"><img src="'+esc(w.cardImg)+'" alt=""></div>'
+      : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
+    card.innerHTML = thumb + '<div class="reco-title">'+esc(w.title)+'</div><div class="reco-author">'+esc(w.author)+'</div>';
+    // 作品はまだ仮データ（実レシピ無し）。空の閲覧ページは崩れるので今は準備中スタブ。
+    card.addEventListener("click", function(){ openStub(w.title + "（作品ページは準備中）"); });
+    row.appendChild(card);
+    var dot = document.createElement("span");
+    dot.className = "dot" + (i === 0 ? " on" : "");
+    dots.appendChild(dot);
+  });
+  startCarousel(row, dots);
+}
+function renderCategories(){
+  var grid = $("catGrid"); grid.innerHTML = "";
+  MOCK.popularCategories.forEach(function(c){
+    var b = document.createElement("button");
+    b.className = "cat-tile";
+    var img = c.img ? '<img src="'+esc(c.img)+'" alt="">' : '';
+    b.innerHTML = img + '<span class="cat-label">'+esc(c.label)+'</span>';
+    b.addEventListener("click", function(){ openStub(c.label); });
+    grid.appendChild(b);
+  });
+}
+function renderPaints(){
+  var grid = $("paintGrid"); grid.innerHTML = "";
+  MOCK.popularPaints.forEach(function(p){
+    var card = document.createElement("button");
+    card.className = "paint-post";
+    var thumb = p.img
+      ? '<span class="pp-thumb"><img src="'+esc(p.img)+'" alt=""></span>'
+      : '<span class="pp-thumb"><span class="ph-ico">🖼</span></span>';
+    var label = (p.code ? p.code + " " : "") + p.name;
+    card.innerHTML = thumb + '<div class="pp-cap">'+esc(label)+'</div>'+
+      '<div class="pp-sub">'+esc(p.brand)+' を使った作品</div>';
+    card.addEventListener("click", function(){ openStub(p.brand+" "+label); });
+    grid.appendChild(card);
+  });
+}
+
+/* ----------------------------- カルーセル ----------------------------- */
+function startCarousel(row, dots){
+  var cards = Array.prototype.slice.call(row.children);
+  if (cards.length === 0) return;
+  var base = cards[0].offsetLeft;
+  var index = 0, timer = null, idle = null;
+  function setDots(i){
+    var ds = dots.querySelectorAll(".dot");
+    for (var k=0;k<ds.length;k++) ds[k].classList.toggle("on", k === i);
+  }
+  function go(i){
+    index = (i + cards.length) % cards.length;
+    row.scrollTo({ left: cards[index].offsetLeft - base, behavior:"smooth" });
+    setDots(index);
+  }
+  function start(){ stop(); timer = setInterval(function(){ go(index+1); }, 2800); }
+  function stop(){ if (timer) clearInterval(timer); timer = null; }
+  row.addEventListener("scroll", function(){
+    var step = cards[1] ? (cards[1].offsetLeft - base) : 1;
+    var near = Math.round(row.scrollLeft / step);
+    index = Math.max(0, Math.min(cards.length - 1, near));
+    setDots(index);
+    stop(); clearTimeout(idle); idle = setTimeout(start, 1600);
+  }, { passive:true });
+  start();
+}
+
+/* --------------- スクロール時に上下バーへ極薄の影（横線の代わり） --------------- */
+(function(){
+  var topbar = document.querySelector(".topbar");
+  var bottomnav = document.querySelector(".bottomnav");
+  function onScroll(){
+    var y = window.scrollY || document.documentElement.scrollTop || 0;
+    var on = y > 4;
+    topbar.classList.toggle("scrolled", on);
+    bottomnav.classList.toggle("scrolled", on);
+  }
+  window.addEventListener("scroll", onScroll, { passive:true });
+  onScroll();
+})();
+
+/* ----------------------------- 起動 ----------------------------- */
+renderDrawer();
+renderReco();
+renderCategories();
+renderPaints();
+// 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
+(function(){
+  var h = (location.hash || "").replace("#","");
+  showTab(h === "records" ? "records" : "discover");
+})();
+</script>
+</body>
+</html>
