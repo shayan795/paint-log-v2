@@ -409,11 +409,21 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #cardImageCard{display:none}
 
 /* 写真ボタンをカメラアイコン化 */
-.ico-cam{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.ico-cam{width:20px;height:20px;stroke:var(--line-d);fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex:none}  /* 写真マークは薄いグレー */
 #editMode .photo-add{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:10px 14px;line-height:1.2}   /* 作品情報：アイコン上＋「写真を追加」下 */
 #editMode .photo-add .ico-cam{width:24px;height:24px}
 #editMode .rowphoto-add{display:inline-flex;align-items:center;justify-content:center;padding:6px 9px}                       /* 行の写真：アイコンのみ */
 #editMode .rowphoto-add .ico-cam{width:18px;height:18px}
+
+/* スマホ：塗装レシピカードの各枠を角丸に */
+@media(max-width:640px){
+  #recipeTable tr{border-radius:12px;overflow:hidden}              /* 大枠（色グループのカード） */
+  #editMode #recipeTable td.part input{border-radius:8px}         /* 色グループ名の枠 */
+  #editMode .part-comment{border-radius:8px}                      /* コメントの枠 */
+  #editMode .rowphoto-add{border-radius:8px}                      /* 画像添付の点線枠 */
+}
+/* about：塗装レシピ録ロゴ下の黒い横線を排除（CTAは残す） */
+#aboutMode .about-hero{border-bottom:none}
 
 /* 塗料ピッカーのボタン：主要ボタンを赤・全ボタン角丸 */
 .picker .actions button{border-radius:8px}
@@ -542,6 +552,12 @@ body{background-image:none}
   <div class="about-sec">
     <h3>データの扱い</h3>
     <p>「共有」するとレシピと写真がオンラインに保存され、短いURLが発行されます。そのURLを知っている人は誰でも閲覧できます（ログイン不要）。</p>
+  </div>
+  <div class="v-cta">
+    <div style="font-size:.72rem;letter-spacing:.14em;color:#9AA3B2;margin-bottom:4px">PAINTLOG</div>
+    <div style="font-weight:700;font-size:1rem">塗料を、記録する。</div>
+    <p>使った塗料を残せる、プラモデル・模型の塗装レシピツール</p>
+    <button id="aboutGotoCreate">自分のレシピを作る — 無料</button>
   </div>
 </div>
 
@@ -2144,6 +2160,7 @@ document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => showPag
 var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
 var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
+var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
