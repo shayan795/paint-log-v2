@@ -382,7 +382,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #editMode .note{font-size:.72rem; color:var(--line-d)}
 
 /* モードタブ：アクティブは薄赤 */
-#editMode .modetabs{gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; width:max-content; margin-bottom:24px}
+#editMode .modetabs{gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; width:max-content; margin:6px auto 24px}  /* 中央寄せ */
 #editMode .modetab{flex:none; border:none; border-radius:0; padding:9px 22px; font-size:.88rem; background:#fff; color:var(--sub)}
 #editMode .modetab.active{background:#FBEAE7; color:#C0392B}
 
@@ -410,7 +410,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 
 /* 写真ボタンをカメラアイコン化 */
 .ico-cam{width:20px;height:20px;stroke:var(--line-d);fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex:none}  /* 写真マークは薄いグレー */
-#editMode .photo-add{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:10px 14px;line-height:1.2}   /* 作品情報：アイコン上＋「写真を追加」下 */
+#editMode .photo-add{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:10px 14px;line-height:1.2;border:1px solid var(--line);color:var(--line-d)}   /* 作品情報：アイコン上＋「写真を追加」下。枠・文字とも薄く */
 #editMode .photo-add .ico-cam{width:24px;height:24px}
 #editMode .rowphoto-add{display:inline-flex;align-items:center;justify-content:center;padding:6px 9px}                       /* 行の写真：アイコンのみ */
 #editMode .rowphoto-add .ico-cam{width:18px;height:18px}
@@ -429,6 +429,11 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .picker .actions button{border-radius:8px}
 #pickerCustom{background:#CC6B60;border-color:#CC6B60;color:#fff}
 #pickerCustom:hover{background:#BE5C51}
+/* 検索欄：フォーカス時の青い枠を消し、角丸に */
+#pickerSearch{border-radius:8px}
+#pickerSearch:focus{outline:none;border-color:var(--line-d)}
+/* 「このセルを空にする」を「閉じる」と同じ薄いグレーに */
+#pickerClear{border-color:var(--line-d);color:var(--sub)}
 
 /* 「とは」ページ：メイン風の上バー（アバター左＋ベル右）。モバイルのみ。❌バー(確認)は出さない */
 .about-topbar{display:none}
@@ -440,6 +445,13 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .about-topbar .ab-avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-d);background:var(--bp-bg);color:var(--bp);font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
 .about-topbar .ab-bell{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
 .about-topbar .ab-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+/* 編集/閲覧の上バー：アバター左・❌・ベル右（❌とベルを右に寄せる） */
+.l-topbar .lt-avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-d);background:var(--bp-bg);color:var(--bp);font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.l-topbar{gap:8px}
+.l-topbar .l-close{margin-left:auto}
+.l-topbar .lt-bell{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.l-topbar .lt-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
 
 /* 編集終了ダイアログ */
 .exit-overlay{position:fixed;inset:0;background:rgba(20,26,40,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:90}
@@ -475,8 +487,9 @@ body{background-image:none}
 
 <!-- v2: モバイル用 ❌ バー（メインへ戻る。三本線の代わり）。空なら確認なし／内容ありはダイアログ -->
 <header class="l-topbar">
+  <button class="lt-avatar" id="ltAvatar" aria-label="メニュー">K</button>
   <button class="l-close" id="lClose" aria-label="閉じる" onclick="exitEditor()">×</button>
-  <span class="l-title">塗装レシピ録</span>
+  <button class="lt-bell" id="ltBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
 </header>
 
 <!-- v2: 編集終了ダイアログ（入力がある時だけ表示） -->
@@ -614,7 +627,7 @@ body{background-image:none}
     <textarea id="memo" rows="4" placeholder="例: フレームはガンメタル一発塗りで省エネ仕上げ。"></textarea>
   </div>
   <div style="margin-top:12px">
-    <label>完成写真(最大2枚・任意・端末内でのみ処理されます)</label>
+    <label style="font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:4px;display:block">サムネイル画像 <span style="font-weight:400;color:var(--sub);font-size:.76rem">— 最大2枚・任意・端末内でのみ処理</span></label>
     <div class="photobox" id="photobox">
       <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
       <button class="small photo-add" id="photoBtn"><svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg><span>写真を追加</span></button>
@@ -2161,6 +2174,9 @@ var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _ab
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
 var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
 var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
+// 編集/閲覧の上バー：アバター→メイン（未保存確認あり）、ベル→スタブ
+var _ltAvatar = document.getElementById("ltAvatar"); if (_ltAvatar) _ltAvatar.onclick = () => exitEditor();
+var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => alert("通知はまだ準備中です。");
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
