@@ -108,6 +108,9 @@ button{font-family:inherit}
   background:linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0));
   color:#fff; font-weight:700; font-size:.9rem; line-height:1.25;
 }
+.cat-hidden{display:none}
+.more-btn{display:block; margin:14px auto 0; background:none; border:1px solid var(--line); border-radius:20px; padding:8px 24px; font:inherit; font-size:.85rem; font-weight:700; color:var(--ink); cursor:pointer}
+.more-btn:hover{border-color:var(--ink)}
 
 /* 人気の塗料（よく使われる塗料を使った投稿を写真で引用） */
 .paint-grid{display:flex; gap:12px; overflow-x:auto; padding-bottom:4px}
@@ -289,6 +292,11 @@ button{font-family:inherit}
     <section class="block">
       <h3>人気の塗装方法</h3>
       <div class="cat-grid" id="catGrid"></div>
+      <button class="more-btn" id="catMore" style="display:none">もっと見る</button>
+    </section>
+    <section class="block">
+      <h3>今話題の塗料作例</h3>
+      <div class="cat-grid" id="trendGrid"></div>
     </section>
     <section class="block">
       <h3>人気の塗料</h3>
@@ -368,7 +376,20 @@ var MOCK = {
     { id:"c_candy_b", label:"キャンディ塗装 ブルー編", img:null },
     { id:"c_wrap",    label:"ラップ塗装",               img:null },
     { id:"c_marble",  label:"大理石塗装",               img:null },
-    { id:"c_weather", label:"ウェザリング",             img:null }
+    { id:"c_weather", label:"ウェザリング",             img:null },
+    { id:"c_brush",   label:"筆塗り塗装",               img:null },
+    { id:"c_metal",   label:"メタリック塗装",           img:null },
+    { id:"c_matte",   label:"つや消し仕上げ",           img:null },
+    { id:"c_mask",    label:"マスキング塗り分け",       img:null }
+  ],
+  // 今話題の塗料作例（画像タイル形式・人気の塗装方法と同じ見た目）
+  trendingWorks: [
+    { id:"t1", label:"ガイア Exシルバーの輝き",   img:null },
+    { id:"t2", label:"GX クリアレッドキャンディ", img:null },
+    { id:"t3", label:"ファレホ 筆塗り迷彩",       img:null },
+    { id:"t4", label:"Mr.カラー 焼鉄色の表現",    img:null },
+    { id:"t5", label:"ガンダムマーカー 部分塗装", img:null },
+    { id:"t6", label:"つや消しトップコート作例",  img:null }
   ],
   // 人気の塗料：よく使われる塗料を集計し、それを使った投稿を写真で引用する。
   // img は後でその塗料を使った代表投稿の写真URLに差し替える。
@@ -384,9 +405,10 @@ var MOCK = {
   drawerItems: [
     { id:"profile",  label:"プロフィール",         kind:"stub" },
     { id:"about",    label:"塗装レシピ録とは",     kind:"legacy", hash:"#about" },
+    { id:"course",   label:"初心者向け塗装講座",   kind:"stub" },
     { id:"settings", label:"設定",                 kind:"stub" },
     { id:"help",     label:"ヘルプ",               kind:"stub" },
-    { id:"feedback", label:"意見を送る",           kind:"stub" },
+    { id:"feedback", label:"お問い合わせ",         kind:"stub" },
     { id:"privacy",  label:"プライバシーポリシー", kind:"stub" }
   ]
 };
@@ -472,16 +494,37 @@ function renderReco(){
   });
   startCarousel(row, dots);
 }
+// 画像タイル1枚を作る（人気の塗装方法・今話題の塗料作例で共用）
+function makeTile(item, hidden){
+  var b = document.createElement("button");
+  b.className = "cat-tile" + (hidden ? " cat-hidden" : "");
+  var img = item.img ? '<img src="'+esc(item.img)+'" alt="">' : '';
+  b.innerHTML = img + '<span class="cat-label">'+esc(item.label)+'</span>';
+  b.addEventListener("click", function(){ openStub(item.label); });
+  return b;
+}
+var CAT_INITIAL = 4;   // 最初に見せる人気の塗装方法の数（残りは「もっと見る」で表示）
 function renderCategories(){
   var grid = $("catGrid"); grid.innerHTML = "";
-  MOCK.popularCategories.forEach(function(c){
-    var b = document.createElement("button");
-    b.className = "cat-tile";
-    var img = c.img ? '<img src="'+esc(c.img)+'" alt="">' : '';
-    b.innerHTML = img + '<span class="cat-label">'+esc(c.label)+'</span>';
-    b.addEventListener("click", function(){ openStub(c.label); });
-    grid.appendChild(b);
-  });
+  MOCK.popularCategories.forEach(function(c, i){ grid.appendChild(makeTile(c, i >= CAT_INITIAL)); });
+  var more = $("catMore");
+  if (!more) return;
+  var extra = MOCK.popularCategories.length - CAT_INITIAL;
+  if (extra > 0){
+    more.style.display = "";
+    more.textContent = "もっと見る（+" + extra + "）";
+    more.onclick = function(){
+      var hid = grid.querySelectorAll(".cat-hidden");
+      for (var k=0;k<hid.length;k++) hid[k].classList.remove("cat-hidden");
+      more.style.display = "none";
+    };
+  } else {
+    more.style.display = "none";
+  }
+}
+function renderTrending(){
+  var grid = $("trendGrid"); if (!grid) return; grid.innerHTML = "";
+  MOCK.trendingWorks.forEach(function(t){ grid.appendChild(makeTile(t, false)); });
 }
 function renderPaints(){
   var grid = $("paintGrid"); grid.innerHTML = "";
@@ -544,6 +587,7 @@ function startCarousel(row, dots){
 renderDrawer();
 renderReco();
 renderCategories();
+renderTrending();
 renderPaints();
 // 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
 (function(){
