@@ -105,7 +105,7 @@ a.buy.rakuten{background:#BF0000;border-color:#BF0000}
 a.buy.yodobashi{background:#0A4FA0;border-color:#0A4FA0}
 .overlay{position:fixed;inset:0;background:rgba(20,26,40,.45);display:none;align-items:flex-start;justify-content:center;padding:60px 14px;z-index:50}
 .overlay.show{display:flex}
-.picker{background:#fff;border:2px solid var(--ink);width:100%;max-width:480px;padding:14px}
+.picker{background:#fff;border:1px solid var(--ink);border-radius:14px;width:100%;max-width:480px;padding:16px}
 .picker h3{font-size:.9rem;margin-bottom:8px}
 .results{max-height:300px;overflow-y:auto;margin-top:8px;border-top:1px solid var(--line)}
 .results div{display:flex;align-items:center;gap:8px;padding:7px 6px;cursor:pointer;border-bottom:1px solid var(--bp-bg);font-size:.84rem}
@@ -363,7 +363,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 
 /* ============ v2: 編集ページのデザイン簡素化（クックパッド風・引き算） ============ */
 /* 差し色＝“薄い赤＋薄いグレー”。メインの鮮やかな赤と被らせず、編集画面らしく淡く */
-#editMode{--bp-bg:#F4F4F1}                              /* 補助背景は薄グレーに */
+#editMode{--bp:#C0392B; --bp-bg:#F4F4F1}                /* 差し色=赤系/補助背景=薄グレー（スマホのカード表示にも効く） */
 
 #editMode > header{display:none}                       /* 大きなロゴ見出しを撤去 */
 #editMode > footer{border:none;color:var(--line-d);font-size:.68rem;text-align:center;margin-top:8px}
@@ -387,7 +387,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #editMode .modetab.active{background:#FBEAE7; color:#C0392B}
 
 /* 表：角丸・薄枠・薄グレーヘッダー・薄赤アクセント */
-#editMode .scroll{border:1px solid var(--line); border-radius:10px}
+@media(min-width:641px){ #editMode .scroll{border:1px solid var(--line); border-radius:10px} }  /* 表の外枠はPCのみ（モバイルのカード表示には付けない） */
+@media(max-width:640px){ #editMode .row{flex-direction:column} }                              /* スマホは作品名/制作者名を縦積み（重なり防止） */
 #editMode table.recipe thead th{background:#EDEDE8; color:var(--ink); font-weight:700}
 #editMode table.recipe thead th input{color:var(--ink)}
 #editMode table.recipe thead th input::placeholder{color:#A9ADA2}
