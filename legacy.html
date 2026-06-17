@@ -431,6 +431,17 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .about-topbar .ab-bell{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
 .about-topbar .ab-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
 
+/* 編集終了ダイアログ */
+.exit-overlay{position:fixed;inset:0;background:rgba(20,26,40,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:90}
+.exit-overlay.show{display:flex}
+.exit-dialog{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px}
+.exit-dialog h3{font-size:1.05rem;margin:0}
+.exit-dialog .note{margin:0 0 6px;font-size:.82rem;color:var(--sub)}
+.exit-dialog button{width:100%;border-radius:8px;padding:12px;font-weight:700}
+.exit-dialog .primary{background:#CC6B60;border-color:#CC6B60;color:#fff}
+.exit-dialog .primary:hover{background:#BE5C51}
+.exit-dialog .ghost{border:none;background:none;color:var(--sub);font-weight:400}
+
 /* 背景のグリッドを除去（編集画面） */
 body{background-image:none}
 
@@ -452,12 +463,22 @@ body{background-image:none}
 </head>
 <body>
 
-<!-- v2: モバイル用 ❌ バー（投稿をやめてメインへ戻る。三本線の代わり） -->
+<!-- v2: モバイル用 ❌ バー（メインへ戻る。三本線の代わり）。空なら確認なし／内容ありはダイアログ -->
 <header class="l-topbar">
-  <button class="l-close" id="lClose" aria-label="閉じる"
-    onclick="if(confirm('編集をやめてメインに戻りますか？（投稿はされません）')){location.href='index.html'}">×</button>
+  <button class="l-close" id="lClose" aria-label="閉じる" onclick="exitEditor()">×</button>
   <span class="l-title">塗装レシピ録</span>
 </header>
+
+<!-- v2: 編集終了ダイアログ（入力がある時だけ表示） -->
+<div class="exit-overlay" id="exitOverlay">
+  <div class="exit-dialog">
+    <h3>編集を終了しますか？</h3>
+    <p class="note">入力した内容があります。</p>
+    <button class="primary" id="exitSave">保存して終了</button>
+    <button id="exitDiscard">変更を破棄して終了</button>
+    <button class="ghost" id="exitCancel">編集に戻る</button>
+  </div>
+</div>
 
 <!-- v2: PC左サイドバー（index.html と同じ。どの画面からもメインへ戻れる） -->
 <aside class="sidebar">
@@ -2123,6 +2144,39 @@ document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => showPag
 var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
 var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
+
+/* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
+function editorHasContent(){
+  if ((state.kit||"").trim() || (state.author||"").trim() || (state.memo||"").trim()) return true;
+  if ((state.photos||[]).length) return true;
+  return (state.rows||[]).some(function(r){
+    return (r.part||"").trim() || (r.comment||"").trim() || r.photo || Object.keys(r.cells||{}).length;
+  });
+}
+var _exitTarget = "index.html";
+function exitEditor(target){
+  _exitTarget = target || "index.html";
+  if (!editorHasContent()){ location.href = _exitTarget; return; }   // 何も入力していなければそのまま戻る
+  document.getElementById("exitOverlay").classList.add("show");
+}
+(function(){
+  var ov = document.getElementById("exitOverlay");
+  if (!ov) return;
+  var close = function(){ ov.classList.remove("show"); };
+  document.getElementById("exitCancel").onclick = close;
+  ov.onclick = function(e){ if (e.target === ov) close(); };
+  document.getElementById("exitDiscard").onclick = function(){ location.href = _exitTarget; };
+  document.getElementById("exitSave").onclick = function(){
+    alert("下書き保存は準備中です。\n今は保存できないため、このまま編集を続けるか「変更を破棄して終了」を選んでください。");
+    close();
+  };
+  // PCサイドバーの「探す/記録/ロゴ」も、編集中で内容があれば同じ確認を通す
+  document.querySelectorAll('.sidebar a[href^="index.html"]').forEach(function(a){
+    a.addEventListener("click", function(e){
+      if (editorHasContent()){ e.preventDefault(); exitEditor(a.getAttribute("href")); }
+    });
+  });
+})();
 
 /* ===================== 編集モードのタブ(閲覧プレビューへ) ===================== */
 document.getElementById("tabViewFromEdit").onclick = () => showPage("view");
