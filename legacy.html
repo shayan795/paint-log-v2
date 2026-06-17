@@ -420,6 +420,17 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #pickerCustom{background:#CC6B60;border-color:#CC6B60;color:#fff}
 #pickerCustom:hover{background:#BE5C51}
 
+/* 「とは」ページ：メイン風の上バー（アバター左＋ベル右）。モバイルのみ。❌バー(確認)は出さない */
+.about-topbar{display:none}
+.ah-logo{cursor:pointer}
+@media(max-width:899px){
+  body.is-about .l-topbar{display:none}
+  #aboutMode .about-topbar{display:flex;flex-direction:row;align-items:center;gap:11px;position:fixed;top:0;left:0;right:0;height:50px;padding:0 12px;margin:0;background:rgba(250,250,247,.96);border-bottom:1px solid var(--line);z-index:71}
+}
+.about-topbar .ab-avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-d);background:var(--bp-bg);color:var(--bp);font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.about-topbar .ab-bell{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.about-topbar .ab-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
+
 /* 背景のグリッドを除去（編集画面） */
 body{background-image:none}
 
@@ -486,12 +497,15 @@ body{background-image:none}
 
 <!-- ============ Aboutモード(塗装レシピ録とは) ============ -->
 <div id="aboutMode">
+  <header class="about-topbar">
+    <button class="ab-avatar" id="aboutAvatar" aria-label="メニュー">K</button>
+    <button class="ab-bell" id="aboutBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
+  </header>
   <div class="about-hero">
-    <div class="ah-logo js-goview" title="閲覧ページ">塗装レシピ録</div>
+    <div class="ah-logo" id="aboutLogo" title="メインへ戻る">塗装レシピ録</div>
     <div class="ah-tag">Paint Log</div>
   </div>
-  <p class="about-lead">使った塗料を、もう一度たどれる。<br>ガンプラ・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。</p>
-  <div class="about-start"><button id="aboutStartTop">レシピを作る・編集する</button></div>
+  <p class="about-lead">使った塗料を、もう一度たどれる。<br>プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。</p>
   <div class="about-sec">
     <h3>こんな悩みに</h3>
     <p>「あの作品、どの色をどの順で塗ったっけ？」——完成した頃には忘れてしまう塗装の手順。色グループ(部位)ごとに、下地・本塗り・仕上げまでを表に残せば、次の制作でも同じ色を再現できます。</p>
@@ -507,11 +521,6 @@ body{background-image:none}
   <div class="about-sec">
     <h3>データの扱い</h3>
     <p>「共有」するとレシピと写真がオンラインに保存され、短いURLが発行されます。そのURLを知っている人は誰でも閲覧できます（ログイン不要）。</p>
-  </div>
-  <div class="v-cta">
-    <div style="font-weight:700;font-size:1rem">さっそく記録してみる</div>
-    <p>入力したレシピはこの端末に保存できます</p>
-    <button id="aboutGotoCreate">レシピを作る — 無料</button>
   </div>
 </div>
 
@@ -2082,6 +2091,7 @@ function showPage(id){
   document.getElementById("editMode").style.display  = id==="edit"  ? "block" : "none";
   document.getElementById("viewMode").style.display  = id==="view"  ? "block" : "none";
   document.getElementById("aboutMode").style.display = id==="about" ? "block" : "none";
+  document.body.classList.toggle("is-about", id==="about");   // とは画面は❌バー(確認あり)でなくアバター/ベルのバーに
   if (id==="edit"){ renderAll(); }
   else if (id==="view"){ renderViewMode(); }
   closeNav();
@@ -2107,10 +2117,12 @@ function closeNav(){ document.getElementById("navOverlay").classList.remove("sho
 document.getElementById("navBtn").onclick    = openNav;
 document.getElementById("navClose").onclick  = closeNav;
 document.getElementById("navOverlay").onclick = closeNav;
-document.getElementById("aboutGotoCreate").onclick = () => showPage("edit");
-document.getElementById("aboutStartTop").onclick = () => showPage("edit");
-// 「塗装レシピ録」ロゴはどのページでも閲覧ページへ
+// 「塗装レシピ録」ロゴ（編集/閲覧内）は閲覧プレビューへ
 document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => showPage("view"));
+// 「とは」ページ: ロゴ/アバター→メイン(index)、ベル→スタブ。確認ダイアログは出さない
+var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
+var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
+var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
 
 /* ===================== 編集モードのタブ(閲覧プレビューへ) ===================== */
 document.getElementById("tabViewFromEdit").onclick = () => showPage("view");
