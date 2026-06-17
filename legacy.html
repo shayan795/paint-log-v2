@@ -363,7 +363,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 
 /* ============ v2: 編集ページのデザイン簡素化（クックパッド風・引き算） ============ */
 /* 差し色＝“薄い赤＋薄いグレー”。メインの鮮やかな赤と被らせず、編集画面らしく淡く */
-#editMode{--bp:#C0392B; --bp-bg:#F4F4F1}                /* 差し色=赤系/補助背景=薄グレー（スマホのカード表示にも効く） */
+#editMode{--bp:#E01E28; --bp-bg:#F4F4F1}                /* 差し色=真っ赤（indexと統一）/補助背景=薄グレー */
 
 #editMode > header{display:none}                       /* 大きなロゴ見出しを撤去 */
 #editMode > footer{border:none;color:var(--line-d);font-size:.68rem;text-align:center;margin-top:8px}
@@ -384,7 +384,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 /* モードタブ：アクティブは薄赤 */
 #editMode .modetabs{gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; width:max-content; margin:6px auto 24px}  /* 中央寄せ */
 #editMode .modetab{flex:none; border:none; border-radius:0; padding:9px 22px; font-size:.88rem; background:#fff; color:var(--sub)}
-#editMode .modetab.active{background:#FBEAE7; color:#C0392B}
+#editMode .modetab.active{background:#FBEAE7; color:#E01E28}
 
 /* 表：角丸・薄枠・薄グレーヘッダー・薄赤アクセント */
 @media(min-width:641px){ #editMode .scroll{border:1px solid var(--line); border-radius:10px} }  /* 表の外枠はPCのみ（モバイルのカード表示には付けない） */
@@ -402,8 +402,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #editMode button.small{border-radius:8px}
 
 /* 投稿ボタンは“柔らかい赤” */
-#editMode button.primary{background:#CC6B60; border-color:#CC6B60; color:#fff}
-#editMode button.primary:hover{background:#BE5C51}
+#editMode button.primary{background:#E01E28; border-color:#E01E28; color:#fff}
+#editMode button.primary:hover{background:#C2161F}
 
 /* カード画像の欄は不要（X共有時にURLで自動生成されるため非表示） */
 #cardImageCard{display:none}
@@ -427,8 +427,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 
 /* 塗料ピッカーのボタン：主要ボタンを赤・全ボタン角丸 */
 .picker .actions button{border-radius:8px}
-#pickerCustom{background:#CC6B60;border-color:#CC6B60;color:#fff}
-#pickerCustom:hover{background:#BE5C51}
+#pickerCustom{background:#E01E28;border-color:#E01E28;color:#fff}
+#pickerCustom:hover{background:#C2161F}
 /* 検索欄：フォーカス時の青い枠を消し、角丸に */
 #pickerSearch{border-radius:8px}
 #pickerSearch:focus{outline:none;border-color:var(--line-d)}
@@ -446,11 +446,10 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .about-topbar .ab-bell{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
 .about-topbar .ab-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
 
-/* 編集/閲覧の上バー：アバター左・❌・ベル右（❌とベルを右に寄せる） */
-.l-topbar .lt-avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--line-d);background:var(--bp-bg);color:var(--bp);font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+/* 編集/閲覧の上バー：❌左・ベル右。❌の丸枠と色はベルと統一 */
 .l-topbar{gap:8px}
-.l-topbar .l-close{margin-left:auto}
-.l-topbar .lt-bell{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.l-topbar .l-close{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.l-topbar .lt-bell{margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--sub);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
 .l-topbar .lt-bell svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
 
 /* 編集終了ダイアログ */
@@ -460,8 +459,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .exit-dialog h3{font-size:1.05rem;margin:0}
 .exit-dialog .note{margin:0 0 6px;font-size:.82rem;color:var(--sub)}
 .exit-dialog button{width:100%;border-radius:8px;padding:12px;font-weight:700}
-.exit-dialog .primary{background:#CC6B60;border-color:#CC6B60;color:#fff}
-.exit-dialog .primary:hover{background:#BE5C51}
+.exit-dialog .primary{background:#E01E28;border-color:#E01E28;color:#fff}
+.exit-dialog .primary:hover{background:#C2161F}
 .exit-dialog .ghost{border:none;background:none;color:var(--sub);font-weight:400}
 
 /* 背景のグリッドを除去（編集画面） */
@@ -478,8 +477,8 @@ body{background-image:none}
 .publish-card h2::before{display:none}
 #editMode .publish-card label, #viewMode .publish-card label{font-size:.98rem; font-weight:700; color:var(--ink); margin-bottom:0}
 .publish-card input[type=radio]{width:auto}             /* グローバルの width:100% を打ち消す（縦並び防止） */
-.publish-card button.primary{background:#CC6B60; border-color:#CC6B60; color:#fff; border-radius:8px}
-.publish-card button.primary:hover{background:#BE5C51}
+.publish-card button.primary{background:#E01E28; border-color:#E01E28; color:#fff; border-radius:8px}
+.publish-card button.primary:hover{background:#C2161F}
 .publish-card .js-draft{border-radius:8px}
 </style>
 </head>
@@ -487,7 +486,6 @@ body{background-image:none}
 
 <!-- v2: モバイル用 ❌ バー（メインへ戻る。三本線の代わり）。空なら確認なし／内容ありはダイアログ -->
 <header class="l-topbar">
-  <button class="lt-avatar" id="ltAvatar" aria-label="メニュー">K</button>
   <button class="l-close" id="lClose" aria-label="閉じる" onclick="exitEditor()">×</button>
   <button class="lt-bell" id="ltBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
 </header>
@@ -2174,8 +2172,7 @@ var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _ab
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
 var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
 var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
-// 編集/閲覧の上バー：アバター→メイン（未保存確認あり）、ベル→スタブ
-var _ltAvatar = document.getElementById("ltAvatar"); if (_ltAvatar) _ltAvatar.onclick = () => exitEditor();
+// 編集/閲覧の上バー：ベル→スタブ（❌はinline onclickでexitEditor）
 var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => alert("通知はまだ準備中です。");
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */

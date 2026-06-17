@@ -14,7 +14,7 @@
    ============================================================================ */
 :root{
   --paper:#FAFAF7; --ink:#1E2430; --sub:#67707F; --line:#C9CFD9; --line-d:#9AA3B2;
-  --bp:#2B4C9B; --bp-bg:#EDF1F9; --accent:#D8442E; --warn:#C8322A;
+  --bp:#2B4C9B; --bp-bg:#EDF1F9; --accent:#E01E28; --warn:#C8322A;
   --card:#fff;
   --topbar-h:52px; --bottomnav-h:60px; --maxw:480px;
 }
@@ -132,6 +132,7 @@ button{font-family:inherit}
 .nav-item svg{width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:1.7}
 .nav-item.active{color:var(--ink)}
 .nav-item.active svg{stroke:var(--accent)}
+.bottomnav .nav-item > span:not(.plus-circle){display:none}   /* 下タブの文字（探す/作る/記録）は非表示・アイコンのみ */
 .nav-plus{justify-content:flex-start; padding-top:5px}
 .plus-circle{width:46px; height:46px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; box-shadow:0 3px 9px rgba(216,68,46,.38)}
 .plus-circle svg{width:26px; height:26px; stroke:#fff; fill:none; stroke-width:2.3}
