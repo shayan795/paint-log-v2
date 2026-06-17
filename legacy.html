@@ -408,6 +408,18 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 /* カード画像の欄は不要（X共有時にURLで自動生成されるため非表示） */
 #cardImageCard{display:none}
 
+/* 写真ボタンをカメラアイコン化 */
+.ico-cam{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex:none}
+#editMode .photo-add{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:10px 14px;line-height:1.2}   /* 作品情報：アイコン上＋「写真を追加」下 */
+#editMode .photo-add .ico-cam{width:24px;height:24px}
+#editMode .rowphoto-add{display:inline-flex;align-items:center;justify-content:center;padding:6px 9px}                       /* 行の写真：アイコンのみ */
+#editMode .rowphoto-add .ico-cam{width:18px;height:18px}
+
+/* 塗料ピッカーのボタン：主要ボタンを赤・全ボタン角丸 */
+.picker .actions button{border-radius:8px}
+#pickerCustom{background:#CC6B60;border-color:#CC6B60;color:#fff}
+#pickerCustom:hover{background:#BE5C51}
+
 /* 背景のグリッドを除去（編集画面） */
 body{background-image:none}
 
@@ -559,7 +571,7 @@ body{background-image:none}
     <label>完成写真(最大2枚・任意・端末内でのみ処理されます)</label>
     <div class="photobox" id="photobox">
       <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
-      <button class="small" id="photoBtn">写真を追加</button>
+      <button class="small photo-add" id="photoBtn"><svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg><span>写真を追加</span></button>
       <button class="small ghost" id="photoClear" style="display:none">全部削除</button>
       <div class="photo-preview" id="photoPreview"></div>
     </div>
@@ -626,7 +638,7 @@ body{background-image:none}
     <h3>塗料を選択</h3>
     <input id="pickerSearch" placeholder="塗料名で検索">
     <div class="results" id="pickerResults"></div>
-    <p class="note" style="margin:8px 0 0">一覧に無い塗料は、上の欄に名前を入力して右の青ボタンで登録できます。</p>
+    <p class="note" style="margin:8px 0 0">一覧に無い塗料は、上の欄に名前を入力して「入力した名前で登録」ボタンで登録できます。</p>
     <div class="actions">
       <button class="small primary" id="pickerCustom">入力した名前で登録(リストに無い塗料)</button>
       <button class="small" id="pickerClear">このセルを空にする</button>
@@ -1414,7 +1426,7 @@ function makeRowPhotoControl(row){
     del.onclick = () => { delete row.photo; renderGrid(); };
     wrap.append(img, del, fileInput);
   } else {
-    const btn = document.createElement("button"); btn.className = "rowphoto-add"; btn.textContent = "＋画像"; btn.title = "この色グループに写真を添付";
+    const btn = document.createElement("button"); btn.className = "rowphoto-add"; btn.innerHTML = '<svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg>'; btn.title = "この色グループに写真を添付";
     btn.onclick = () => fileInput.click();
     wrap.append(btn, fileInput);
   }
