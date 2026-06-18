@@ -163,6 +163,7 @@ button{font-family:inherit}
 .drawer-list{padding:6px 0; flex:1}
 .drawer-list button{width:100%; text-align:left; background:none; border:none; padding:13px 18px; font:inherit; font-size:.92rem; color:var(--ink); cursor:pointer}
 .drawer-list button:hover{background:var(--bp-bg)}
+.drawer-list button.drawer-danger{color:var(--warn)}
 .drawer-foot{padding:14px 18px; border-top:1px solid var(--line); font-size:.68rem; color:var(--sub); line-height:1.5}
 /* ログイン/ログアウト */
 .drawer-auth{padding:12px 18px; border-bottom:1px solid var(--line)}
@@ -183,7 +184,8 @@ button{font-family:inherit}
 .onb-card input{width:100%; padding:12px 14px; border:1px solid var(--line-d); border-radius:10px; font:inherit; font-size:1rem; color:var(--ink); margin-bottom:14px; text-align:center}
 .onb-card input:focus{outline:none; border-color:var(--accent)}
 /* プロフィール（X風） */
-.pf-header{height:120px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
+.pf{max-width:600px; margin:0 auto}   /* PCでも中央の列に（X風）。ヘッダーが伸びすぎない */
+.pf-header{aspect-ratio:3/1; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
 .pf-avatar img{width:100%; height:100%; border-radius:50%; object-fit:cover}
 /* 画像アップロード行（編集フォーム） */
 .pf-imgrow{display:flex; align-items:center; gap:12px; margin-bottom:4px}
@@ -560,19 +562,12 @@ function setAuthUI(session, profile){
     av.textContent = ini; n.textContent = shown; s.textContent = sub;
     if (avBtn) avBtn.textContent = ini;
     setSidebarAccount(ini, shown);
-    box.innerHTML = "";   // 上の認証欄は空（ログイン中はアカウント情報が見出しに出る）
-    // ログアウト・退会はメニュー最下部（プライバシーポリシーの下）に配置
-    $("drawerBottom").innerHTML =
-      '<button class="drawer-btn" id="logoutBtn">ログアウト</button>'
-      + '<button class="drawer-btn danger" id="deleteBtn">退会（アカウント削除）</button>';
-    $("logoutBtn").onclick = function(){ sb.auth.signOut(); };
-    $("deleteBtn").onclick = deleteAccount;
+    box.innerHTML = "";   // 上の認証欄は空（ログアウト/退会はメニュー一覧の最下部に出す）
   } else {
     currentUserId = null; currentName = "";
     av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
     if (avBtn) avBtn.textContent = "ゲ";
     setSidebarAccount("ゲ", "ゲスト");
-    $("drawerBottom").innerHTML = "";
     box.innerHTML = sb
       ? '<button class="drawer-btn primary" id="loginBtn">Googleでログイン</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
@@ -581,6 +576,13 @@ function setAuthUI(session, profile){
       sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + location.pathname } });
     };
   }
+  renderDrawer();   // ログイン状態に応じてメニュー最下部のログアウト/退会/切替を出し分け
+}
+
+// 別アカウントに切り替え（Googleのアカウント選択を強制）
+function switchAccount(){
+  if (!sb) return;
+  sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + location.pathname, queryParams:{ prompt:"select_account" } } });
 }
 
 // 表示名をDBに保存して再描画（成功時に cb）。本名は使わず本人が決めた名前のみ。
@@ -651,10 +653,19 @@ function deleteAccount(){
   if (!sb || !currentUserId) return;
   if (!confirm("本当に退会しますか？\nアカウント・プロフィール・投稿など、あなたのデータはすべて完全に削除され、元に戻せません。")) return;
   if (!confirm("最終確認：すべてのデータを削除します。よろしいですか？")) return;
-  sb.rpc("delete_user").then(function(res){
-    if (res && res.error){ alert("退会に失敗しました：" + res.error.message); return; }
-    sb.auth.signOut().then(function(){ alert("退会が完了しました。ご利用ありがとうございました。"); location.reload(); });
-  });
+  var uid = currentUserId;
+  // 画像はStorage API経由で先に削除（DBからの直接削除は禁止のため）→ その後アカウント削除
+  sb.storage.from("profile").list(uid).then(function(res){
+    var files = ((res && res.data) || []).map(function(f){ return uid + "/" + f.name; });
+    return files.length ? sb.storage.from("profile").remove(files) : Promise.resolve();
+  }).then(function(){
+    return sb.rpc("delete_user");
+  }).then(function(res){
+    if (res && res.error) throw res.error;
+    return sb.auth.signOut();
+  }).then(function(){
+    alert("退会が完了しました。ご利用ありがとうございました。"); location.reload();
+  }).catch(function(e){ alert("退会に失敗しました：" + (e.message || e)); });
 }
 
 // 自分の投稿一覧（段2で実投稿が入るまでは空状態）
@@ -791,6 +802,19 @@ function renderDrawer(){
     });
     list.appendChild(b);
   });
+  // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
+  if (currentUserId){
+    [ { label:"別のアカウントでログイン", fn: switchAccount },
+      { label:"ログアウト",               fn: function(){ sb.auth.signOut(); } },
+      { label:"退会（アカウント削除）",     fn: deleteAccount, danger:true }
+    ].forEach(function(it){
+      var b = document.createElement("button");
+      b.textContent = it.label;
+      if (it.danger) b.className = "drawer-danger";
+      b.addEventListener("click", function(){ closeDrawer(); it.fn(); });
+      list.appendChild(b);
+    });
+  }
 }
 
 /* ----------------------------- 探す画面の描画 ----------------------------- */
