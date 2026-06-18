@@ -130,7 +130,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-site-tag{font-family:"IBM Plex Mono",monospace;font-size:.66rem;font-weight:600;letter-spacing:.34em;text-transform:uppercase;color:var(--sub);margin-top:9px}
 .v-edit-inline{position:absolute;top:14px;right:12px;font-family:inherit;font-size:.72rem;padding:5px 12px;border:1px solid var(--line-d);background:#fff;color:var(--sub);cursor:pointer}
 .v-edit-inline:hover{border-color:var(--ink);color:var(--ink)}
-@media(max-width:560px){.v-site-logo{font-size:1.6rem}.v-edit-inline{position:static;margin-top:14px}}
+.v-actions{position:absolute;top:14px;right:12px;display:flex;gap:8px}
+@media(max-width:560px){.v-site-logo{font-size:1.6rem}.v-edit-inline{position:static;margin-top:14px}.v-actions{position:static;justify-content:center;margin-top:14px}}
 
 /* カード画像ヒーロー(正方形カードをそのまま表示・見切れさせない) */
 #viewHero{margin:0 -12px;background:#0E1014;display:none}
@@ -1323,6 +1324,7 @@ const SITE_NAME  = "PaintLog";
 let procSeq = 1;
 const newProc = name => ({ id: "q" + (procSeq++), name });
 let state = newState();
+var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既存投稿（スクリプト間で共有）
 function newState(){
   return { kit:"", author:"", memo:"", photos:[],
     procs: ["サフ","下地","本塗装","スミ入れ","トップコート"].map(newProc),
@@ -2190,6 +2192,13 @@ function editorHasContent(){
 }
 var _exitTarget = "index.html";
 function exitEditor(target){
+  // 既存投稿を編集していた場合は、メインでなく「その投稿の閲覧画面」に戻る
+  if (currentRecipeId){
+    showPage("view");
+    var pc = document.getElementById("publishCard"); if (pc) pc.style.display = "none";
+    window.scrollTo(0,0);
+    return;
+  }
   _exitTarget = target || "index.html";
   if (!editorHasContent()){ location.href = _exitTarget; return; }   // 何も入力していなければそのまま戻る
   document.getElementById("exitOverlay").classList.add("show");
@@ -2214,7 +2223,10 @@ function exitEditor(target){
 })();
 
 /* ===================== 編集モードのタブ(閲覧プレビューへ) ===================== */
-document.getElementById("tabViewFromEdit").onclick = () => showPage("view");
+document.getElementById("tabViewFromEdit").onclick = () => {
+  showPage("view");
+  var pc = document.getElementById("publishCard"); if (pc) pc.style.display = "";  // 編集→プレビューでは公開ボタンを出す
+};
 document.getElementById("tabEditActive").onclick = () => { /* 既に編集中 */ };
 
 /* ===================== 起動(モード振り分け) ===================== */
@@ -2259,7 +2271,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   var cfg = window.PAINTLOG_CONFIG || {};
   var sb = (window.supabase && cfg.SUPABASE_URL)
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
-  var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既存投稿
+  /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
 
   // 保存用に state を複製し、base64画像を除去（画像は次チャンクでR2へ。DB肥大を防ぐ）
   function gridForSave(){
@@ -2290,33 +2302,45 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
       setVis(rec.is_public);
       renderAll();
-      if (location.hash === "#edit") showPage("edit"); else showPage("view");
+      showPage("view");                 // 投稿閲覧は必ず「閲覧（読み取り）」で開く
+      setPublishCard(false);            // 既存投稿の閲覧では公開設定/投稿ボタンは出さない
       // 所有者だけ「編集する」「削除」を出す
       sb.auth.getSession().then(function(s){
         var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;
         var owner = !!uid && uid === currentOwnerId;
         var edit = document.getElementById("tabEdit");
         if (edit) edit.style.display = owner ? "" : "none";
-        if (owner) ensureDeleteBtn();
+        if (owner) ensureDeleteBtn(); else removeDeleteBtn();
       });
     });
   })();
 
+  // 公開設定カード（公開/非公開＋投稿する）の表示切替：編集→プレビュー時のみ出す
+  function setPublishCard(show){
+    var pc = document.getElementById("publishCard");
+    if (pc) pc.style.display = show ? "" : "none";
+  }
+  function removeDeleteBtn(){ var d=document.getElementById("vActions"); if(d) d.remove(); }
   function ensureDeleteBtn(){
-    if (document.getElementById("vDelete")) return;
+    if (document.getElementById("vActions")) return;
     var hdr = document.querySelector("#viewMode .v-site-header");
+    var edit = document.getElementById("tabEdit");
     if (!hdr) return;
-    var btn = document.createElement("button");
-    btn.id = "vDelete"; btn.className = "v-edit-inline"; btn.textContent = "削除";
-    btn.style.cssText = "margin-left:8px;color:var(--warn);border-color:var(--warn)";
-    btn.onclick = function(){
+    // 編集と削除を横並びの一塊に（PCで重ならないように）
+    var wrap = document.createElement("div"); wrap.id = "vActions"; wrap.className = "v-actions";
+    var del = document.createElement("button");
+    del.id = "vDelete"; del.className = "v-edit-inline"; del.textContent = "削除";
+    del.style.cssText = "position:static;color:var(--warn);border-color:var(--warn)";
+    del.onclick = function(){
       if (!confirm("この投稿を削除します。元に戻せません。よろしいですか？")) return;
       sb.from("recipes").delete().eq("id", currentRecipeId).then(function(res){
         if (res.error){ alert("削除に失敗しました：" + res.error.message); return; }
         location.href = "index.html#records";
       });
     };
-    hdr.appendChild(btn);
+    hdr.appendChild(wrap);
+    if (edit){ edit.style.position = "static"; wrap.appendChild(edit); }
+    wrap.appendChild(del);
   }
 
   // 「投稿する」＝新規はINSERT / 既存(?idで読込)はUPDATE。押すまで投稿されない
