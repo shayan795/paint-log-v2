@@ -195,6 +195,11 @@ create policy clips_all on public.clips
 -- profiles に管理者フラグを追加(運営削除・通報閲覧用。自分のidだけ手動でtrueにする)
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 
+-- プロフィール公開情報の追加列(emailはauth側で非公開のまま)
+alter table public.profiles add column if not exists link       text;  -- 任意リンク(X/サイト等)
+alter table public.profiles add column if not exists avatar_url text;  -- アイコン画像URL(画像ステップで使用)
+alter table public.profiles add column if not exists header_url text;  -- ヘッダー画像URL(画像ステップで使用)
+
 -- 自分が管理者か判定するヘルパー(RLSの再帰を避けるため security definer)
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$

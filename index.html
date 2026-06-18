@@ -178,6 +178,33 @@ button{font-family:inherit}
 .onb-card p{font-size:.84rem; color:var(--sub); margin:0 0 16px; line-height:1.6}
 .onb-card input{width:100%; padding:12px 14px; border:1px solid var(--line-d); border-radius:10px; font:inherit; font-size:1rem; color:var(--ink); margin-bottom:14px; text-align:center}
 .onb-card input:focus{outline:none; border-color:var(--accent)}
+/* プロフィール（X風） */
+.pf-header{height:120px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2)}
+.pf-bar{display:flex; align-items:flex-end; justify-content:space-between; padding:0 16px; margin-top:-34px}
+.pf-avatar{width:72px; height:72px; border-radius:50%; background:var(--bp-bg); color:var(--bp); border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.7rem}
+.pf-edit{border:1px solid var(--line-d); background:#fff; color:var(--ink); font:inherit; font-weight:700; font-size:.85rem; padding:7px 18px; border-radius:20px; cursor:pointer; margin-bottom:6px}
+.pf-edit:hover{border-color:var(--ink)}
+.pf-info{padding:10px 16px 4px}
+.pf-name{font-size:1.25rem; font-weight:700}
+.pf-handle{font-size:.85rem; color:var(--sub); margin-top:1px}
+.pf-bio{font-size:.9rem; margin-top:10px; line-height:1.6; white-space:pre-wrap}
+.pf-link{display:inline-block; margin-top:8px; color:var(--bp); font-size:.88rem; text-decoration:none; word-break:break-all}
+.pf-link:hover{text-decoration:underline}
+.pf-postsec{padding:18px 16px 8px}
+.pf-postsec > h3{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
+.pf-postsec > h3::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
+#pfPosts{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+.pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
+.pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
+.pf-post-thumb{display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
+.pf-post-thumb img{width:100%; height:100%; object-fit:cover; display:block}
+.pf-post-title{font-size:.82rem; font-weight:700; margin-top:6px; line-height:1.3}
+/* プロフィール編集フォーム */
+.pf-edit-form{padding:20px 16px}
+.pf-label{display:block; font-size:.78rem; color:var(--sub); margin:14px 0 4px}
+.pf-field{width:100%; max-width:420px; padding:11px 13px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:.95rem; color:var(--ink); background:#fff}
+.pf-field:focus{outline:none; border-color:var(--accent)}
+textarea.pf-field{resize:vertical; line-height:1.6}
 
 /* 全画面ビュー(legacy iframe / 空ページ) */
 .fullview{
@@ -556,26 +583,91 @@ function showOnboarding(){
   };
 }
 
-// プロフィール編集（ドロワーの「プロフィール」から。表示名の変更はここ）
-function openProfile(){
+// プロフィールの保存（複数項目をまとめてupdate）
+function saveProfile(fields, cb){
+  if (!sb || !currentUserId) return;
+  sb.from("profiles").update(fields).eq("id", currentUserId)
+    .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); if (cb) cb(); }); });
+}
+
+// 自分の投稿一覧（段2で実投稿が入るまでは空状態）
+function renderMyPosts(){
+  var box = $("pfPosts"); if (!box || !sb || !currentUserId) return;
+  sb.from("recipes").select("id,title,cover_url,created_at").eq("owner_id", currentUserId).order("created_at", { ascending:false })
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      if (!rows.length){ box.innerHTML = '<p class="pf-empty">まだ投稿がありません。下の ＋ から作れます。</p>'; return; }
+      box.innerHTML = "";
+      rows.forEach(function(r){
+        var c = document.createElement("button"); c.className = "pf-post";
+        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
+        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+'</div>';
+        box.appendChild(c);
+      });
+    });
+}
+
+// X風プロフィール表示
+function renderProfileView(prof){
+  prof = prof || {};
+  var rawName = (prof.display_name && prof.display_name.trim()) ? prof.display_name.trim() : "";
+  var name = rawName || "（名前未設定）";
+  var ini  = rawName ? rawName.charAt(0) : "？";
+  var handle = prof.handle ? "@"+prof.handle : "";
+  var bio  = prof.bio || "";
+  var link = prof.link || "";
+  $("fvTitle").textContent = "プロフィール";
+  fullviewBody.innerHTML =
+    '<div class="pf">'
+    + '<div class="pf-header"></div>'
+    + '<div class="pf-bar"><span class="pf-avatar">'+esc(ini)+'</span>'
+    +   '<button class="pf-edit" id="pfEdit">編集</button></div>'
+    + '<div class="pf-info">'
+    +   '<div class="pf-name">'+esc(name)+'</div>'
+    +   (handle ? '<div class="pf-handle">'+esc(handle)+'</div>' : '')
+    +   (bio ? '<div class="pf-bio">'+esc(bio)+'</div>' : '')
+    +   (link ? '<a class="pf-link" href="'+esc(link)+'" target="_blank" rel="noopener nofollow">'+esc(link)+'</a>' : '')
+    + '</div>'
+    + '<div class="pf-postsec"><h3>投稿</h3><div id="pfPosts"></div></div>'
+    + '</div>';
+  fullview.hidden = false;
+  $("pfEdit").onclick = function(){ renderProfileEdit(prof); };
+  renderMyPosts();
+}
+
+// プロフィール編集フォーム（表示名・自己紹介・リンク）
+function renderProfileEdit(prof){
+  prof = prof || {};
+  var val = function(x){ return x ? esc(x) : ""; };
   $("fvTitle").textContent = "プロフィール編集";
+  fullviewBody.innerHTML =
+    '<div class="pf-edit-form">'
+    + '<label class="pf-label">表示名（ニックネーム）</label>'
+    + '<input id="pfName" class="pf-field" type="text" maxlength="30" value="'+val(prof.display_name)+'">'
+    + '<label class="pf-label">自己紹介</label>'
+    + '<textarea id="pfBio" class="pf-field" rows="3" maxlength="160" placeholder="制作スタイルや好きなジャンルなど">'+val(prof.bio)+'</textarea>'
+    + '<label class="pf-label">リンク（XやサイトのURL）</label>'
+    + '<input id="pfLink" class="pf-field" type="url" placeholder="https://..." value="'+val(prof.link)+'">'
+    + '<div><button class="drawer-btn primary" id="pfSave" style="width:auto;margin-top:18px;padding:11px 30px">保存</button></div>'
+    + '<p class="note" style="margin-top:12px;font-size:.74rem;color:var(--sub)">ヘッダー画像・アイコンの設定は近日追加します。本名でなくてOK。</p>'
+    + '</div>';
+  $("pfSave").onclick = function(){
+    var nm = $("pfName").value.trim();
+    if (!nm){ $("pfName").focus(); return; }   // 表示名は必須
+    saveProfile({ display_name: nm, bio: $("pfBio").value.trim(), link: $("pfLink").value.trim() },
+      function(){ openProfile(); });            // 保存後は表示に戻る
+  };
+}
+
+// プロフィールを開く（ドロワーの「プロフィール」から）
+function openProfile(){
   if (!sb || !currentUserId){
-    fullviewBody.innerHTML = '<div class="stub"><h2>プロフィール</h2><p>ログインすると表示名などを設定できます。</p></div>';
+    $("fvTitle").textContent = "プロフィール";
+    fullviewBody.innerHTML = '<div class="stub"><h2>プロフィール</h2><p>ログインすると表示名・自己紹介・リンクを設定できます。</p></div>';
     fullview.hidden = false; return;
   }
-  fullviewBody.innerHTML =
-    '<div class="stub"><h2>プロフィール編集</h2>'
-    + '<label style="display:block;font-size:.8rem;color:var(--sub);margin:16px 0 4px">表示名（ニックネーム）</label>'
-    + '<input id="profName" type="text" maxlength="30" style="width:100%;max-width:360px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink)">'
-    + '<div><button class="drawer-btn primary" id="profSave" style="width:auto;max-width:360px;margin-top:16px;padding:11px 28px">保存</button></div>'
-    + '<p class="note" style="margin-top:10px;font-size:.74rem;color:var(--sub)">本名でなくてOK。いつでも変更できます。</p></div>';
-  $("profName").value = currentName || "";
-  fullview.hidden = false;
-  $("profSave").onclick = function(){
-    var v = $("profName").value.trim();
-    if (!v){ $("profName").focus(); return; }
-    saveDisplayName(v, function(){ closeFull(); });
-  };
+  sb.from("profiles").select("display_name,handle,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
+    .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}); });
 }
 
 function applySession(session){
