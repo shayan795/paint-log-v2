@@ -190,6 +190,29 @@ button{font-family:inherit}
 .onb-hint{font-weight:400; color:var(--sub); font-size:.72rem}
 .onb-err{text-align:left; color:var(--warn); font-size:.76rem; min-height:1.1em; margin:2px 0 10px}
 .drawer-btn:disabled{opacity:.45; cursor:not-allowed}
+
+/* 認証画面（ログイン/新規登録/再設定） */
+.auth-overlay{position:fixed; inset:0; background:rgba(20,26,40,.5); display:flex; align-items:flex-start; justify-content:center; padding:40px 18px; z-index:100; overflow:auto}
+.auth-overlay[hidden]{display:none}
+.auth-card{position:relative; background:#fff; border-radius:16px; padding:26px 22px; width:100%; max-width:380px}
+.auth-close{position:absolute; top:10px; right:12px; border:none; background:none; font-size:1.5rem; line-height:1; color:var(--sub); cursor:pointer}
+.auth-card h2{font-size:1.3rem; margin:0 0 18px; text-align:center}
+.auth-g{width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid var(--line-d); border-radius:10px; background:#fff; font:inherit; font-weight:700; font-size:.92rem; cursor:pointer}
+.auth-g:hover{background:var(--bp-bg)}
+.auth-or{display:flex; align-items:center; gap:10px; color:var(--sub); font-size:.74rem; margin:16px 0}
+.auth-or::before,.auth-or::after{content:""; flex:1; height:1px; background:var(--line)}
+.auth-label{display:block; font-size:.76rem; font-weight:700; color:var(--ink); margin:12px 0 4px}
+.auth-hint{font-weight:400; color:var(--sub); font-size:.72rem}
+.auth-field{width:100%; padding:11px 13px; border:1px solid var(--line-d); border-radius:8px; font:inherit; font-size:.95rem; color:var(--ink)}
+.auth-field:focus{outline:none; border-color:var(--accent)}
+.auth-consent{display:flex; align-items:flex-start; gap:8px; font-size:.8rem; color:var(--sub); margin:14px 0 4px; line-height:1.5}
+.auth-consent input{width:auto; margin-top:3px}
+.auth-consent a{color:var(--bp)}
+.auth-err{color:var(--warn); font-size:.78rem; min-height:1.1em; margin:8px 0 0}
+.auth-submit{width:100%; margin-top:14px; padding:12px; border:none; border-radius:10px; background:var(--accent); color:#fff; font:inherit; font-weight:700; cursor:pointer}
+.auth-submit:disabled{opacity:.45; cursor:not-allowed}
+.auth-foot{text-align:center; font-size:.82rem; color:var(--sub); margin-top:16px}
+.auth-link{background:none; border:none; color:var(--bp); font:inherit; font-size:.82rem; cursor:pointer; padding:0; text-decoration:underline}
 /* プロフィール（X風） */
 .pf{width:100%}   /* 画面いっぱい（PCも全幅） */
 .pf-header{aspect-ratio:3/1; max-height:260px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
@@ -420,6 +443,14 @@ textarea.pf-field{resize:vertical; line-height:1.6}
     </div>
   </div>
 
+  <!-- 認証（ログイン / 新規登録 / パスワード再設定）。中身はJSで切替 -->
+  <div class="auth-overlay" id="authOverlay" hidden>
+    <div class="auth-card">
+      <button class="auth-close" id="authClose" aria-label="閉じる">×</button>
+      <div id="authBody"></div>
+    </div>
+  </div>
+
   <!-- 全画面ビュー（編集/閲覧/とは=legacy, 空ページ） -->
   <div class="fullview" id="fullview" hidden>
     <header class="fullview-bar">
@@ -530,9 +561,11 @@ function openStub(title){
 }
 function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; }
 $("fvBack").addEventListener("click", closeFull);
-$("plusBtn").addEventListener("click", function(){ openLegacy("レシピを作る", "#edit"); });
+// 投稿（作る）はログイン必須。未ログインならログイン画面へ誘導
+function startCreate(){ requireLogin(function(){ openLegacy("レシピを作る", "#edit"); }); }
+$("plusBtn").addEventListener("click", startCreate);
 var sbCreate = $("sbCreate");
-if (sbCreate) sbCreate.addEventListener("click", function(){ openLegacy("レシピを作る", "#edit"); });
+if (sbCreate) sbCreate.addEventListener("click", startCreate);
 
 /* ----------------------------- ドロワー ----------------------------- */
 var drawer = $("drawer"), scrim = $("scrim");
@@ -543,6 +576,8 @@ var sbAccount = $("sbAccount");
 if (sbAccount) sbAccount.addEventListener("click", openDrawer);
 scrim.addEventListener("click", closeDrawer);
 $("bellBtn").addEventListener("click", function(){ openStub("通知"); });
+$("authClose").addEventListener("click", closeAuth);
+$("authOverlay").addEventListener("click", function(e){ if (e.target === $("authOverlay")) closeAuth(); });
 
 /* ----------------------------- 認証（Googleログイン） ----------------------------- */
 var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_URL)
@@ -582,10 +617,11 @@ function setAuthUI(session, profile){
     if (avBtn) avBtn.textContent = "ゲ";
     setSidebarAccount("ゲ", "ゲスト");
     box.innerHTML = sb
-      ? '<button class="drawer-btn primary" id="loginBtn">Googleで続ける</button>'
+      ? '<button class="drawer-btn primary" id="loginBtn">ログイン</button>'
+        + '<button class="drawer-btn" id="registerBtn" style="margin-top:8px">新規登録</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
-    var lb = $("loginBtn");
-    if (lb) lb.onclick = googleLogin;
+    if ($("loginBtn"))    $("loginBtn").onclick    = function(){ openAuth("login"); };
+    if ($("registerBtn")) $("registerBtn").onclick = function(){ openAuth("register"); };
   }
   renderDrawer();   // ログイン状態に応じてメニュー最下部のログアウト/退会/切替を出し分け
 }
@@ -603,6 +639,113 @@ function googleLogin(){
 function switchAccount(){
   if (!sb) return;
   sb.auth.signOut().then(googleLogin);
+}
+
+/* ============ ログイン / 新規登録 / パスワード再設定 ============ */
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function openAuth(mode){
+  if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに利用できます。"); return; }
+  closeDrawer(); $("authOverlay").hidden = false; renderAuth(mode || "login");
+}
+function closeAuth(){ $("authOverlay").hidden = true; $("authBody").innerHTML = ""; }
+function authMessage(title, msg){
+  $("authBody").innerHTML = '<h2>'+esc(title)+'</h2><p style="font-size:.9rem;line-height:1.7;color:var(--sub)">'+esc(msg)+'</p>'
+    + '<button class="auth-submit" id="aOk">閉じる</button>';
+  $("aOk").onclick = closeAuth;
+}
+function requireLogin(fn){ if (currentUserId) fn(); else openAuth("login"); }
+
+function renderAuth(mode){
+  var b = $("authBody");
+  if (mode === "register"){
+    b.innerHTML =
+      '<h2>新規登録</h2>'
+      + '<button class="auth-g" id="aG">Googleで登録</button>'
+      + '<div class="auth-or">または</div>'
+      + '<label class="auth-label">ユーザーID<span class="auth-hint">（半角英数_・後から変更不可）</span></label>'
+      + '<input id="aUid" class="auth-field" maxlength="20" autocapitalize="off" autocorrect="off">'
+      + '<label class="auth-label">メールアドレス</label>'
+      + '<input id="aEmail" class="auth-field" type="email" autocapitalize="off">'
+      + '<label class="auth-label">パスワード<span class="auth-hint">（6文字以上）</span></label>'
+      + '<input id="aPw" class="auth-field" type="password">'
+      + '<label class="auth-label">パスワード（確認）</label>'
+      + '<input id="aPw2" class="auth-field" type="password">'
+      + '<label class="auth-consent"><input type="checkbox" id="aAgree"><span><a href="terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意します</span></label>'
+      + '<div class="auth-err" id="aErr"></div>'
+      + '<button class="auth-submit" id="aSubmit">登録する</button>'
+      + '<div class="auth-foot">アカウントをお持ちの方は <button class="auth-link" id="aToLogin">ログイン</button></div>';
+    $("aG").onclick = googleLogin;
+    $("aToLogin").onclick = function(){ renderAuth("login"); };
+    $("aSubmit").onclick = doRegister;
+  } else if (mode === "reset"){
+    b.innerHTML =
+      '<h2>パスワード再設定</h2>'
+      + '<p class="auth-hint" style="display:block;margin-bottom:6px">登録メールアドレスに再設定リンクを送ります。</p>'
+      + '<label class="auth-label">メールアドレス</label>'
+      + '<input id="aEmail" class="auth-field" type="email" autocapitalize="off">'
+      + '<div class="auth-err" id="aErr"></div>'
+      + '<button class="auth-submit" id="aSubmit">再設定メールを送る</button>'
+      + '<div class="auth-foot"><button class="auth-link" id="aToLogin">ログインに戻る</button></div>';
+    $("aToLogin").onclick = function(){ renderAuth("login"); };
+    $("aSubmit").onclick = doReset;
+  } else {
+    b.innerHTML =
+      '<h2>ログイン</h2>'
+      + '<button class="auth-g" id="aG">Googleでログイン</button>'
+      + '<div class="auth-or">または</div>'
+      + '<label class="auth-label">メールアドレス</label>'
+      + '<input id="aEmail" class="auth-field" type="email" autocapitalize="off">'
+      + '<label class="auth-label">パスワード</label>'
+      + '<input id="aPw" class="auth-field" type="password">'
+      + '<div class="auth-err" id="aErr"></div>'
+      + '<button class="auth-submit" id="aSubmit">ログイン</button>'
+      + '<div class="auth-foot"><button class="auth-link" id="aReset">パスワードを忘れた方</button></div>'
+      + '<div class="auth-foot">アカウントが無い方は <button class="auth-link" id="aToReg">新規登録</button></div>';
+    $("aG").onclick = googleLogin;
+    $("aReset").onclick = function(){ renderAuth("reset"); };
+    $("aToReg").onclick = function(){ renderAuth("register"); };
+    $("aSubmit").onclick = doLogin;
+  }
+}
+function doRegister(){
+  var id=$("aUid").value.trim(), email=$("aEmail").value.trim(), pw=$("aPw").value, pw2=$("aPw2").value,
+      agree=$("aAgree").checked, err=$("aErr"), btn=$("aSubmit");
+  if (!USERID_RE.test(id)){ err.textContent="ユーザーIDは半角英数と _ の3〜20文字"; return; }
+  if (!EMAIL_RE.test(email)){ err.textContent="メールアドレスの形式が正しくありません"; return; }
+  if (pw.length < 6){ err.textContent="パスワードは6文字以上にしてください"; return; }
+  if (pw !== pw2){ err.textContent="パスワードが一致しません"; return; }
+  if (!agree){ err.textContent="利用規約・プライバシーポリシーへの同意が必要です"; return; }
+  btn.disabled=true; err.textContent="確認中…";
+  sb.from("profiles").select("id").ilike("user_id", id).then(function(res){
+    if (res.data && res.data.length){ err.textContent="このユーザーIDは既に使われています"; btn.disabled=false; return; }
+    err.textContent="登録中…";
+    sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname, data:{ pending_user_id:id } } }).then(function(r){
+      if (r.error){ err.textContent="登録に失敗：" + r.error.message; btn.disabled=false; return; }
+      if (r.data && r.data.session){
+        currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF）→ user_id等を保存
+        saveProfile({ user_id:id, display_name:id, terms_agreed_at:new Date().toISOString() }, function(){ closeAuth(); });
+      } else {
+        authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。完了後にログインしてください。");
+      }
+    });
+  });
+}
+function doLogin(){
+  var email=$("aEmail").value.trim(), pw=$("aPw").value, err=$("aErr"), btn=$("aSubmit");
+  if (!email || !pw){ err.textContent="メールとパスワードを入力してください"; return; }
+  btn.disabled=true; err.textContent="ログイン中…";
+  sb.auth.signInWithPassword({ email:email, password:pw }).then(function(r){
+    if (r.error){ err.textContent="メールアドレスまたはパスワードが違います"; btn.disabled=false; return; }
+    closeAuth();   // onAuthStateChange がUIを更新
+  });
+}
+function doReset(){
+  var email=$("aEmail").value.trim(), err=$("aErr"), btn=$("aSubmit");
+  if (!EMAIL_RE.test(email)){ err.textContent="メールアドレスの形式が正しくありません"; return; }
+  btn.disabled=true; err.textContent="送信中…";
+  sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname }).then(function(){
+    authMessage("送信しました", "パスワード再設定メールを送りました。メール内のリンクから再設定してください。");
+  });
 }
 
 // 表示名をDBに保存して再描画（成功時に cb）。本名は使わず本人が決めた名前のみ。
@@ -792,11 +935,7 @@ function renderProfileEdit(prof){
 
 // プロフィールを開く（ドロワーの「プロフィール」から）
 function openProfile(){
-  if (!sb || !currentUserId){
-    $("fvTitle").textContent = "プロフィール";
-    fullviewBody.innerHTML = '<div class="stub"><h2>プロフィール</h2><p>ログインすると表示名・自己紹介・リンクを設定できます。</p></div>';
-    fullview.hidden = false; return;
-  }
+  if (!sb || !currentUserId){ openAuth("login"); return; }   // プロフィールはログイン必須
   sb.from("profiles").select("user_id,display_name,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
     .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}); });
 }
