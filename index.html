@@ -170,6 +170,14 @@ button{font-family:inherit}
 .drawer-btn{width:100%; padding:11px; border-radius:8px; font:inherit; font-size:.9rem; font-weight:700; cursor:pointer; border:1px solid var(--line-d); background:#fff; color:var(--ink)}
 .drawer-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
 .drawer-auth .note{font-size:.74rem; color:var(--sub); margin:0}
+/* 初回ニックネーム入力モーダル（必須・閉じられない） */
+.onb-overlay{position:fixed; inset:0; background:rgba(20,26,40,.55); display:flex; align-items:center; justify-content:center; padding:22px; z-index:100}
+.onb-overlay[hidden]{display:none}
+.onb-card{background:#fff; border-radius:16px; padding:24px 22px; width:100%; max-width:360px; text-align:center}
+.onb-card h2{font-size:1.2rem; margin:0 0 8px}
+.onb-card p{font-size:.84rem; color:var(--sub); margin:0 0 16px; line-height:1.6}
+.onb-card input{width:100%; padding:12px 14px; border:1px solid var(--line-d); border-radius:10px; font:inherit; font-size:1rem; color:var(--ink); margin-bottom:14px; text-align:center}
+.onb-card input:focus{outline:none; border-color:var(--accent)}
 
 /* 全画面ビュー(legacy iframe / 空ページ) */
 .fullview{
@@ -347,6 +355,16 @@ button{font-family:inherit}
     <div class="drawer-foot">塗装レシピ録 v2 — 骨組み版<br>記載の商品名は各社の商標です。</div>
   </aside>
 
+  <!-- 初回ログイン: 表示名の必須入力（決めるまで閉じない） -->
+  <div class="onb-overlay" id="onbOverlay" hidden>
+    <div class="onb-card">
+      <h2>ようこそ！</h2>
+      <p>表示する名前（ニックネーム）を決めてください。<br>本名でなくてOK。あとでいつでも変更できます。</p>
+      <input id="onbName" type="text" placeholder="例：Ku-xii" maxlength="30">
+      <button class="drawer-btn primary" id="onbSave">これで始める</button>
+    </div>
+  </div>
+
   <!-- 全画面ビュー（編集/閲覧/とは=legacy, 空ページ） -->
   <div class="fullview" id="fullview" hidden>
     <header class="fullview-bar">
@@ -501,9 +519,7 @@ function setAuthUI(session, profile){
     av.textContent = ini; n.textContent = shown; s.textContent = sub;
     if (avBtn) avBtn.textContent = ini;
     setSidebarAccount(ini, shown);
-    box.innerHTML = '<button class="drawer-btn" id="renameBtn">表示名を変更</button>'
-                  + '<button class="drawer-btn" id="logoutBtn" style="margin-top:8px">ログアウト</button>';
-    $("renameBtn").onclick = setDisplayName;
+    box.innerHTML = '<button class="drawer-btn" id="logoutBtn">ログアウト</button>';
     $("logoutBtn").onclick = function(){ sb.auth.signOut(); };
   } else {
     currentUserId = null; currentName = "";
@@ -520,14 +536,46 @@ function setAuthUI(session, profile){
   }
 }
 
-// 表示する名前（ニックネーム）を本人が決める。本名を出さないための要。
-function setDisplayName(){
+// 表示名をDBに保存して再描画（成功時に cb）。本名は使わず本人が決めた名前のみ。
+function saveDisplayName(v, cb){
   if (!sb || !currentUserId) return;
-  var v = prompt("表示する名前（ニックネーム）を入力してください。\n※本名でなくてOK。いつでも変更できます。", currentName || "");
-  if (v === null) return;        // キャンセル
-  v = v.trim(); if (!v) return;
+  v = (v || "").trim(); if (!v) return;
   sb.from("profiles").update({ display_name: v }).eq("id", currentUserId)
-    .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); }); });
+    .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); if (cb) cb(); }); });
+}
+
+// 初回ログイン: 表示名が空なら必須入力モーダル（決めるまで閉じない）
+function showOnboarding(){
+  var ov = $("onbOverlay"), inp = $("onbName");
+  ov.hidden = false; inp.value = "";
+  setTimeout(function(){ inp.focus(); }, 60);
+  $("onbSave").onclick = function(){
+    var v = inp.value.trim();
+    if (!v){ inp.focus(); return; }            // 空では進めない＝必須
+    saveDisplayName(v, function(){ ov.hidden = true; });
+  };
+}
+
+// プロフィール編集（ドロワーの「プロフィール」から。表示名の変更はここ）
+function openProfile(){
+  $("fvTitle").textContent = "プロフィール編集";
+  if (!sb || !currentUserId){
+    fullviewBody.innerHTML = '<div class="stub"><h2>プロフィール</h2><p>ログインすると表示名などを設定できます。</p></div>';
+    fullview.hidden = false; return;
+  }
+  fullviewBody.innerHTML =
+    '<div class="stub"><h2>プロフィール編集</h2>'
+    + '<label style="display:block;font-size:.8rem;color:var(--sub);margin:16px 0 4px">表示名（ニックネーム）</label>'
+    + '<input id="profName" type="text" maxlength="30" style="width:100%;max-width:360px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink)">'
+    + '<div><button class="drawer-btn primary" id="profSave" style="width:auto;max-width:360px;margin-top:16px;padding:11px 28px">保存</button></div>'
+    + '<p class="note" style="margin-top:10px;font-size:.74rem;color:var(--sub)">本名でなくてOK。いつでも変更できます。</p></div>';
+  $("profName").value = currentName || "";
+  fullview.hidden = false;
+  $("profSave").onclick = function(){
+    var v = $("profName").value.trim();
+    if (!v){ $("profName").focus(); return; }
+    saveDisplayName(v, function(){ closeFull(); });
+  };
 }
 
 function applySession(session){
@@ -537,10 +585,10 @@ function applySession(session){
       .then(function(p){
         var prof = (p && !p.error) ? p.data : null;
         setAuthUI(session, prof);
-        // 初回（表示名が空）なら一度だけニックネーム入力を促す＝本名を出さずに済む
+        // 初回（表示名が空）なら必須入力モーダルを一度だけ表示＝本名を出さずに済む
         if (prof && (!prof.display_name || !prof.display_name.trim()) && !_namePrompted){
           _namePrompted = true;
-          setDisplayName();
+          showOnboarding();
         }
       });
   } else {
@@ -561,7 +609,8 @@ function renderDrawer(){
     b.textContent = item.label;
     b.addEventListener("click", function(){
       closeDrawer();
-      if (item.kind === "legacy") openLegacy(item.label, item.hash);
+      if (item.id === "profile") openProfile();
+      else if (item.kind === "legacy") openLegacy(item.label, item.hash);
       else openStub(item.label);
     });
     list.appendChild(b);
