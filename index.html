@@ -169,7 +169,11 @@ button{font-family:inherit}
 .drawer-auth:empty{display:none}
 .drawer-btn{width:100%; padding:11px; border-radius:8px; font:inherit; font-size:.9rem; font-weight:700; cursor:pointer; border:1px solid var(--line-d); background:#fff; color:var(--ink)}
 .drawer-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.drawer-btn.danger{border-color:var(--warn); color:var(--warn)}
 .drawer-auth .note{font-size:.74rem; color:var(--sub); margin:0}
+/* メニュー最下部のログアウト・退会（プライバシーポリシーの下） */
+.drawer-bottom{padding:8px 18px 4px; display:flex; flex-direction:column; gap:8px}
+.drawer-bottom:empty{display:none}
 /* 初回ニックネーム入力モーダル（必須・閉じられない） */
 .onb-overlay{position:fixed; inset:0; background:rgba(20,26,40,.55); display:flex; align-items:center; justify-content:center; padding:22px; z-index:100}
 .onb-overlay[hidden]{display:none}
@@ -179,7 +183,16 @@ button{font-family:inherit}
 .onb-card input{width:100%; padding:12px 14px; border:1px solid var(--line-d); border-radius:10px; font:inherit; font-size:1rem; color:var(--ink); margin-bottom:14px; text-align:center}
 .onb-card input:focus{outline:none; border-color:var(--accent)}
 /* プロフィール（X風） */
-.pf-header{height:120px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2)}
+.pf-header{height:120px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
+.pf-avatar img{width:100%; height:100%; border-radius:50%; object-fit:cover}
+/* 画像アップロード行（編集フォーム） */
+.pf-imgrow{display:flex; align-items:center; gap:12px; margin-bottom:4px}
+.pf-imgprev{flex:none; background:#EEF0F4 center/cover no-repeat; border:1px solid var(--line)}
+.pf-imgprev-h{width:96px; height:54px; border-radius:8px}
+.pf-imgprev-a{width:54px; height:54px; border-radius:50%}
+.pf-uploadbtn{border:1px solid var(--line-d); border-radius:8px; padding:8px 14px; font-size:.84rem; font-weight:700; cursor:pointer; background:#fff}
+.pf-uploadbtn:hover{border-color:var(--ink)}
+.pf-imgstatus{font-size:.74rem; color:var(--sub)}
 .pf-bar{display:flex; align-items:flex-end; justify-content:space-between; padding:0 16px; margin-top:-34px}
 .pf-avatar{width:72px; height:72px; border-radius:50%; background:var(--bp-bg); color:var(--bp); border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.7rem}
 .pf-edit{border:1px solid var(--line-d); background:#fff; color:var(--ink); font:inherit; font-weight:700; font-size:.85rem; padding:7px 18px; border-radius:20px; cursor:pointer; margin-bottom:6px}
@@ -379,6 +392,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
     </div>
     <div class="drawer-auth" id="drawerAuth"></div>
     <div class="drawer-list" id="drawerList"></div>
+    <div class="drawer-bottom" id="drawerBottom"></div>
     <div class="drawer-foot">塗装レシピ録 v2 — 骨組み版<br>記載の商品名は各社の商標です。</div>
   </aside>
 
@@ -546,13 +560,19 @@ function setAuthUI(session, profile){
     av.textContent = ini; n.textContent = shown; s.textContent = sub;
     if (avBtn) avBtn.textContent = ini;
     setSidebarAccount(ini, shown);
-    box.innerHTML = '<button class="drawer-btn" id="logoutBtn">ログアウト</button>';
+    box.innerHTML = "";   // 上の認証欄は空（ログイン中はアカウント情報が見出しに出る）
+    // ログアウト・退会はメニュー最下部（プライバシーポリシーの下）に配置
+    $("drawerBottom").innerHTML =
+      '<button class="drawer-btn" id="logoutBtn">ログアウト</button>'
+      + '<button class="drawer-btn danger" id="deleteBtn">退会（アカウント削除）</button>';
     $("logoutBtn").onclick = function(){ sb.auth.signOut(); };
+    $("deleteBtn").onclick = deleteAccount;
   } else {
     currentUserId = null; currentName = "";
     av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
     if (avBtn) avBtn.textContent = "ゲ";
     setSidebarAccount("ゲ", "ゲスト");
+    $("drawerBottom").innerHTML = "";
     box.innerHTML = sb
       ? '<button class="drawer-btn primary" id="loginBtn">Googleでログイン</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
@@ -590,13 +610,63 @@ function saveProfile(fields, cb){
     .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); if (cb) cb(); }); });
 }
 
+// 画像をcanvasで縮小＆JPEG圧縮（容量・転送量の節約＝課金暴走防止）
+function compressImage(file, maxEdge, quality){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    img.onload = function(){
+      var s = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      var cw = Math.round(img.width * s), ch = Math.round(img.height * s);
+      var c = document.createElement("canvas"); c.width = cw; c.height = ch;
+      c.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      c.toBlob(function(b){ b ? resolve(b) : reject(new Error("変換失敗")); }, "image/jpeg", quality);
+    };
+    img.onerror = function(){ reject(new Error("画像を読み込めません")); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ヘッダー/アイコン画像をStorageにアップロード→profilesに保存
+function uploadProfileImage(kind, file, statusEl, prevEl){
+  if (!sb || !currentUserId) return;
+  statusEl.textContent = "アップロード中…";
+  var maxEdge = (kind === "avatar") ? 512 : 1500;
+  compressImage(file, maxEdge, 0.85).then(function(blob){
+    var path = currentUserId + "/" + kind + "_" + Date.now() + ".jpg";
+    return sb.storage.from("profile").upload(path, blob, { contentType:"image/jpeg", upsert:true });
+  }).then(function(up){
+    if (up.error) throw up.error;
+    var url = sb.storage.from("profile").getPublicUrl(up.data.path).data.publicUrl;
+    var field = (kind === "avatar") ? { avatar_url:url } : { header_url:url };
+    return sb.from("profiles").update(field).eq("id", currentUserId).then(function(r){
+      if (r.error) throw r.error;
+      if (prevEl) prevEl.style.backgroundImage = "url(" + url + ")";
+      statusEl.textContent = "更新しました ✓";
+    });
+  }).catch(function(e){ statusEl.textContent = "失敗: " + (e.message || e); });
+}
+
+// 退会＝アカウント＋全データ完全削除（サーバの delete_user 関数を呼ぶ。cascadeで投稿等も消える）
+function deleteAccount(){
+  if (!sb || !currentUserId) return;
+  if (!confirm("本当に退会しますか？\nアカウント・プロフィール・投稿など、あなたのデータはすべて完全に削除され、元に戻せません。")) return;
+  if (!confirm("最終確認：すべてのデータを削除します。よろしいですか？")) return;
+  sb.rpc("delete_user").then(function(res){
+    if (res && res.error){ alert("退会に失敗しました：" + res.error.message); return; }
+    sb.auth.signOut().then(function(){ alert("退会が完了しました。ご利用ありがとうございました。"); location.reload(); });
+  });
+}
+
 // 自分の投稿一覧（段2で実投稿が入るまでは空状態）
 function renderMyPosts(){
   var box = $("pfPosts"); if (!box || !sb || !currentUserId) return;
   sb.from("recipes").select("id,title,cover_url,created_at").eq("owner_id", currentUserId).order("created_at", { ascending:false })
     .then(function(res){
       var rows = (res && !res.error && res.data) ? res.data : [];
-      if (!rows.length){ box.innerHTML = '<p class="pf-empty">まだ投稿がありません。下の ＋ から作れます。</p>'; return; }
+      if (!rows.length){
+        var where = (window.innerWidth >= 900) ? "横の" : "下の";
+        box.innerHTML = '<p class="pf-empty">まだ投稿がありません。'+where+' ＋ から作れます。</p>'; return;
+      }
       box.innerHTML = "";
       rows.forEach(function(r){
         var c = document.createElement("button"); c.className = "pf-post";
@@ -617,10 +687,12 @@ function renderProfileView(prof){
   var bio  = prof.bio || "";
   var link = prof.link || "";
   $("fvTitle").textContent = "プロフィール";
+  var hdrStyle = prof.header_url ? ' style="background-image:url('+esc(prof.header_url)+')"' : '';
+  var avInner  = prof.avatar_url ? '<img src="'+esc(prof.avatar_url)+'" alt="">' : esc(ini);
   fullviewBody.innerHTML =
     '<div class="pf">'
-    + '<div class="pf-header"></div>'
-    + '<div class="pf-bar"><span class="pf-avatar">'+esc(ini)+'</span>'
+    + '<div class="pf-header"'+hdrStyle+'></div>'
+    + '<div class="pf-bar"><span class="pf-avatar">'+avInner+'</span>'
     +   '<button class="pf-edit" id="pfEdit">編集</button></div>'
     + '<div class="pf-info">'
     +   '<div class="pf-name">'+esc(name)+'</div>'
@@ -648,9 +720,21 @@ function renderProfileEdit(prof){
     + '<textarea id="pfBio" class="pf-field" rows="3" maxlength="160" placeholder="制作スタイルや好きなジャンルなど">'+val(prof.bio)+'</textarea>'
     + '<label class="pf-label">リンク（XやサイトのURL）</label>'
     + '<input id="pfLink" class="pf-field" type="url" placeholder="https://..." value="'+val(prof.link)+'">'
+    + '<label class="pf-label">ヘッダー画像</label>'
+    + '<div class="pf-imgrow"><span class="pf-imgprev pf-imgprev-h" id="hdrPrev"></span>'
+    +   '<label class="pf-uploadbtn">画像を選ぶ<input type="file" id="hdrFile" accept="image/*" hidden></label>'
+    +   '<span class="pf-imgstatus" id="hdrStatus"></span></div>'
+    + '<label class="pf-label">アイコン</label>'
+    + '<div class="pf-imgrow"><span class="pf-imgprev pf-imgprev-a" id="avPrev"></span>'
+    +   '<label class="pf-uploadbtn">画像を選ぶ<input type="file" id="avFile" accept="image/*" hidden></label>'
+    +   '<span class="pf-imgstatus" id="avStatus"></span></div>'
     + '<div><button class="drawer-btn primary" id="pfSave" style="width:auto;margin-top:18px;padding:11px 30px">保存</button></div>'
-    + '<p class="note" style="margin-top:12px;font-size:.74rem;color:var(--sub)">ヘッダー画像・アイコンの設定は近日追加します。本名でなくてOK。</p>'
+    + '<p class="note" style="margin-top:12px;font-size:.74rem;color:var(--sub)">画像はその場で保存されます。文字情報は「保存」で確定。本名でなくてOK。</p>'
     + '</div>';
+  if (prof.header_url) $("hdrPrev").style.backgroundImage = "url(" + prof.header_url + ")";
+  if (prof.avatar_url) $("avPrev").style.backgroundImage  = "url(" + prof.avatar_url + ")";
+  $("hdrFile").onchange = function(e){ var f = e.target.files[0]; if (f) uploadProfileImage("header", f, $("hdrStatus"), $("hdrPrev")); };
+  $("avFile").onchange  = function(e){ var f = e.target.files[0]; if (f) uploadProfileImage("avatar", f, $("avStatus"), $("avPrev")); };
   $("pfSave").onclick = function(){
     var nm = $("pfName").value.trim();
     if (!nm){ $("pfName").focus(); return; }   // 表示名は必須
