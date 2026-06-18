@@ -199,6 +199,7 @@ alter table public.profiles add column if not exists is_admin boolean not null d
 alter table public.profiles add column if not exists link       text;  -- 任意リンク(X/サイト等)
 alter table public.profiles add column if not exists avatar_url text;  -- アイコン画像URL(画像ステップで使用)
 alter table public.profiles add column if not exists header_url text;  -- ヘッダー画像URL(画像ステップで使用)
+alter table public.profiles add column if not exists terms_agreed_at timestamptz;  -- 利用規約・プライバシーへの同意時刻
 
 -- 自分が管理者か判定するヘルパー(RLSの再帰を避けるため security definer)
 create or replace function public.is_admin()

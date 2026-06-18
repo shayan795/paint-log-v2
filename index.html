@@ -182,7 +182,11 @@ button{font-family:inherit}
 .onb-card h2{font-size:1.2rem; margin:0 0 8px}
 .onb-card p{font-size:.84rem; color:var(--sub); margin:0 0 16px; line-height:1.6}
 .onb-card input{width:100%; padding:12px 14px; border:1px solid var(--line-d); border-radius:10px; font:inherit; font-size:1rem; color:var(--ink); margin-bottom:14px; text-align:center}
-.onb-card input:focus{outline:none; border-color:var(--accent)}
+.onb-card input[type=text]:focus{outline:none; border-color:var(--accent)}
+.onb-consent{display:flex; align-items:flex-start; gap:8px; text-align:left; font-size:.8rem; color:var(--sub); margin:0 0 14px; line-height:1.5}
+.onb-consent input{width:auto; margin:3px 0 0}
+.onb-consent a{color:var(--bp)}
+.drawer-btn:disabled{opacity:.45; cursor:not-allowed}
 /* プロフィール（X風） */
 .pf{width:100%}   /* 画面いっぱい（PCも全幅） */
 .pf-header{aspect-ratio:3/1; max-height:260px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
@@ -404,7 +408,8 @@ textarea.pf-field{resize:vertical; line-height:1.6}
       <h2>ようこそ！</h2>
       <p>表示する名前（ニックネーム）を決めてください。<br>本名でなくてOK。あとでいつでも変更できます。</p>
       <input id="onbName" type="text" placeholder="例：Ku-xii" maxlength="30">
-      <button class="drawer-btn primary" id="onbSave">これで始める</button>
+      <label class="onb-consent"><input type="checkbox" id="onbAgree"><span><a href="terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意します</span></label>
+      <button class="drawer-btn primary" id="onbSave" disabled>これで始める</button>
     </div>
   </div>
 
@@ -480,7 +485,8 @@ var MOCK = {
     { id:"settings", label:"設定",                 kind:"stub" },
     { id:"help",     label:"ヘルプ",               kind:"stub" },
     { id:"feedback", label:"お問い合わせ",         kind:"stub" },
-    { id:"privacy",  label:"プライバシーポリシー", kind:"stub" }
+    { id:"terms",    label:"利用規約",             kind:"page", url:"terms.html" },
+    { id:"privacy",  label:"プライバシーポリシー", kind:"page", url:"privacy.html" }
   ]
 };
 
@@ -569,20 +575,27 @@ function setAuthUI(session, profile){
     if (avBtn) avBtn.textContent = "ゲ";
     setSidebarAccount("ゲ", "ゲスト");
     box.innerHTML = sb
-      ? '<button class="drawer-btn primary" id="loginBtn">Googleでログイン</button>'
+      ? '<button class="drawer-btn primary" id="loginBtn">Googleで続ける</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
     var lb = $("loginBtn");
-    if (lb) lb.onclick = function(){
-      sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + location.pathname } });
-    };
+    if (lb) lb.onclick = googleLogin;
   }
   renderDrawer();   // ログイン状態に応じてメニュー最下部のログアウト/退会/切替を出し分け
 }
 
-// 別アカウントに切り替え（Googleのアカウント選択を強制）
+// Googleで続ける（ログイン＝新規登録を兼ねる。毎回アカウント選択させる）
+function googleLogin(){
+  if (!sb) return;
+  sb.auth.signInWithOAuth({ provider:"google", options:{
+    redirectTo: location.origin + location.pathname,
+    queryParams:{ prompt:"select_account" }   // 毎回どのGoogleアカウントか選ばせる（誤アカウント防止）
+  }});
+}
+
+// 別アカウントに切り替え＝一度ログアウトしてから再ログイン（多重ログインは作らない）
 function switchAccount(){
   if (!sb) return;
-  sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + location.pathname, queryParams:{ prompt:"select_account" } } });
+  sb.auth.signOut().then(googleLogin);
 }
 
 // 表示名をDBに保存して再描画（成功時に cb）。本名は使わず本人が決めた名前のみ。
@@ -595,13 +608,16 @@ function saveDisplayName(v, cb){
 
 // 初回ログイン: 表示名が空なら必須入力モーダル（決めるまで閉じない）
 function showOnboarding(){
-  var ov = $("onbOverlay"), inp = $("onbName");
-  ov.hidden = false; inp.value = "";
+  var ov = $("onbOverlay"), inp = $("onbName"), agree = $("onbAgree"), btn = $("onbSave");
+  ov.hidden = false; inp.value = ""; agree.checked = false;
+  function upd(){ btn.disabled = !(inp.value.trim() && agree.checked); }  // 名前＋同意が揃うまで押せない
+  inp.oninput = upd; agree.onchange = upd; upd();
   setTimeout(function(){ inp.focus(); }, 60);
-  $("onbSave").onclick = function(){
+  btn.onclick = function(){
     var v = inp.value.trim();
-    if (!v){ inp.focus(); return; }            // 空では進めない＝必須
-    saveDisplayName(v, function(){ ov.hidden = true; });
+    if (!v || !agree.checked) return;
+    // 表示名と「規約同意の時刻」を記録（本名は使わない）
+    saveProfile({ display_name: v, terms_agreed_at: new Date().toISOString() }, function(){ ov.hidden = true; });
   };
 }
 
@@ -664,7 +680,8 @@ function deleteAccount(){
     if (res && res.error) throw res.error;
     return sb.auth.signOut();
   }).then(function(){
-    alert("退会が完了しました。ご利用ありがとうございました。"); location.reload();
+    // 認証を一切初期化しない静的ページへ（自動再ログインが起きない）
+    location.href = "goodbye.html";
   }).catch(function(e){ alert("退会に失敗しました：" + (e.message || e)); });
 }
 
@@ -798,6 +815,7 @@ function renderDrawer(){
       closeDrawer();
       if (item.id === "profile") openProfile();
       else if (item.kind === "legacy") openLegacy(item.label, item.hash);
+      else if (item.kind === "page") location.href = item.url;
       else openStub(item.label);
     });
     list.appendChild(b);
