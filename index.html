@@ -164,6 +164,12 @@ button{font-family:inherit}
 .drawer-list button{width:100%; text-align:left; background:none; border:none; padding:13px 18px; font:inherit; font-size:.92rem; color:var(--ink); cursor:pointer}
 .drawer-list button:hover{background:var(--bp-bg)}
 .drawer-foot{padding:14px 18px; border-top:1px solid var(--line); font-size:.68rem; color:var(--sub); line-height:1.5}
+/* ログイン/ログアウト */
+.drawer-auth{padding:12px 18px; border-bottom:1px solid var(--line)}
+.drawer-auth:empty{display:none}
+.drawer-btn{width:100%; padding:11px; border-radius:8px; font:inherit; font-size:.9rem; font-weight:700; cursor:pointer; border:1px solid var(--line-d); background:#fff; color:var(--ink)}
+.drawer-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.drawer-auth .note{font-size:.74rem; color:var(--sub); margin:0}
 
 /* 全画面ビュー(legacy iframe / 空ページ) */
 .fullview{
@@ -333,9 +339,10 @@ button{font-family:inherit}
   <div class="scrim" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-head">
-      <div class="av">K</div>
+      <div class="av">ゲ</div>
       <div class="who"><div class="n">ゲスト</div><div class="s">ログインしていません</div></div>
     </div>
+    <div class="drawer-auth" id="drawerAuth"></div>
     <div class="drawer-list" id="drawerList"></div>
     <div class="drawer-foot">塗装レシピ録 v2 — 骨組み版<br>記載の商品名は各社の商標です。</div>
   </aside>
@@ -351,6 +358,9 @@ button{font-family:inherit}
 
 </div>
 
+<!-- 認証ライブラリ＋接続設定（classic。HTTP配信時のみログイン動作。file://やオフラインでも閲覧は維持） -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="src/config.js"></script>
 <script>
 /* ============================================================================
    塗装レシピ録 v2 — アプリシェルのロジック（モジュール不使用＝どこでも動く）
@@ -459,6 +469,51 @@ var sbAccount = $("sbAccount");
 if (sbAccount) sbAccount.addEventListener("click", openDrawer);
 scrim.addEventListener("click", closeDrawer);
 $("bellBtn").addEventListener("click", function(){ openStub("通知"); });
+
+/* ----------------------------- 認証（Googleログイン） ----------------------------- */
+var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_URL)
+  ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
+  : null;
+
+function setAuthUI(session, profile){
+  var head = document.querySelector(".drawer-head");
+  var av = head.querySelector(".av"), n = head.querySelector(".who .n"), s = head.querySelector(".who .s");
+  var box = $("drawerAuth"), avBtn = $("avatarBtn");
+  if (session && session.user){
+    var u = session.user, m = u.user_metadata || {};
+    var name = (profile && profile.display_name) || m.name || m.full_name || (u.email||"").split("@")[0] || "ユーザー";
+    var sub  = (profile && profile.handle) ? "@"+profile.handle : (u.email||"");
+    var ini  = (name.charAt(0)||"U").toUpperCase();
+    av.textContent = ini; n.textContent = name; s.textContent = sub;
+    if (avBtn) avBtn.textContent = ini;
+    box.innerHTML = '<button class="drawer-btn" id="logoutBtn">ログアウト</button>';
+    $("logoutBtn").onclick = function(){ sb.auth.signOut(); };
+  } else {
+    av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
+    if (avBtn) avBtn.textContent = "ゲ";
+    box.innerHTML = sb
+      ? '<button class="drawer-btn primary" id="loginBtn">Googleでログイン</button>'
+      : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
+    var lb = $("loginBtn");
+    if (lb) lb.onclick = function(){
+      sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + location.pathname } });
+    };
+  }
+}
+function applySession(session){
+  if (sb && session && session.user){
+    sb.from("profiles").select("display_name,handle").eq("id", session.user.id).single()
+      .then(function(p){ setAuthUI(session, (p && !p.error) ? p.data : null); });
+  } else {
+    setAuthUI(null, null);
+  }
+}
+if (sb){
+  sb.auth.getSession().then(function(res){ applySession(res.data.session); });
+  sb.auth.onAuthStateChange(function(_e, session){ applySession(session); });
+} else {
+  setAuthUI(null, null);   // ライブラリ未読込（file:///オフライン）でもゲストUIは描く
+}
 
 function renderDrawer(){
   var list = $("drawerList"); list.innerHTML = "";

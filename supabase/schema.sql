@@ -189,5 +189,101 @@ create policy clips_all on public.clips
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================================
+-- 段1 追加: 管理者フラグ / タグ / 通報
+-- ----------------------------------------------------------------------------
+-- profiles に管理者フラグを追加(運営削除・通報閲覧用。自分のidだけ手動でtrueにする)
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+
+-- 自分が管理者か判定するヘルパー(RLSの再帰を避けるため security definer)
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select is_admin from public.profiles where id = auth.uid()), false);
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 6) tags — 塗装方法などのタグ(段5の集計で使う。器は今作る)
+-- ----------------------------------------------------------------------------
+create table if not exists public.tags (
+  id    bigint generated always as identity primary key,
+  slug  text unique not null,      -- URL用の安定キー(例 "gradation")
+  label text not null              -- 表示名(例 "グラデーション塗装")
+);
+
+-- 7) recipe_tags — 投稿とタグの紐付け(多対多)
+create table if not exists public.recipe_tags (
+  recipe_id uuid   not null references public.recipes(id) on delete cascade,
+  tag_id    bigint not null references public.tags(id)    on delete cascade,
+  primary key (recipe_id, tag_id)
+);
+
+-- 8) reports — 通報(段4で使う。器は今作る)
+create table if not exists public.reports (
+  id          bigint generated always as identity primary key,
+  recipe_id   uuid not null references public.recipes(id) on delete cascade,
+  reporter_id uuid references public.profiles(id) on delete set null,  -- 通報者(ログイン必須)
+  reason      text,                                  -- 種別(スパム/不適切 等)
+  detail      text,                                  -- 自由記述
+  status      text not null default 'open',          -- open / reviewed / closed
+  created_at  timestamptz not null default now()
+);
+
+-- 索引
+create index if not exists idx_recipe_tags_tag on public.recipe_tags(tag_id);
+create index if not exists idx_reports_status  on public.reports(status, created_at desc);
+create index if not exists idx_reports_recipe  on public.reports(recipe_id);
+
+-- ----------------------------------------------------------------------------
+-- RLS(タグ・通報)
+-- ----------------------------------------------------------------------------
+alter table public.tags        enable row level security;
+alter table public.recipe_tags enable row level security;
+alter table public.reports     enable row level security;
+
+drop policy if exists tags_select       on public.tags;
+drop policy if exists tags_admin_write  on public.tags;
+drop policy if exists rt_select         on public.recipe_tags;
+drop policy if exists rt_insert         on public.recipe_tags;
+drop policy if exists rt_delete         on public.recipe_tags;
+drop policy if exists reports_insert    on public.reports;
+drop policy if exists reports_select    on public.reports;
+drop policy if exists reports_update    on public.reports;
+
+-- tags: 読みは全員 / 書きは管理者のみ
+create policy tags_select on public.tags
+  for select using (true);
+create policy tags_admin_write on public.tags
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- recipe_tags: 親recipeが読めれば読める / 付け外しは親recipeの所有者
+create policy rt_select on public.recipe_tags
+  for select using (exists (
+    select 1 from public.recipes r
+    where r.id = recipe_id and (r.is_public or r.owner_id = auth.uid())
+  ));
+create policy rt_insert on public.recipe_tags
+  for insert with check (exists (
+    select 1 from public.recipes r
+    where r.id = recipe_id and r.owner_id = auth.uid()
+  ));
+create policy rt_delete on public.recipe_tags
+  for delete using (exists (
+    select 1 from public.recipes r
+    where r.id = recipe_id and r.owner_id = auth.uid()
+  ));
+
+-- reports: 追加はログイン済み本人 / 読み・更新は管理者のみ(通報内容は一般非公開)
+create policy reports_insert on public.reports
+  for insert with check (reporter_id = auth.uid());
+create policy reports_select on public.reports
+  for select using (public.is_admin());
+create policy reports_update on public.reports
+  for update using (public.is_admin()) with check (public.is_admin());
+
+-- recipes: 削除に管理者例外を追加(運営は通報対応で消せる)
+drop policy if exists recipes_delete on public.recipes;
+create policy recipes_delete on public.recipes
+  for delete using (owner_id = auth.uid() or public.is_admin());
+
+-- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
