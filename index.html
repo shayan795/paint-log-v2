@@ -562,7 +562,7 @@ function renderRecords(){
         var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
         var badge = r.is_public ? '' : '<span class="rec-private">非公開</span>';
         c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
-        c.addEventListener("click", function(){ openStub((r.title||"無題")+"（作品ページは段3で接続）"); });
+        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
         box.appendChild(c);
       });
     });
@@ -887,6 +887,7 @@ function renderMyPosts(){
         var c = document.createElement("button"); c.className = "pf-post";
         var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
         c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+'</div>';
+        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
         box.appendChild(c);
       });
     });

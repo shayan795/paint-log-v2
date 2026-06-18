@@ -2105,10 +2105,12 @@ function renderViewMode(){
   renderUsed("viewPaintList");
 
   // 編集ボタン(ヘッダー右上)
-  document.getElementById("tabEdit").onclick = () => showPage("edit");
+  var _te = document.getElementById("tabEdit");
+  if (_te) _te.onclick = () => showPage("edit");
 
-  // 「自分もレシピを作る」
-  document.getElementById("gotoCreate").onclick = () => {
+  // 「自分もレシピを作る」(v2でviewModeのCTAは撤去済み＝存在すれば結線)
+  var _gc = document.getElementById("gotoCreate");
+  if (_gc) _gc.onclick = () => {
     if (!confirm("新しいレシピを最初から作りますか?(今表示中のレシピは消えません。URLは残ります)")) return;
     location.hash = ""; location.reload();
   };
@@ -2253,10 +2255,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 <!-- v2: 公開フロー（押すまで投稿されない。DB接続後に実アップロードを実装） -->
 <script>
 (function(){
-  // v2: 「投稿する」を本物の保存に（押すまで投稿されない）
+  // v2: 投稿の 保存（新規/更新）・読み込み（?id）・削除
   var cfg = window.PAINTLOG_CONFIG || {};
   var sb = (window.supabase && cfg.SUPABASE_URL)
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+  var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既存投稿
 
   // 保存用に state を複製し、base64画像を除去（画像は次チャンクでR2へ。DB肥大を防ぐ）
   function gridForSave(){
@@ -2265,7 +2268,58 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     if (g.rows) g.rows.forEach(function(r){ delete r.photo; });
     return g;
   }
+  // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
+  function setVis(isPublic){
+    var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
+    for (var i=0;i<rs.length;i++) rs[i].checked = (rs[i].value === (isPublic ? "public" : "private"));
+  }
 
+  // ?id=UUID があれば既存レシピを読み込む（RLSで0件＝非公開の他人/削除済み）
+  (function loadById(){
+    if (!sb) return;
+    var id = new URLSearchParams(location.search).get("id");
+    if (!id) return;
+    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public").eq("id", id).single().then(function(res){
+      if (res.error || !res.data){
+        var vb = document.getElementById("viewBody");
+        if (vb) vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
+        return;
+      }
+      var rec = res.data;
+      try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
+      currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
+      setVis(rec.is_public);
+      renderAll();
+      if (location.hash === "#edit") showPage("edit"); else showPage("view");
+      // 所有者だけ「編集する」「削除」を出す
+      sb.auth.getSession().then(function(s){
+        var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;
+        var owner = !!uid && uid === currentOwnerId;
+        var edit = document.getElementById("tabEdit");
+        if (edit) edit.style.display = owner ? "" : "none";
+        if (owner) ensureDeleteBtn();
+      });
+    });
+  })();
+
+  function ensureDeleteBtn(){
+    if (document.getElementById("vDelete")) return;
+    var hdr = document.querySelector("#viewMode .v-site-header");
+    if (!hdr) return;
+    var btn = document.createElement("button");
+    btn.id = "vDelete"; btn.className = "v-edit-inline"; btn.textContent = "削除";
+    btn.style.cssText = "margin-left:8px;color:var(--warn);border-color:var(--warn)";
+    btn.onclick = function(){
+      if (!confirm("この投稿を削除します。元に戻せません。よろしいですか？")) return;
+      sb.from("recipes").delete().eq("id", currentRecipeId).then(function(res){
+        if (res.error){ alert("削除に失敗しました：" + res.error.message); return; }
+        location.href = "index.html#records";
+      });
+    };
+    hdr.appendChild(btn);
+  }
+
+  // 「投稿する」＝新規はINSERT / 既存(?idで読込)はUPDATE。押すまで投稿されない
   var btns = document.querySelectorAll(".js-publish");
   for (var i=0;i<btns.length;i++){
     btns[i].addEventListener("click", function(){
@@ -2278,21 +2332,24 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
         if (!session){ alert("投稿にはログインが必要です。"); location.href = "index.html"; return; }
-        return sb.from("recipes").insert({
-          owner_id: session.user.id,
+        var payload = {
           title: (state.kit || "").trim() || null,
           author_label: (state.author || "").trim() || null,
           memo: (state.memo || "").trim() || null,
           grid: gridForSave(),
           is_public: isPublic
-        }).select("id").single().then(function(res){
+        };
+        var q;
+        if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
+        else { payload.owner_id = session.user.id; q = sb.from("recipes").insert(payload); }
+        return q.select("id").single().then(function(res){
           if (res.error) throw res.error;
-          alert("投稿しました（" + (isPublic ? "公開" : "非公開") + "）。");
+          alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
           location.href = "index.html#records";
         });
       }).catch(function(e){
         btn.disabled = false; btn.textContent = orig;
-        alert("投稿に失敗しました：" + (e && e.message ? e.message : e));
+        alert("保存に失敗しました：" + (e && e.message ? e.message : e));
       });
     });
   }
