@@ -102,11 +102,12 @@ create trigger trg_recipes_updated_at
 -- ----------------------------------------------------------------------------
 -- 新規ユーザー登録時に profiles を自動作成するトリガー
 -- ----------------------------------------------------------------------------
+-- プライバシー: Googleの本名は入れない。display_nameは空のまま作り、本人がニックネームを設定する。
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'))
+  insert into public.profiles (id)
+  values (new.id)
   on conflict (id) do nothing;
   return new;
 end; $$;

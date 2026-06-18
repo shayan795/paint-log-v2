@@ -475,22 +475,41 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
   : null;
 
+var currentUserId = null, currentName = "", _namePrompted = false;
+
+// PCサイドバーのアカウント表示も連動させる
+function setSidebarAccount(ini, label){
+  var sbAcc = $("sbAccount");
+  if (!sbAcc) return;
+  var avEl = sbAcc.querySelector(".sb-av");
+  var txtEl = sbAcc.querySelector("span:not(.sb-av)");
+  if (avEl) avEl.textContent = ini;
+  if (txtEl) txtEl.textContent = label;
+}
+
 function setAuthUI(session, profile){
   var head = document.querySelector(".drawer-head");
   var av = head.querySelector(".av"), n = head.querySelector(".who .n"), s = head.querySelector(".who .s");
   var box = $("drawerAuth"), avBtn = $("avatarBtn");
   if (session && session.user){
-    var u = session.user, m = u.user_metadata || {};
-    var name = (profile && profile.display_name) || m.name || m.full_name || (u.email||"").split("@")[0] || "ユーザー";
-    var sub  = (profile && profile.handle) ? "@"+profile.handle : (u.email||"");
-    var ini  = (name.charAt(0)||"U").toUpperCase();
-    av.textContent = ini; n.textContent = name; s.textContent = sub;
+    // ★プライバシー: Googleの本名(metadata)は使わない。profiles.display_name のみ採用
+    var name = (profile && profile.display_name && profile.display_name.trim()) ? profile.display_name.trim() : "";
+    currentName = name;
+    var shown = name || "（名前未設定）";
+    var sub   = (profile && profile.handle) ? "@"+profile.handle : "ログイン中";
+    var ini   = name ? name.charAt(0) : "？";
+    av.textContent = ini; n.textContent = shown; s.textContent = sub;
     if (avBtn) avBtn.textContent = ini;
-    box.innerHTML = '<button class="drawer-btn" id="logoutBtn">ログアウト</button>';
+    setSidebarAccount(ini, shown);
+    box.innerHTML = '<button class="drawer-btn" id="renameBtn">表示名を変更</button>'
+                  + '<button class="drawer-btn" id="logoutBtn" style="margin-top:8px">ログアウト</button>';
+    $("renameBtn").onclick = setDisplayName;
     $("logoutBtn").onclick = function(){ sb.auth.signOut(); };
   } else {
+    currentUserId = null; currentName = "";
     av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
     if (avBtn) avBtn.textContent = "ゲ";
+    setSidebarAccount("ゲ", "ゲスト");
     box.innerHTML = sb
       ? '<button class="drawer-btn primary" id="loginBtn">Googleでログイン</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
@@ -500,10 +519,30 @@ function setAuthUI(session, profile){
     };
   }
 }
+
+// 表示する名前（ニックネーム）を本人が決める。本名を出さないための要。
+function setDisplayName(){
+  if (!sb || !currentUserId) return;
+  var v = prompt("表示する名前（ニックネーム）を入力してください。\n※本名でなくてOK。いつでも変更できます。", currentName || "");
+  if (v === null) return;        // キャンセル
+  v = v.trim(); if (!v) return;
+  sb.from("profiles").update({ display_name: v }).eq("id", currentUserId)
+    .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); }); });
+}
+
 function applySession(session){
   if (sb && session && session.user){
-    sb.from("profiles").select("display_name,handle").eq("id", session.user.id).single()
-      .then(function(p){ setAuthUI(session, (p && !p.error) ? p.data : null); });
+    currentUserId = session.user.id;
+    sb.from("profiles").select("display_name,handle").eq("id", currentUserId).single()
+      .then(function(p){
+        var prof = (p && !p.error) ? p.data : null;
+        setAuthUI(session, prof);
+        // 初回（表示名が空）なら一度だけニックネーム入力を促す＝本名を出さずに済む
+        if (prof && (!prof.display_name || !prof.display_name.trim()) && !_namePrompted){
+          _namePrompted = true;
+          setDisplayName();
+        }
+      });
   } else {
     setAuthUI(null, null);
   }
