@@ -186,6 +186,9 @@ button{font-family:inherit}
 .onb-consent{display:flex; align-items:flex-start; gap:8px; text-align:left; font-size:.8rem; color:var(--sub); margin:0 0 14px; line-height:1.5}
 .onb-consent input{width:auto; margin:3px 0 0}
 .onb-consent a{color:var(--bp)}
+.onb-label{display:block; text-align:left; font-size:.76rem; font-weight:700; color:var(--ink); margin:2px 0 4px}
+.onb-hint{font-weight:400; color:var(--sub); font-size:.72rem}
+.onb-err{text-align:left; color:var(--warn); font-size:.76rem; min-height:1.1em; margin:2px 0 10px}
 .drawer-btn:disabled{opacity:.45; cursor:not-allowed}
 /* プロフィール（X風） */
 .pf{width:100%}   /* 画面いっぱい（PCも全幅） */
@@ -406,8 +409,12 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <div class="onb-overlay" id="onbOverlay" hidden>
     <div class="onb-card">
       <h2>ようこそ！</h2>
-      <p>表示する名前（ニックネーム）を決めてください。<br>本名でなくてOK。あとでいつでも変更できます。</p>
+      <p>アカウントの初期設定です。<br>本名は使いません。</p>
+      <label class="onb-label">ユーザーID<span class="onb-hint">（半角英数・_、後から変更できません）</span></label>
+      <input id="onbUserId" type="text" placeholder="例：kuxii_01" maxlength="20" autocapitalize="off" autocomplete="off" autocorrect="off">
+      <label class="onb-label">ニックネーム（表示名・後から変更可）</label>
       <input id="onbName" type="text" placeholder="例：Ku-xii" maxlength="30">
+      <div class="onb-err" id="onbErr"></div>
       <label class="onb-consent"><input type="checkbox" id="onbAgree"><span><a href="terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意します</span></label>
       <button class="drawer-btn primary" id="onbSave" disabled>これで始める</button>
     </div>
@@ -563,7 +570,7 @@ function setAuthUI(session, profile){
     var name = (profile && profile.display_name && profile.display_name.trim()) ? profile.display_name.trim() : "";
     currentName = name;
     var shown = name || "（名前未設定）";
-    var sub   = (profile && profile.handle) ? "@"+profile.handle : "ログイン中";
+    var sub   = (profile && profile.user_id) ? "@"+profile.user_id : "ログイン中";
     var ini   = name ? name.charAt(0) : "？";
     av.textContent = ini; n.textContent = shown; s.textContent = sub;
     if (avBtn) avBtn.textContent = ini;
@@ -607,17 +614,27 @@ function saveDisplayName(v, cb){
 }
 
 // 初回ログイン: 表示名が空なら必須入力モーダル（決めるまで閉じない）
+var USERID_RE = /^[A-Za-z0-9_]{3,20}$/;
 function showOnboarding(){
-  var ov = $("onbOverlay"), inp = $("onbName"), agree = $("onbAgree"), btn = $("onbSave");
-  ov.hidden = false; inp.value = ""; agree.checked = false;
-  function upd(){ btn.disabled = !(inp.value.trim() && agree.checked); }  // 名前＋同意が揃うまで押せない
-  inp.oninput = upd; agree.onchange = upd; upd();
-  setTimeout(function(){ inp.focus(); }, 60);
+  var ov = $("onbOverlay"), uid = $("onbUserId"), inp = $("onbName"), agree = $("onbAgree"), btn = $("onbSave"), err = $("onbErr");
+  ov.hidden = false; uid.value = ""; inp.value = ""; agree.checked = false; err.textContent = "";
+  function upd(){ btn.disabled = !(USERID_RE.test(uid.value.trim()) && inp.value.trim() && agree.checked); }
+  uid.oninput = upd; inp.oninput = upd; agree.onchange = upd; upd();
+  setTimeout(function(){ uid.focus(); }, 60);
   btn.onclick = function(){
-    var v = inp.value.trim();
-    if (!v || !agree.checked) return;
-    // 表示名と「規約同意の時刻」を記録（本名は使わない）
-    saveProfile({ display_name: v, terms_agreed_at: new Date().toISOString() }, function(){ ov.hidden = true; });
+    var id = uid.value.trim(), nm = inp.value.trim();
+    if (!USERID_RE.test(id)){ err.textContent = "ユーザーIDは半角英数と _ の3〜20文字"; return; }
+    if (!nm || !agree.checked) return;
+    btn.disabled = true; err.textContent = "確認中…";
+    // ユーザーID重複チェック（大小無視）
+    sb.from("profiles").select("id").ilike("user_id", id).then(function(res){
+      if (res.data && res.data.length){ err.textContent = "このユーザーIDは既に使われています"; btn.disabled = false; return; }
+      // user_id（不変）＋ニックネーム＋規約同意時刻を保存。本名は使わない
+      saveProfile({ user_id: id, display_name: nm, terms_agreed_at: new Date().toISOString() }, function(r){
+        if (r && r.error){ err.textContent = "保存に失敗しました（IDが重複の可能性）"; btn.disabled = false; return; }
+        err.textContent = ""; ov.hidden = true;
+      });
+    });
   };
 }
 
@@ -625,7 +642,7 @@ function showOnboarding(){
 function saveProfile(fields, cb){
   if (!sb || !currentUserId) return;
   sb.from("profiles").update(fields).eq("id", currentUserId)
-    .then(function(){ sb.auth.getSession().then(function(r){ applySession(r.data.session); if (cb) cb(); }); });
+    .then(function(res){ sb.auth.getSession().then(function(r){ applySession(r.data.session); if (cb) cb(res); }); });
 }
 
 // 画像をcanvasで縮小＆JPEG圧縮（容量・転送量の節約＝課金暴走防止）
@@ -711,7 +728,7 @@ function renderProfileView(prof){
   var rawName = (prof.display_name && prof.display_name.trim()) ? prof.display_name.trim() : "";
   var name = rawName || "（名前未設定）";
   var ini  = rawName ? rawName.charAt(0) : "？";
-  var handle = prof.handle ? "@"+prof.handle : "";
+  var handle = prof.user_id ? "@"+prof.user_id : "";
   var bio  = prof.bio || "";
   var link = prof.link || "";
   $("fvTitle").textContent = "プロフィール";
@@ -742,6 +759,8 @@ function renderProfileEdit(prof){
   $("fvTitle").textContent = "プロフィール編集";
   fullviewBody.innerHTML =
     '<div class="pf-edit-form">'
+    + '<label class="pf-label">ユーザーID（変更できません）</label>'
+    + '<input class="pf-field" type="text" value="'+val(prof.user_id)+'" disabled style="opacity:.7">'
     + '<label class="pf-label">表示名（ニックネーム）</label>'
     + '<input id="pfName" class="pf-field" type="text" maxlength="30" value="'+val(prof.display_name)+'">'
     + '<label class="pf-label">自己紹介</label>'
@@ -778,19 +797,20 @@ function openProfile(){
     fullviewBody.innerHTML = '<div class="stub"><h2>プロフィール</h2><p>ログインすると表示名・自己紹介・リンクを設定できます。</p></div>';
     fullview.hidden = false; return;
   }
-  sb.from("profiles").select("display_name,handle,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
+  sb.from("profiles").select("user_id,display_name,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
     .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}); });
 }
 
 function applySession(session){
   if (sb && session && session.user){
     currentUserId = session.user.id;
-    sb.from("profiles").select("display_name,handle").eq("id", currentUserId).single()
+    sb.from("profiles").select("user_id,display_name").eq("id", currentUserId).single()
       .then(function(p){
         var prof = (p && !p.error) ? p.data : null;
         setAuthUI(session, prof);
-        // 初回（表示名が空）なら必須入力モーダルを一度だけ表示＝本名を出さずに済む
-        if (prof && (!prof.display_name || !prof.display_name.trim()) && !_namePrompted){
+        // 初回（user_id または ニックネームが未設定）なら初期設定モーダルを一度だけ表示
+        var needsSetup = prof && (!prof.user_id || !prof.display_name || !prof.display_name.trim());
+        if (needsSetup && !_namePrompted){
           _namePrompted = true;
           showOnboarding();
         }

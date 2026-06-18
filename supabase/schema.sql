@@ -201,6 +201,23 @@ alter table public.profiles add column if not exists avatar_url text;  -- アイ
 alter table public.profiles add column if not exists header_url text;  -- ヘッダー画像URL(画像ステップで使用)
 alter table public.profiles add column if not exists terms_agreed_at timestamptz;  -- 利用規約・プライバシーへの同意時刻
 
+-- ユーザーID（半角英数_・公開ID・一度決めたら変更不可）。display_name はニックネーム(変更可)
+alter table public.profiles add column if not exists user_id text;
+create unique index if not exists profiles_user_id_key on public.profiles(lower(user_id));  -- 大小無視で一意
+
+-- user_id を不変にする（一度設定したら変更不可）
+create or replace function public.lock_user_id()
+returns trigger language plpgsql as $$
+begin
+  if old.user_id is not null and new.user_id is distinct from old.user_id then
+    raise exception 'user_id は変更できません';
+  end if;
+  return new;
+end; $$;
+drop trigger if exists trg_lock_user_id on public.profiles;
+create trigger trg_lock_user_id before update on public.profiles
+  for each row execute function public.lock_user_id();
+
 -- 自分が管理者か判定するヘルパー(RLSの再帰を避けるため security definer)
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
