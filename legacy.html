@@ -1875,7 +1875,9 @@ function drawDots(x, cx, cy, cols, r, gap, centered){
   });
 }
 
-function generateCardUrl(theme, cb) {
+function generateCardUrl(theme, cb, opts) {
+  opts = opts || {};
+  const noTitle = !!opts.noTitle;   // サムネ用＝中央の「塗装レシピ」文字を描かない
   const W = 1080, H = 1080;
   const layout = "X";
   const draw = (imgs) => {
@@ -1917,8 +1919,8 @@ function generateCardUrl(theme, cb) {
         x.fillStyle = "#9AA3B2"; x.font = "600 26px 'IBM Plex Mono',monospace";
         x.textAlign="center"; x.fillText("NO PHOTO", W/2, photoH/2); x.textAlign="left";
       }
-      // 中央に大きく「塗装レシピ」(誘導の主役)
-      drawCenterTitle(x, W/2, photoH/2);
+      // 中央に大きく「塗装レシピ」(誘導の主役)。サムネ用は描かない
+      if (!noTitle) drawCenterTitle(x, W/2, photoH/2);
       // 左上ID
       if (state.author){
         x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(state.author.slice(0,20)).width;
@@ -1958,8 +1960,8 @@ function generateCardUrl(theme, cb) {
         x.fillStyle = "#9AA3B2"; x.font = "600 26px 'IBM Plex Mono',monospace";
         x.textAlign="center"; x.fillText("NO PHOTO", W/2, photoH/2); x.textAlign="left";
       }
-      // 中央に大きく「塗装レシピ」
-      drawCenterTitle(x, W/2, photoH/2);
+      // 中央に大きく「塗装レシピ」。サムネ用は描かない
+      if (!noTitle) drawCenterTitle(x, W/2, photoH/2);
       if (state.author){
         x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(state.author.slice(0,20)).width;
         roundRectPath(x, 28, 24, tw+24, 34, 16); x.fillStyle = "rgba(0,0,0,0.42)"; x.fill();
@@ -1980,6 +1982,7 @@ function generateCardUrl(theme, cb) {
   let loaded = 0; const imgs = [];
   srcs.forEach((src, idx) => {
     const im = new Image();
+    im.crossOrigin = "anonymous";   // Storage URL でも canvas を汚染させない
     im.onload = im.onerror = () => {
       if (im.width) imgs[idx] = im;
       if (++loaded === srcs.length) draw(imgs.filter(Boolean));
@@ -2273,12 +2276,30 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
   /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
 
-  // 保存用に state を複製し、base64画像を除去（画像は次チャンクでR2へ。DB肥大を防ぐ）
-  function gridForSave(){
-    var g = JSON.parse(JSON.stringify(state));
-    g.photos = [];
-    if (g.rows) g.rows.forEach(function(r){ delete r.photo; });
-    return g;
+  // 画像保存（Supabase Storage 'recipes' バケット）
+  function uploadImage(uid, dataUrl, tag){
+    return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+      var ext = (blob.type === "image/png") ? "png" : "jpg";
+      var path = uid + "/" + Date.now() + "_" + tag + "." + ext;
+      return sb.storage.from("recipes").upload(path, blob, { contentType: blob.type || "image/jpeg", upsert:true }).then(function(up){
+        if (up.error) throw up.error;
+        return sb.storage.from("recipes").getPublicUrl(path).data.publicUrl;
+      });
+    });
+  }
+  // base64(data:)だけアップロードしURL化。既にURLならそのまま
+  function ensureUrl(uid, src, tag){
+    if (!src) return Promise.resolve(null);
+    if (src.indexOf("data:") !== 0) return Promise.resolve(src);
+    return uploadImage(uid, src, tag);
+  }
+  // カバー画像（カードから「塗装レシピ」文字を抜いたもの）を生成→アップロード
+  function makeCover(uid){
+    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
+    if (!has) return Promise.resolve(null);
+    return new Promise(function(res){
+      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); }, { noTitle:true });
+    });
   }
   // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
   function setVis(isPublic){
@@ -2355,24 +2376,40 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       var v = card ? card.querySelector('input[type="radio"]:checked') : null;
       var isPublic = !(v && v.value === "private");
       if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに使えます。"); return; }
-      btn.disabled = true; var orig = btn.textContent; btn.textContent = "投稿中…";
+      btn.disabled = true; var orig = btn.textContent; btn.textContent = "保存中…";
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
         if (!session){ alert("投稿にはログインが必要です。"); location.href = "index.html"; return; }
-        var payload = {
-          title: (state.kit || "").trim() || null,
-          author_label: (state.author || "").trim() || null,
-          memo: (state.memo || "").trim() || null,
-          grid: gridForSave(),
-          is_public: isPublic
-        };
-        var q;
-        if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
-        else { payload.owner_id = session.user.id; q = sb.from("recipes").insert(payload); }
-        return q.select("id").single().then(function(res){
-          if (res.error) throw res.error;
-          alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
-          location.href = "index.html#records";
+        var uid = session.user.id;
+        // 1) 写真をStorageへ（data:のみアップ。既存URLは流用）
+        var photosSrc = (state.photos || []).slice();
+        var photoUrls = photosSrc.slice();
+        var rowPhotos = (state.rows || []).map(function(r){ return r.photo || null; });
+        var rowUrls = rowPhotos.slice();
+        var jobs = [];
+        photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
+        rowPhotos.forEach(function(p, ri){ if (p) jobs.push(ensureUrl(uid, p, "r"+ri).then(function(u){ rowUrls[ri] = u; })); });
+        return Promise.all(jobs).then(function(){
+          return makeCover(uid).then(function(cover){
+            // 2) URL化したgridを作る（base64は保存しない）
+            var g = JSON.parse(JSON.stringify(state));
+            g.photos = photoUrls.filter(Boolean);
+            if (g.rows) g.rows.forEach(function(r, ri){ if (rowUrls[ri]) r.photo = rowUrls[ri]; else delete r.photo; });
+            var payload = {
+              title: (state.kit || "").trim() || null,
+              author_label: (state.author || "").trim() || null,
+              memo: (state.memo || "").trim() || null,
+              grid: g, is_public: isPublic, cover_url: cover
+            };
+            var q;
+            if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
+            else { payload.owner_id = uid; q = sb.from("recipes").insert(payload); }
+            return q.select("id").single().then(function(res){
+              if (res.error) throw res.error;
+              alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
+              location.href = "index.html#records";
+            });
+          });
         });
       }).catch(function(e){
         btn.disabled = false; btn.textContent = orig;
