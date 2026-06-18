@@ -2300,6 +2300,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       var rec = res.data;
       try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
+      // 既存投稿の編集なので「投稿する」→「編集を保存」に
+      var pbs = document.querySelectorAll(".js-publish");
+      for (var k=0;k<pbs.length;k++) pbs[k].textContent = "編集を保存";
       setVis(rec.is_public);
       renderAll();
       showPage("view");                 // 投稿閲覧は必ず「閲覧（読み取り）」で開く
