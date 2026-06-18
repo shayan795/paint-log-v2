@@ -2298,6 +2298,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       });
     });
   }
+  // 公開URL → Storageオブジェクトパス（recipesバケット内）を取り出す。削除に使う
+  function toStoragePath(url){
+    var m = String(url || "").match(/\/object\/public\/recipes\/(.+)$/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
   // base64(data:)だけアップロードしURL化。既にURLならそのまま
   function ensureUrl(uid, src, tag){
     if (!src) return Promise.resolve(null);
@@ -2381,11 +2386,23 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     del.id = "vDelete"; del.className = "v-edit-inline"; del.textContent = "削除";
     del.style.cssText = "position:static;color:var(--warn);border-color:var(--warn)";
     del.onclick = function(){
-      if (!confirm("この投稿を削除します。元に戻せません。よろしいですか？")) return;
-      sb.from("recipes").delete().eq("id", currentRecipeId).then(function(res){
-        if (res.error){ alert("削除に失敗しました：" + res.error.message); return; }
+      if (!confirm("この投稿を削除します。写真も含めて消え、元に戻せません。よろしいですか？")) return;
+      // 投稿に紐づく画像URL（写真・サムネ）をStorageから先に削除→投稿行を削除
+      sb.from("recipes").select("cover_url,grid").eq("id", currentRecipeId).single().then(function(res){
+        var urls = [];
+        if (res && res.data){
+          if (res.data.cover_url) urls.push(res.data.cover_url);
+          var g = res.data.grid || {};
+          (g.photos || []).forEach(function(u){ if (u) urls.push(u); });
+          (g.rows || []).forEach(function(r){ if (r && r.photo) urls.push(r.photo); });
+        }
+        var paths = urls.map(toStoragePath).filter(Boolean);
+        var rm = paths.length ? sb.storage.from("recipes").remove(paths) : Promise.resolve();
+        return rm.then(function(){ return sb.from("recipes").delete().eq("id", currentRecipeId); });
+      }).then(function(res){
+        if (res && res.error){ alert("削除に失敗しました：" + res.error.message); return; }
         location.href = "index.html#records";
-      });
+      }).catch(function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
     };
     hdr.appendChild(wrap);
     if (edit){ edit.style.position = "static"; wrap.appendChild(edit); }
