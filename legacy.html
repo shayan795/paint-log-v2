@@ -481,6 +481,9 @@ body{background-image:none}
 .publish-card button.primary:hover{background:#C2161F}
 .publish-card .js-draft{border-radius:8px}
 </style>
+<!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="src/config.js"></script>
 </head>
 <body>
 
@@ -2250,16 +2253,47 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 <!-- v2: 公開フロー（押すまで投稿されない。DB接続後に実アップロードを実装） -->
 <script>
 (function(){
-  // 編集画面・プレビュー両方の「投稿する」を有効化（押すまで投稿されない）
+  // v2: 「投稿する」を本物の保存に（押すまで投稿されない）
+  var cfg = window.PAINTLOG_CONFIG || {};
+  var sb = (window.supabase && cfg.SUPABASE_URL)
+    ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+
+  // 保存用に state を複製し、base64画像を除去（画像は次チャンクでR2へ。DB肥大を防ぐ）
+  function gridForSave(){
+    var g = JSON.parse(JSON.stringify(state));
+    g.photos = [];
+    if (g.rows) g.rows.forEach(function(r){ delete r.photo; });
+    return g;
+  }
+
   var btns = document.querySelectorAll(".js-publish");
   for (var i=0;i<btns.length;i++){
     btns[i].addEventListener("click", function(){
-      var card = this.closest(".publish-card");
+      var btn = this;
+      var card = btn.closest(".publish-card");
       var v = card ? card.querySelector('input[type="radio"]:checked') : null;
-      var label = (v && v.value === "private") ? "非公開" : "公開";
-      alert("（プレビュー段階）公開範囲＝" + label + " で投稿します。\n"
-          + "ログイン／DB接続後に、実際にあなたのページへアップロードされます。\n"
-          + "※今はまだ投稿されていません。");
+      var isPublic = !(v && v.value === "private");
+      if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに使えます。"); return; }
+      btn.disabled = true; var orig = btn.textContent; btn.textContent = "投稿中…";
+      sb.auth.getSession().then(function(r){
+        var session = r && r.data && r.data.session;
+        if (!session){ alert("投稿にはログインが必要です。"); location.href = "index.html"; return; }
+        return sb.from("recipes").insert({
+          owner_id: session.user.id,
+          title: (state.kit || "").trim() || null,
+          author_label: (state.author || "").trim() || null,
+          memo: (state.memo || "").trim() || null,
+          grid: gridForSave(),
+          is_public: isPublic
+        }).select("id").single().then(function(res){
+          if (res.error) throw res.error;
+          alert("投稿しました（" + (isPublic ? "公開" : "非公開") + "）。");
+          location.href = "index.html#records";
+        });
+      }).catch(function(e){
+        btn.disabled = false; btn.textContent = orig;
+        alert("投稿に失敗しました：" + (e && e.message ? e.message : e));
+      });
     });
   }
 })();

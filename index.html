@@ -238,7 +238,8 @@ button{font-family:inherit}
 .pf-postsec{padding:18px 16px 8px}
 .pf-postsec > h3{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .pf-postsec > h3::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
-#pfPosts{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px}
+#pfPosts,#recordsList{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px}
+.rec-private{display:inline-block; margin-left:6px; font-size:.62rem; font-weight:700; color:var(--sub); border:1px solid var(--line-d); border-radius:6px; padding:0 5px; vertical-align:middle}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
 .pf-post-thumb{display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
@@ -393,10 +394,8 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <!-- 記録 -->
   <main class="view" id="screen-records" hidden>
     <h2 class="view-title">記録</h2>
-    <p class="view-sub">自分が保存・作成したレシピ</p>
-    <div class="note-box">
-      まだ記録がありません。下の <strong>＋</strong> から新しく作るか、気に入った作品を保存するとここに並びます。
-    </div>
+    <p class="view-sub">自分が作成・保存したレシピ</p>
+    <div id="recordsList"></div>
   </main>
 
   <!-- 下タブ -->
@@ -538,7 +537,35 @@ function showTab(tab){
   for (var key in screens) screens[key].hidden = (key !== tab);
   var items = document.querySelectorAll("[data-tab]");   // 下タブ＋PCヘッダーナビ両方
   for (var i=0;i<items.length;i++) items[i].classList.toggle("active", items[i].dataset.tab === tab);
+  if (tab === "records") renderRecords();   // 記録タブ＝自分の投稿一覧
   window.scrollTo(0,0);
+}
+
+// 記録タブ：自分が作成・保存したレシピ一覧
+function renderRecords(){
+  var box = $("recordsList"); if (!box) return;
+  if (!sb || !currentUserId){
+    box.innerHTML = '<div class="note-box">ログインすると、作った・保存したレシピがここに並びます。左上のメニューからログインしてください。</div>';
+    return;
+  }
+  box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
+  sb.from("recipes").select("id,title,cover_url,is_public,created_at").eq("owner_id", currentUserId).order("created_at", { ascending:false })
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      if (!rows.length){
+        var where = (window.innerWidth >= 900) ? "横の" : "下の";
+        box.innerHTML = '<p class="pf-empty">まだ投稿がありません。'+where+' ＋ から作れます。</p>'; return;
+      }
+      box.innerHTML = "";
+      rows.forEach(function(r){
+        var c = document.createElement("button"); c.className = "pf-post";
+        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
+        var badge = r.is_public ? '' : '<span class="rec-private">非公開</span>';
+        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
+        c.addEventListener("click", function(){ openStub((r.title||"無題")+"（作品ページは段3で接続）"); });
+        box.appendChild(c);
+      });
+    });
 }
 (function(){
   var items = document.querySelectorAll("[data-tab]");
@@ -953,9 +980,11 @@ function applySession(session){
           _namePrompted = true;
           showOnboarding();
         }
+        if (!$("screen-records").hidden) renderRecords();   // 記録タブ表示中ならログイン反映
       });
   } else {
     setAuthUI(null, null);
+    if (!$("screen-records").hidden) renderRecords();
   }
 }
 if (sb){
