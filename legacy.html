@@ -131,11 +131,12 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-edit-inline{position:absolute;top:14px;right:12px;font-family:inherit;font-size:.72rem;padding:5px 12px;border:1px solid var(--line-d);background:#fff;color:var(--sub);cursor:pointer}
 .v-edit-inline:hover{border-color:var(--ink);color:var(--ink)}
 .v-edit-inline.on{background:#FBEAE7;border-color:var(--accent);color:var(--accent)}
-.v-actions{position:absolute;top:14px;right:12px;display:flex;gap:8px}
-.v-back-inline{position:absolute;top:14px;left:12px;font-family:inherit;font-size:.72rem;padding:5px 12px;border:1px solid var(--line-d);background:#fff;color:var(--sub);cursor:pointer;border-radius:8px}
-.v-back-inline:hover{border-color:var(--ink);color:var(--ink)}
-@media(max-width:560px){.v-back-inline{position:static;display:inline-block;margin:0 0 10px}}
-@media(max-width:560px){.v-site-logo{font-size:1.6rem}.v-edit-inline{position:static;margin-top:14px}.v-actions{position:static;justify-content:center;margin-top:14px}}
+/* 閲覧ページ上部の操作バー（戻る左／保存・通報・編集・削除を右に横並び） */
+.v-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px}
+.v-bar .v-edit-inline{position:static;top:auto;right:auto;margin:0;border-radius:8px}
+.v-bar .vb-back{margin-right:auto}
+.v-bar .v-del{color:var(--warn);border-color:var(--warn)}
+@media(max-width:560px){.v-site-logo{font-size:1.6rem}}
 
 /* カード画像ヒーロー(正方形カードをそのまま表示・見切れさせない) */
 #viewHero{margin:0 -12px;background:#0E1014;display:none}
@@ -2456,14 +2457,22 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     var pc = document.getElementById("publishCard"); if (pc) pc.style.display = show ? "" : "none";
     var pb = document.getElementById("pvBanner");    if (pb) pb.style.display = show ? "" : "none";
   }
+  // 閲覧ページ上部の操作バー（戻る左・保存/通報/編集/削除を右に横並び）
+  function vBar(){
+    var b = document.getElementById("vActions");
+    if (b) return b;
+    var vm = document.getElementById("viewMode");
+    b = document.createElement("div"); b.id = "vActions"; b.className = "v-bar";
+    vm.insertBefore(b, vm.firstChild);
+    return b;
+  }
   // 他人の投稿を「保存」（クリップ）。記録タブに出る。トグル
   function setSaveBtn(b, saved){ b.textContent = saved ? "保存済み" : "保存"; b.classList.toggle("on", saved); }
   function ensureSaveBtn(uid){
     if (document.getElementById("vSave")) return;
-    var hdr = document.querySelector("#viewMode .v-site-header"); if (!hdr) return;
     var b = document.createElement("button");
     b.id = "vSave"; b.className = "v-edit-inline"; b.textContent = "保存";
-    hdr.appendChild(b);
+    vBar().appendChild(b);
     sb.from("clips").select("recipe_id").eq("user_id", uid).eq("recipe_id", currentRecipeId).then(function(res){
       var saved = !!(res.data && res.data.length);
       setSaveBtn(b, saved);
@@ -2481,11 +2490,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   function ensureReportBtn(uid){
     _reportUid = uid;
     if (document.getElementById("vReport")) return;
-    var hdr = document.querySelector("#viewMode .v-site-header"); if (!hdr) return;
     var b = document.createElement("button");
     b.id = "vReport"; b.className = "v-edit-inline"; b.textContent = "⚠ 通報";
     b.onclick = openReportDialog;
-    hdr.appendChild(b);
+    vBar().appendChild(b);
   }
   function openReportDialog(){
     var ov = document.getElementById("reportOverlay");
@@ -2518,27 +2526,20 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     }
     ov.classList.add("show");
   }
-  // 投稿閲覧ページの「← 戻る」（誰でも使える。元のページへ戻す）
+  // 投稿閲覧ページの「← 戻る」（誰でも使える。バー左端に固定）
   function ensureBackBtn(){
     if (document.getElementById("vBack")) return;
-    var hdr = document.querySelector("#viewMode .v-site-header");
-    if (!hdr) return;
     var b = document.createElement("button");
-    b.id = "vBack"; b.className = "v-back-inline"; b.textContent = "← 戻る";
-    b.onclick = function(){ if (history.length > 1) history.back(); else location.href = "index.html#records"; };
-    hdr.insertBefore(b, hdr.firstChild);
+    b.id = "vBack"; b.className = "v-edit-inline vb-back"; b.textContent = "← 戻る";
+    b.onclick = function(){ if (history.length > 1) history.back(); else location.href = "index.html"; };
+    var bar = vBar(); bar.insertBefore(b, bar.firstChild);
   }
-  function removeDeleteBtn(){ var d=document.getElementById("vActions"); if(d) d.remove(); }
+  function removeDeleteBtn(){ var d=document.getElementById("vDelete"); if(d) d.remove(); }
   function ensureDeleteBtn(){
-    if (document.getElementById("vActions")) return;
-    var hdr = document.querySelector("#viewMode .v-site-header");
+    if (document.getElementById("vDelete")) return;
     var edit = document.getElementById("tabEdit");
-    if (!hdr) return;
-    // 編集と削除を横並びの一塊に（PCで重ならないように）
-    var wrap = document.createElement("div"); wrap.id = "vActions"; wrap.className = "v-actions";
     var del = document.createElement("button");
-    del.id = "vDelete"; del.className = "v-edit-inline"; del.textContent = "削除";
-    del.style.cssText = "position:static;color:var(--warn);border-color:var(--warn)";
+    del.id = "vDelete"; del.className = "v-edit-inline v-del"; del.textContent = "削除";
     del.onclick = function(){
       if (!confirm("この投稿を削除します。写真も含めて消え、元に戻せません。よろしいですか？")) return;
       // 投稿に紐づく画像URL（写真・サムネ）をStorageから先に削除→投稿行を削除
@@ -2558,9 +2559,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         location.href = "index.html#records";
       }).catch(function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
     };
-    hdr.appendChild(wrap);
-    if (edit){ edit.style.position = "static"; wrap.appendChild(edit); }
-    wrap.appendChild(del);
+    var bar = vBar();
+    if (edit && edit.parentNode !== bar){ edit.style.position = "static"; bar.appendChild(edit); }
+    bar.appendChild(del);
   }
 
   // 「投稿する」＝新規はINSERT / 既存(?idで読込)はUPDATE。押すまで投稿されない

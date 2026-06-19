@@ -246,6 +246,9 @@ button{font-family:inherit}
 .rec-sec{margin-bottom:24px}
 .rec-h{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .rec-h::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
+.tag-back{font:inherit; font-size:.85rem; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); padding:6px 14px; cursor:pointer; margin-bottom:12px}
+.tag-back:hover{border-color:var(--ink)}
+#screen-tag .view-title{margin-bottom:14px}
 .rep-card{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px}
 .rep-reason{font-weight:700; color:var(--warn)}
 .rep-detail{font-size:.86rem; color:var(--ink); margin-top:4px; white-space:pre-wrap}
@@ -407,8 +410,15 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <!-- 記録 -->
   <main class="view" id="screen-records" hidden>
     <h2 class="view-title">記録</h2>
-    <p class="view-sub">自分が作成・保存したレシピ</p>
+    <p class="view-sub">保存した投稿（自分の作品はプロフィールから）</p>
     <div id="recordsList"></div>
+  </main>
+
+  <!-- 塗装方法/タグの絞り込み結果（上バーはそのまま＝アバター/ロゴ/通知が見える） -->
+  <main class="view" id="screen-tag" hidden>
+    <button class="tag-back" id="tagBack">← 戻る</button>
+    <h2 class="view-title" id="tagTitle"></h2>
+    <div class="tag-grid" id="tagList"></div>
   </main>
 
   <!-- 下タブ -->
@@ -563,7 +573,8 @@ var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
 /* ----------------------------- 下タブ切替 ----------------------------- */
 var screens = { discover: $("screen-discover"), records: $("screen-records") };
 function showTab(tab, keepHash){
-  if (!fullview.hidden) closeFull();        // プロフィール/タグ結果が開いていれば閉じてから遷移（PC不具合解消）
+  if (!fullview.hidden) closeFull();        // プロフィールが開いていれば閉じてから遷移
+  $("screen-tag").hidden = true;            // タグ結果画面も閉じる
   for (var key in screens) screens[key].hidden = (key !== tab);
   var items = document.querySelectorAll("[data-tab]");   // 下タブ＋PCヘッダーナビ両方
   for (var i=0;i<items.length;i++) items[i].classList.toggle("active", items[i].dataset.tab === tab);
@@ -587,34 +598,23 @@ function recordCard(r){
 function renderRecords(){
   var box = $("recordsList"); if (!box) return;
   if (!sb || !currentUserId){
-    box.innerHTML = '<div class="note-box">ログインすると、作った・保存したレシピがここに並びます。左上のメニューからログインしてください。</div>';
+    box.innerHTML = '<div class="note-box">ログインすると、保存した投稿がここに並びます。左上のメニューからログインしてください。</div>';
     return;
   }
   box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
-  function section(title, rows, emptyMsg){
-    var sec = document.createElement("div"); sec.className = "rec-sec";
-    var h = document.createElement("h3"); h.className = "rec-h"; h.textContent = title; sec.appendChild(h);
-    var g = document.createElement("div"); g.className = "tag-grid";
-    if (rows.length) rows.forEach(function(r){ g.appendChild(recordCard(r)); });
-    else g.innerHTML = '<p class="pf-empty">'+emptyMsg+'</p>';
-    sec.appendChild(g); return sec;
-  }
+  // 記録タブ＝保存(クリップ)した投稿だけ。自分の作成物はプロフィールで見る
   var SEL = "id,title,cover_url,is_public,created_at";
-  sb.from("recipes").select(SEL).eq("owner_id", currentUserId).order("created_at", { ascending:false }).then(function(m){
-    if (m && m.error){ box.innerHTML = '<div class="note-box">読み込みに失敗しました。通信状況を確認して、引き下げて更新してください。</div>'; return; }
-    var mine = (m && m.data) ? m.data : [];
-    sb.from("clips").select("recipe_id").eq("user_id", currentUserId).then(function(cl){
-      var ids = (cl && !cl.error && cl.data) ? cl.data.map(function(x){ return x.recipe_id; }) : [];
-      function paint(saved){
-        box.innerHTML = "";
-        var where = (window.innerWidth >= 900) ? "横の" : "下の";
-        box.appendChild(section("作成した投稿", mine, "まだ投稿がありません。"+where+" ＋ から作れます。"));
-        box.appendChild(section("保存した投稿", saved, "気に入った投稿の「保存」でここに集まります。"));
-      }
-      if (!ids.length){ paint([]); return; }
-      sb.from("recipes").select(SEL).in("id", ids).order("created_at", { ascending:false }).then(function(sv){
-        paint((sv && !sv.error && sv.data) ? sv.data : []);
-      });
+  sb.from("clips").select("recipe_id").eq("user_id", currentUserId).then(function(cl){
+    if (cl && cl.error){ box.innerHTML = '<div class="note-box">読み込みに失敗しました。通信状況を確認して、引き下げて更新してください。</div>'; return; }
+    var ids = (cl && cl.data) ? cl.data.map(function(x){ return x.recipe_id; }) : [];
+    function paint(saved){
+      if (!saved.length){ box.innerHTML = '<p class="pf-empty">保存した投稿はまだありません。気に入った作品の「保存」でここに集まります。</p>'; return; }
+      box.innerHTML = ""; var g = document.createElement("div"); g.className = "tag-grid";
+      saved.forEach(function(r){ g.appendChild(recordCard(r)); }); box.appendChild(g);
+    }
+    if (!ids.length){ paint([]); return; }
+    sb.from("recipes").select(SEL).in("id", ids).order("created_at", { ascending:false }).then(function(sv){
+      paint((sv && !sv.error && sv.data) ? sv.data : []);
     });
   });
 }
@@ -641,31 +641,26 @@ function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; setHa
 $("fvBack").addEventListener("click", closeFull);
 
 // 塗装方法タグで公開投稿を絞り込んで一覧表示（fullview）
+// 塗装方法/タグの絞り込み結果（独立画面＝上バーのアバター/ロゴ/通知はそのまま表示）
 function openTagResults(slug, label){
-  if (!sb){ openStub(label); return; }
+  if (!sb) return;
+  if (!fullview.hidden){ fullview.hidden = true; fullviewBody.innerHTML = ""; }   // プロフィール等を閉じる
+  $("screen-discover").hidden = true; $("screen-records").hidden = true; $("screen-tag").hidden = false;
   setHash("m/" + slug);
-  $("fvTitle").textContent = label;
-  fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
-  fullview.hidden = false;
-  sb.from("recipes").select("id,title,cover_url,owner_id,profiles!recipes_owner_id_fkey(display_name)")
-    .eq("is_public", true).contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
+  $("tagTitle").textContent = label;
+  var list = $("tagList"); list.innerHTML = '<p class="pf-empty">読み込み中…</p>';
+  window.scrollTo(0,0);
+  sb.from("recipes").select("id,title,cover_url,owner_id").eq("is_public", true)
+    .contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
     .then(function(res){
-      var rows = (res && !res.error && res.data) ? res.data : [];
-      if (!rows.length){
-        fullviewBody.innerHTML = '<div class="stub"><h2>'+esc(label)+'</h2><p>この塗装方法の公開投稿はまだありません。</p></div>';
-        return;
-      }
-      fullviewBody.innerHTML = '<div style="padding:16px"><h3 style="font-size:1.05rem;margin:0 0 12px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:14px;background:var(--accent);border-radius:1px"></span>'+esc(label)+'</h3><div class="tag-grid"></div></div>';
-      var g = fullviewBody.querySelector(".tag-grid");
-      rows.forEach(function(r){
-        var c = document.createElement("button"); c.className = "pf-post";
-        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
-        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+'</div>';
-        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
-        g.appendChild(c);
-      });
+      if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
+      var rows = res.data || [];
+      if (!rows.length){ list.innerHTML = '<p class="pf-empty">この塗装方法の公開投稿はまだありません。</p>'; return; }
+      list.innerHTML = "";
+      rows.forEach(function(r){ list.appendChild(recordCard(r)); });
     });
 }
+$("tagBack").addEventListener("click", function(){ showTab("discover"); });
 // 投稿（作る）はログイン必須。未ログインならログイン画面へ誘導
 function startCreate(){ requireLogin(function(){ openLegacy("レシピを作る", "#edit"); }); }
 $("plusBtn").addEventListener("click", startCreate);
@@ -689,7 +684,7 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
   : null;
 
-var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false;
+var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false;
 
 // アバター表示の共通ロジック：画像URLがあれば画像、無ければ頭文字テキスト
 var currentAvatar = null;
@@ -1069,10 +1064,12 @@ function applySession(session){
           showOnboarding();
         }
         if (!$("screen-records").hidden) renderRecords();   // 記録タブ表示中ならログイン反映
+        if (_pendingProfile){ _pendingProfile = false; openProfile(); }   // リロード復元はセッション確定後に
       });
   } else {
     setAuthUI(null, null);
     if (!$("screen-records").hidden) renderRecords();
+    _pendingProfile = false;   // 未ログインならプロフィール復元はしない（探すのまま）
   }
 }
 if (sb){
@@ -1319,7 +1316,7 @@ renderPaints();
   var mm = h.match(/^m\/(.+)$/);
   if (mm){ showTab("discover", true); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
   if (h === "records"){ showTab("records", true); return; }
-  if (h === "profile"){ showTab("discover", true); openProfile(); return; }   // プロフィールでリロード→復元
+  if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // プロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
   showTab("discover", true);
 })();
 </script>
