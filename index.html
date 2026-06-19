@@ -1147,8 +1147,11 @@ function renderCategories(){
   var grid = $("catGrid"); grid.innerHTML = "";
   PAINT_METHODS.forEach(function(m, i){
     var fn = (function(s, l){ return function(){ openTagResults(s, l); }; })(m.slug, m.label);
-    grid.appendChild(makeTile({ label:m.label, img:null }, i >= CAT_INITIAL, fn));
+    var tile = makeTile({ label:m.label, img:null }, i >= CAT_INITIAL, fn);
+    tile.setAttribute("data-slug", m.slug);
+    grid.appendChild(tile);
   });
+  loadTileCovers();   // 各タグの代表画像（最新公開投稿のcover）を後から差し込む
   var more = $("catMore");
   if (!more) return;
   var extra = PAINT_METHODS.length - CAT_INITIAL;
@@ -1163,6 +1166,25 @@ function renderCategories(){
   } else {
     more.style.display = "none";
   }
+}
+// 人気の塗装方法タイルに代表画像（そのタグの最新公開投稿のcover）を差し込む
+function loadTileCovers(){
+  if (!sb) return;
+  sb.from("recipes").select("cover_url,methods,created_at").eq("is_public", true)
+    .not("cover_url", "is", null).order("created_at", { ascending:false }).limit(80)
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      var cover = {};
+      rows.forEach(function(r){ (r.methods || []).forEach(function(s){ if (!cover[s] && r.cover_url) cover[s] = r.cover_url; }); });
+      var tiles = document.querySelectorAll("#catGrid .cat-tile");
+      for (var i=0;i<tiles.length;i++){
+        var t = tiles[i], s = t.getAttribute("data-slug");
+        if (s && cover[s] && !t.querySelector("img")){
+          var img = document.createElement("img"); img.src = cover[s]; img.alt = "";
+          t.insertBefore(img, t.firstChild);
+        }
+      }
+    });
 }
 function renderTrending(){
   var grid = $("trendGrid"); if (!grid) return; grid.innerHTML = "";
