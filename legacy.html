@@ -130,6 +130,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-site-tag{font-family:"IBM Plex Mono",monospace;font-size:.66rem;font-weight:600;letter-spacing:.34em;text-transform:uppercase;color:var(--sub);margin-top:9px}
 .v-edit-inline{position:absolute;top:14px;right:12px;font-family:inherit;font-size:.72rem;padding:5px 12px;border:1px solid var(--line-d);background:#fff;color:var(--sub);cursor:pointer}
 .v-edit-inline:hover{border-color:var(--ink);color:var(--ink)}
+.v-edit-inline.on{background:#FBEAE7;border-color:var(--accent);color:var(--accent)}
 .v-actions{position:absolute;top:14px;right:12px;display:flex;gap:8px}
 .v-back-inline{position:absolute;top:14px;left:12px;font-family:inherit;font-size:.72rem;padding:5px 12px;border:1px solid var(--line-d);background:#fff;color:var(--sub);cursor:pointer;border-radius:8px}
 .v-back-inline:hover{border-color:var(--ink);color:var(--ink)}
@@ -2412,7 +2413,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         var owner = !!uid && uid === currentOwnerId;
         var edit = document.getElementById("tabEdit");
         if (edit) edit.style.display = owner ? "" : "none";
-        if (owner) ensureDeleteBtn(); else removeDeleteBtn();
+        if (owner) ensureDeleteBtn();
+        else { removeDeleteBtn(); if (uid) ensureSaveBtn(uid); }   // 他人の投稿（ログイン中）は「保存」
       });
     });
   })();
@@ -2421,6 +2423,26 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   function setPublishCard(show){
     var pc = document.getElementById("publishCard"); if (pc) pc.style.display = show ? "" : "none";
     var pb = document.getElementById("pvBanner");    if (pb) pb.style.display = show ? "" : "none";
+  }
+  // 他人の投稿を「保存」（クリップ）。記録タブに出る。トグル
+  function setSaveBtn(b, saved){ b.textContent = saved ? "保存済み" : "保存"; b.classList.toggle("on", saved); }
+  function ensureSaveBtn(uid){
+    if (document.getElementById("vSave")) return;
+    var hdr = document.querySelector("#viewMode .v-site-header"); if (!hdr) return;
+    var b = document.createElement("button");
+    b.id = "vSave"; b.className = "v-edit-inline"; b.textContent = "保存";
+    hdr.appendChild(b);
+    sb.from("clips").select("recipe_id").eq("user_id", uid).eq("recipe_id", currentRecipeId).then(function(res){
+      var saved = !!(res.data && res.data.length);
+      setSaveBtn(b, saved);
+      b.onclick = function(){
+        b.disabled = true;
+        var op = saved
+          ? sb.from("clips").delete().eq("user_id", uid).eq("recipe_id", currentRecipeId)
+          : sb.from("clips").insert({ user_id: uid, recipe_id: currentRecipeId });
+        op.then(function(r){ b.disabled = false; if (r && r.error){ alert("保存に失敗：" + r.error.message); return; } saved = !saved; setSaveBtn(b, saved); });
+      };
+    });
   }
   // 投稿閲覧ページの「← 戻る」（誰でも使える。元のページへ戻す）
   function ensureBackBtn(){

@@ -243,6 +243,9 @@ button{font-family:inherit}
 .pf-postsec > h3::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
 #pfPosts,#recordsList,.tag-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px}
 .rec-private{display:inline-block; margin-left:6px; font-size:.62rem; font-weight:700; color:var(--sub); border:1px solid var(--line-d); border-radius:6px; padding:0 5px; vertical-align:middle}
+.rec-sec{margin-bottom:24px}
+.rec-h{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
+.rec-h::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
 .pf-post-thumb{display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
@@ -564,7 +567,16 @@ function showTab(tab, keepHash){
 // リロードで前の画面に戻れるよう、現在地を location.hash に保持（履歴は汚さない）
 function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pathname + location.search); }catch(_){ location.hash = h || ""; } }
 
-// 記録タブ：自分が作成・保存したレシピ一覧
+// 投稿カード（記録/プロフィール共通）
+function recordCard(r){
+  var c = document.createElement("button"); c.className = "pf-post";
+  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
+  var badge = (r.is_public === false) ? '<span class="rec-private">非公開</span>' : '';
+  c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
+  c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+  return c;
+}
+// 記録タブ：作成した投稿＋保存した投稿（クリップ）の2セクション
 function renderRecords(){
   var box = $("recordsList"); if (!box) return;
   if (!sb || !currentUserId){
@@ -572,23 +584,31 @@ function renderRecords(){
     return;
   }
   box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
-  sb.from("recipes").select("id,title,cover_url,is_public,created_at").eq("owner_id", currentUserId).order("created_at", { ascending:false })
-    .then(function(res){
-      var rows = (res && !res.error && res.data) ? res.data : [];
-      if (!rows.length){
+  function section(title, rows, emptyMsg){
+    var sec = document.createElement("div"); sec.className = "rec-sec";
+    var h = document.createElement("h3"); h.className = "rec-h"; h.textContent = title; sec.appendChild(h);
+    var g = document.createElement("div"); g.className = "tag-grid";
+    if (rows.length) rows.forEach(function(r){ g.appendChild(recordCard(r)); });
+    else g.innerHTML = '<p class="pf-empty">'+emptyMsg+'</p>';
+    sec.appendChild(g); return sec;
+  }
+  var SEL = "id,title,cover_url,is_public,created_at";
+  sb.from("recipes").select(SEL).eq("owner_id", currentUserId).order("created_at", { ascending:false }).then(function(m){
+    var mine = (m && !m.error && m.data) ? m.data : [];
+    sb.from("clips").select("recipe_id").eq("user_id", currentUserId).then(function(cl){
+      var ids = (cl && !cl.error && cl.data) ? cl.data.map(function(x){ return x.recipe_id; }) : [];
+      function paint(saved){
+        box.innerHTML = "";
         var where = (window.innerWidth >= 900) ? "横の" : "下の";
-        box.innerHTML = '<p class="pf-empty">まだ投稿がありません。'+where+' ＋ から作れます。</p>'; return;
+        box.appendChild(section("作成した投稿", mine, "まだ投稿がありません。"+where+" ＋ から作れます。"));
+        box.appendChild(section("保存した投稿", saved, "気に入った投稿の「保存」でここに集まります。"));
       }
-      box.innerHTML = "";
-      rows.forEach(function(r){
-        var c = document.createElement("button"); c.className = "pf-post";
-        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
-        var badge = r.is_public ? '' : '<span class="rec-private">非公開</span>';
-        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
-        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
-        box.appendChild(c);
+      if (!ids.length){ paint([]); return; }
+      sb.from("recipes").select(SEL).in("id", ids).order("created_at", { ascending:false }).then(function(sv){
+        paint((sv && !sv.error && sv.data) ? sv.data : []);
       });
     });
+  });
 }
 (function(){
   var items = document.querySelectorAll("[data-tab]");
