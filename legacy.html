@@ -478,6 +478,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 .exit-dialog .primary{background:#E01E28;border-color:#E01E28;color:#fff}
 .exit-dialog .primary:hover{background:#C2161F}
 .exit-dialog .ghost{border:none;background:none;color:var(--sub);font-weight:400}
+.rp-field{width:100%;font:inherit;font-size:.92rem;padding:10px;border:1px solid var(--line-d);border-radius:8px;background:#fff;color:var(--ink)}
+.rp-field:focus{outline:none;border-color:var(--accent)}
 
 /* 背景のグリッドを除去（編集画面） */
 body{background-image:none}
@@ -2439,7 +2441,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         var edit = document.getElementById("tabEdit");
         if (edit) edit.style.display = owner ? "" : "none";
         if (owner) ensureDeleteBtn();
-        else { removeDeleteBtn(); if (uid) ensureSaveBtn(uid); }   // 他人の投稿（ログイン中）は「保存」
+        else {
+          removeDeleteBtn();
+          if (uid){ ensureSaveBtn(uid); ensureReportBtn(uid); }   // 他人の投稿（ログイン中）：保存＋通報
+          // 管理者なら他人の投稿でも削除可（RLSは許可済み）
+          if (uid) sb.rpc("is_admin").then(function(a){ if (a && a.data === true) ensureDeleteBtn(); });
+        }
       });
     });
   })();
@@ -2468,6 +2475,48 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         op.then(function(r){ b.disabled = false; if (r && r.error){ alert("保存に失敗：" + r.error.message); return; } saved = !saved; setSaveBtn(b, saved); });
       };
     });
+  }
+  // 通報（他人の投稿・ログイン中）。reports に登録（運営が確認）
+  var _reportUid = null;
+  function ensureReportBtn(uid){
+    _reportUid = uid;
+    if (document.getElementById("vReport")) return;
+    var hdr = document.querySelector("#viewMode .v-site-header"); if (!hdr) return;
+    var b = document.createElement("button");
+    b.id = "vReport"; b.className = "v-edit-inline"; b.textContent = "⚠ 通報";
+    b.onclick = openReportDialog;
+    hdr.appendChild(b);
+  }
+  function openReportDialog(){
+    var ov = document.getElementById("reportOverlay");
+    if (!ov){
+      ov = document.createElement("div"); ov.id = "reportOverlay"; ov.className = "exit-overlay";
+      ov.innerHTML = '<div class="exit-dialog">'
+        + '<h3>この投稿を通報</h3>'
+        + '<p class="note" style="text-align:center">運営が内容を確認します。</p>'
+        + '<select id="rpReason" class="rp-field"><option>スパム</option><option>不適切な内容</option><option>権利侵害（無断転載など）</option><option>その他</option></select>'
+        + '<textarea id="rpDetail" class="rp-field" rows="3" placeholder="詳細（任意）"></textarea>'
+        + '<button class="primary" id="rpSend">通報する</button>'
+        + '<button class="ghost" id="rpCancel">キャンセル</button>'
+        + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener("click", function(e){ if (e.target === ov) ov.classList.remove("show"); });
+      document.getElementById("rpCancel").onclick = function(){ ov.classList.remove("show"); };
+      document.getElementById("rpSend").onclick = function(){
+        var btn = this; btn.disabled = true;
+        sb.from("reports").insert({
+          recipe_id: currentRecipeId, reporter_id: _reportUid,
+          reason: document.getElementById("rpReason").value,
+          detail: (document.getElementById("rpDetail").value || "").trim() || null
+        }).then(function(r){
+          btn.disabled = false;
+          if (r.error){ alert("通報に失敗しました：" + r.error.message); return; }
+          ov.classList.remove("show");
+          alert("通報を受け付けました。運営が確認します。");
+        });
+      };
+    }
+    ov.classList.add("show");
   }
   // 投稿閲覧ページの「← 戻る」（誰でも使える。元のページへ戻す）
   function ensureBackBtn(){

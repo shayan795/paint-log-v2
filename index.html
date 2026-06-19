@@ -246,6 +246,13 @@ button{font-family:inherit}
 .rec-sec{margin-bottom:24px}
 .rec-h{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .rec-h::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
+.rep-card{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px}
+.rep-reason{font-weight:700; color:var(--warn)}
+.rep-detail{font-size:.86rem; color:var(--ink); margin-top:4px; white-space:pre-wrap}
+.rep-meta{font-size:.74rem; color:var(--sub); margin-top:6px}
+.rep-act{display:flex; gap:8px; margin-top:10px}
+.rep-btn{font:inherit; font-size:.82rem; font-weight:700; padding:7px 14px; border:1px solid var(--line-d); border-radius:8px; background:#fff; color:var(--ink); cursor:pointer}
+.rep-btn:hover{border-color:var(--ink)}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
 .pf-post-thumb{display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
@@ -682,7 +689,7 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
   : null;
 
-var currentUserId = null, currentName = "", _namePrompted = false;
+var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false;
 
 // アバター表示の共通ロジック：画像URLがあれば画像、無ければ頭文字テキスト
 var currentAvatar = null;
@@ -1049,10 +1056,12 @@ function openProfile(){
 function applySession(session){
   if (sb && session && session.user){
     currentUserId = session.user.id;
-    sb.from("profiles").select("user_id,display_name,avatar_url").eq("id", currentUserId).single()
+    sb.from("profiles").select("user_id,display_name,avatar_url,is_admin").eq("id", currentUserId).single()
       .then(function(p){
         var prof = (p && !p.error) ? p.data : null;
+        currentIsAdmin = !!(prof && prof.is_admin);
         setAuthUI(session, prof);
+        renderDrawer();   // 管理者なら「通報一覧」を出す
         // 初回（user_id または ニックネームが未設定）なら初期設定モーダルを一度だけ表示
         var needsSetup = prof && (!prof.user_id || !prof.display_name || !prof.display_name.trim());
         if (needsSetup && !_namePrompted){
@@ -1073,6 +1082,44 @@ if (sb){
   setAuthUI(null, null);   // ライブラリ未読込（file:///オフライン）でもゲストUIは描く
 }
 
+// 運営：通報一覧（is_admin のみ。RLSで一般ユーザーは0件）
+function openReportsAdmin(){
+  if (!sb) return;
+  $("fvTitle").textContent = "通報一覧（運営）";
+  fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
+  fullview.hidden = false; setHash("reports");
+  sb.from("reports").select("id,reason,detail,status,created_at,recipe_id,recipes(title)")
+    .eq("status", "open").order("created_at", { ascending:false })
+    .then(function(res){
+      if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
+      var rows = res.data || [];
+      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>通報一覧</h2><p>未対応の通報はありません。</p></div>'; return; }
+      var wrap = document.createElement("div"); wrap.style.padding = "16px";
+      rows.forEach(function(r){
+        var title = (r.recipes && r.recipes.title) ? r.recipes.title : "（無題/削除済み）";
+        var d = new Date(r.created_at).toLocaleString("ja-JP");
+        var card = document.createElement("div"); card.className = "rep-card";
+        card.innerHTML = '<div class="rep-reason">'+esc(r.reason||"その他")+'</div>'
+          + (r.detail ? '<div class="rep-detail">'+esc(r.detail)+'</div>' : '')
+          + '<div class="rep-meta">対象：'+esc(title)+' ／ '+esc(d)+'</div>';
+        var act = document.createElement("div"); act.className = "rep-act";
+        var view = document.createElement("button"); view.className = "rep-btn"; view.textContent = "投稿を見る";
+        view.onclick = function(){ location.href = "legacy.html?id=" + r.recipe_id + "#view"; };
+        var done = document.createElement("button"); done.className = "rep-btn"; done.textContent = "対応済みにする";
+        done.onclick = function(){
+          done.disabled = true;
+          sb.from("reports").update({ status:"reviewed" }).eq("id", r.id).then(function(u){
+            if (u.error){ done.disabled = false; alert("更新に失敗：" + u.error.message); return; }
+            card.parentNode.removeChild(card);
+            if (!wrap.querySelector(".rep-card")) fullviewBody.innerHTML = '<div class="stub"><h2>通報一覧</h2><p>未対応の通報はありません。</p></div>';
+          });
+        };
+        act.appendChild(view); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
+      });
+      fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
+    });
+}
+
 function renderDrawer(){
   var list = $("drawerList"); list.innerHTML = "";
   MOCK.drawerItems.forEach(function(item){
@@ -1087,6 +1134,13 @@ function renderDrawer(){
     });
     list.appendChild(b);
   });
+  // 管理者だけ「通報一覧（運営）」を表示
+  if (currentIsAdmin){
+    var ab = document.createElement("button");
+    ab.textContent = "通報一覧（運営）";
+    ab.addEventListener("click", function(){ closeDrawer(); openReportsAdmin(); });
+    list.appendChild(ab);
+  }
   // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
   if (currentUserId){
     [ { label:"別のアカウントでログイン", fn: switchAccount },
