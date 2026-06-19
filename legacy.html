@@ -138,6 +138,10 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-bar .v-del{color:var(--warn);border-color:var(--warn)}
 .vb-save{padding:6px 9px;display:inline-flex;align-items:center;justify-content:center}
 .vb-save svg{width:18px;height:18px;display:block}
+.vb-save.on{background:#fff; border-color:var(--ink); color:var(--ink)}   /* 保存済み＝黒（赤にしない） */
+.v-report-foot{margin:32px 0 12px; text-align:center}
+.v-report-btn{font:inherit; font-size:.78rem; color:var(--sub); background:none; border:none; cursor:pointer; text-decoration:underline}
+.v-report-btn:hover{color:var(--warn)}
 .v-authorchip{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);padding:12px 2px;border-bottom:1px solid var(--line);margin-bottom:10px}
 .v-authorchip:hover .vac-meta b{text-decoration:underline}
 .v-authorchip .vac-av{width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--bp-bg);color:var(--bp);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
@@ -2504,10 +2508,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   function ensureReportBtn(uid){
     _reportUid = uid;
     if (document.getElementById("vReport")) return;
+    var vb = document.getElementById("viewBody"); if (!vb) return;
+    var foot = document.createElement("div"); foot.className = "v-report-foot";
     var b = document.createElement("button");
-    b.id = "vReport"; b.className = "v-edit-inline"; b.textContent = "⚠ 通報";
+    b.id = "vReport"; b.className = "v-report-btn"; b.textContent = "⚠ この投稿を通報する";
     b.onclick = openReportDialog;
-    vBar().appendChild(b);
+    foot.appendChild(b);
+    vb.appendChild(foot);   // 投稿の一番下に控えめに配置
   }
   function openReportDialog(){
     var ov = document.getElementById("reportOverlay");

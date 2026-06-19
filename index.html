@@ -218,7 +218,7 @@ button{font-family:inherit}
 .auth-link{background:none; border:none; color:var(--bp); font:inherit; font-size:.82rem; cursor:pointer; padding:0; text-decoration:underline}
 /* プロフィール（X風） */
 .pf{width:100%}   /* 画面いっぱい（PCも全幅） */
-.pf-header{aspect-ratio:3/1; max-height:260px; background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
+.pf-header{width:100%; height:clamp(150px,26vw,260px); background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
 .pf-avatar img{width:100%; height:100%; border-radius:50%; object-fit:cover}
 /* 画像アップロード行（編集フォーム） */
 .pf-imgrow{display:flex; align-items:center; gap:12px; margin-bottom:4px}
@@ -248,7 +248,7 @@ button{font-family:inherit}
 .rec-h::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
 .pf-tabs{display:flex; gap:8px; margin-bottom:12px}
 .pf-tab{border:1px solid var(--line); background:#fff; border-radius:18px; padding:5px 16px; font:inherit; font-size:.82rem; font-weight:700; color:var(--sub); cursor:pointer}
-.pf-tab.on{background:#FBEAE7; border-color:var(--accent); color:var(--accent)}
+.pf-tab.on{background:#fff; border-color:var(--ink); color:var(--ink)}
 .tag-back{font:inherit; font-size:.85rem; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); padding:6px 14px; cursor:pointer; margin-bottom:12px}
 .tag-back:hover{border-color:var(--ink)}
 #screen-tag .view-title{margin-bottom:14px}
@@ -421,7 +421,15 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <main class="view" id="screen-tag" hidden>
     <button class="tag-back" id="tagBack">← 戻る</button>
     <h2 class="view-title" id="tagTitle"></h2>
-    <div class="tag-grid" id="tagList"></div>
+    <section class="block" id="tagRecoSec" hidden>
+      <h3>おすすめ</h3>
+      <div class="card-row" id="tagRecoRow"></div>
+      <div class="dots" id="tagRecoDots"></div>
+    </section>
+    <section class="block">
+      <h3>新着</h3>
+      <div class="tag-grid" id="tagList"></div>
+    </section>
   </main>
 
   <!-- 下タブ -->
@@ -652,6 +660,8 @@ function openTagResults(slug, label){
   setHash("m/" + slug);
   $("tagTitle").textContent = label;
   var list = $("tagList"); list.innerHTML = '<p class="pf-empty">読み込み中…</p>';
+  var recoSec = $("tagRecoSec"), recoRow = $("tagRecoRow"), recoDots = $("tagRecoDots");
+  recoSec.hidden = true; recoRow.innerHTML = ""; recoDots.innerHTML = "";
   window.scrollTo(0,0);
   sb.from("recipes").select("id,title,cover_url,owner_id").eq("is_public", true)
     .contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
@@ -659,6 +669,21 @@ function openTagResults(slug, label){
       if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
       var rows = res.data || [];
       if (!rows.length){ list.innerHTML = '<p class="pf-empty">この塗装方法の公開投稿はまだありません。</p>'; return; }
+      // 上部おすすめ＝画像のある投稿を横スクロール（最大8件・メインと同じカルーセル）
+      var withCover = rows.filter(function(r){ return r.cover_url; }).slice(0, 8);
+      if (withCover.length){
+        recoSec.hidden = false;
+        withCover.forEach(function(r, i){
+          var card = document.createElement("div"); card.className = "reco-card";
+          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt=""></div>'
+            + '<div class="reco-title">'+esc(r.title||"無題")+'</div>';
+          card.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+          recoRow.appendChild(card);
+          var dot = document.createElement("span"); dot.className = "dot" + (i === 0 ? " on" : ""); recoDots.appendChild(dot);
+        });
+        startCarousel(recoRow, recoDots);
+      }
+      // 下部＝新着順の全件
       list.innerHTML = "";
       rows.forEach(function(r){ list.appendChild(recordCard(r)); });
     });
