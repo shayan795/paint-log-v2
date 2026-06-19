@@ -412,6 +412,15 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 /* カード画像の欄は不要（X共有時にURLで自動生成されるため非表示） */
 #cardImageCard{display:none}
 
+/* 塗装方法チップ（編集＝トグル選択） */
+.method-chips{display:flex; flex-wrap:wrap; gap:8px}
+.mchip{font:inherit; font-size:.8rem; padding:7px 13px; border:1px solid var(--line-d); border-radius:18px; background:#fff; color:var(--sub); cursor:pointer}
+.mchip.on{background:#FBEAE7; border-color:var(--accent); color:var(--accent); font-weight:700}
+/* 塗装方法（閲覧＝表示・絞り込みリンク） */
+.vmethods{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.vmethod{font-size:.78rem; padding:5px 12px; border:1px solid var(--line); border-radius:16px; background:#fff; color:var(--ink); text-decoration:none}
+.vmethod:hover{border-color:var(--accent); color:var(--accent)}
+
 /* 写真ボタンをカメラアイコン化 */
 .ico-cam{width:20px;height:20px;stroke:var(--line-d);fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex:none}  /* 写真マークは薄いグレー */
 #editMode .photo-add{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:10px 14px;line-height:1.2;border:1px solid var(--line);color:var(--line-d)}   /* 作品情報：アイコン上＋「写真を追加」下。枠・文字とも薄く */
@@ -639,6 +648,10 @@ body{background-image:none}
       <button class="small ghost" id="photoClear" style="display:none">全部削除</button>
       <div class="photo-preview" id="photoPreview"></div>
     </div>
+  </div>
+  <div style="margin-top:12px">
+    <label style="font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:6px;display:block">塗装方法 <span style="font-weight:400;color:var(--sub);font-size:.76rem">— 複数選択可・任意</span></label>
+    <div class="method-chips" id="methodChips"></div>
   </div>
 </div>
 
@@ -1328,6 +1341,41 @@ let procSeq = 1;
 const newProc = name => ({ id: "q" + (procSeq++), name });
 let state = newState();
 var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既存投稿（スクリプト間で共有）
+
+/* 塗装方法マスター（index.html と同一内容） */
+var PAINT_METHODS = [
+  { slug:"grad",       label:"グラデーション塗装" },
+  { slug:"candy",      label:"キャンディ塗装" },
+  { slug:"candy_red",  label:"キャンディ塗装 レッド" },
+  { slug:"candy_blue", label:"キャンディ塗装 ブルー" },
+  { slug:"wrap",       label:"ラップ塗装" },
+  { slug:"marble",     label:"大理石塗装" },
+  { slug:"weather",    label:"ウェザリング" },
+  { slug:"brush",      label:"筆塗り" },
+  { slug:"metal",      label:"メタリック塗装" },
+  { slug:"matte",      label:"つや消し仕上げ" },
+  { slug:"mask",       label:"マスキング塗り分け" }
+];
+var METHOD_LABEL = {}; PAINT_METHODS.forEach(function(m){ METHOD_LABEL[m.slug] = m.label; });
+
+/* 編集：塗装方法チップ（トグル選択）。選択は state.methods(配列)に保持 */
+function renderMethodChips(){
+  var box = document.getElementById("methodChips"); if (!box) return;
+  if (!Array.isArray(state.methods)) state.methods = [];
+  box.innerHTML = "";
+  PAINT_METHODS.forEach(function(m){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "mchip" + (state.methods.indexOf(m.slug) >= 0 ? " on" : "");
+    b.textContent = m.label;
+    b.onclick = function(){
+      var i = state.methods.indexOf(m.slug);
+      if (i >= 0) state.methods.splice(i, 1); else state.methods.push(m.slug);
+      b.classList.toggle("on");
+    };
+    box.appendChild(b);
+  });
+}
 function newState(){
   return { kit:"", author:"", memo:"", photos:[],
     procs: ["サフ","下地","本塗装","スミ入れ","トップコート"].map(newProc),
@@ -1645,7 +1693,7 @@ function yodobashiUrl(name){
 ["kit","author","memo"].forEach(id => {
   document.getElementById(id).oninput = e => { state[id] = e.target.value; };
 });
-function renderMeta(){ ["kit","author","memo"].forEach(id => document.getElementById(id).value = state[id] || ""); renderPhoto(); }
+function renderMeta(){ ["kit","author","memo"].forEach(id => document.getElementById(id).value = state[id] || ""); renderPhoto(); renderMethodChips(); }
 function renderAll(){ renderMeta(); renderGrid(); renderUsed(); }
 
 /* ===================== 完成写真 ===================== */
@@ -2049,6 +2097,13 @@ function renderViewMode(){
       ? `<a class="vauthor vauthor-x" href="${xurl}" target="_blank" rel="noopener nofollow"><span class="x-badge">𝕏</span>@${esc(xurl.split("/").pop())}</a>`
       : `<div class="vauthor">${esc(state.author)}</div>`;
   }
+  // 塗装方法タグ（探すの絞り込みへリンク）
+  let methodsHtml = "";
+  if (Array.isArray(state.methods) && state.methods.length){
+    methodsHtml = '<div class="vmethods">' + state.methods.map(function(s){
+      return '<a class="vmethod" href="index.html#m/'+esc(s)+'">'+esc(METHOD_LABEL[s] || s)+'</a>';
+    }).join("") + '</div>';
+  }
   band.innerHTML = `
     <div class="vband-inner">
       <div>
@@ -2056,6 +2111,7 @@ function renderViewMode(){
         ${authorHtml}
       </div>
     </div>
+    ${methodsHtml}
     ${state.memo ? `<div class="vmeta-memo"><span class="vmeta-memo-label">制作コメント</span>${esc(state.memo)}</div>` : ""}`;
   thumb.after(band);
 
@@ -2328,7 +2384,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     if (!sb) return;
     var id = new URLSearchParams(location.search).get("id");
     if (!id) return;
-    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public").eq("id", id).single().then(function(res){
+    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
         var vb = document.getElementById("viewBody");
         if (vb) vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
@@ -2336,6 +2392,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       }
       var rec = res.data;
       try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
+      state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
       // 既存投稿の編集なので「投稿する」→「編集を保存」に
       var pbs = document.querySelectorAll(".js-publish");
@@ -2441,7 +2498,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
               title: (state.kit || "").trim() || null,
               author_label: (state.author || "").trim() || null,
               memo: (state.memo || "").trim() || null,
-              grid: g, is_public: isPublic, cover_url: cover
+              grid: g, is_public: isPublic, cover_url: cover,
+              methods: Array.isArray(state.methods) ? state.methods : []
             };
             var q;
             if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }

@@ -40,8 +40,11 @@ button{font-family:inherit}
 .avatar-btn{
   width:34px; height:34px; border-radius:50%; border:1px solid var(--line-d); background:var(--bp-bg);
   color:var(--bp); font-weight:700; font-size:.95rem; display:flex; align-items:center; justify-content:center;
-  cursor:pointer; flex:none; padding:0;
+  cursor:pointer; flex:none; padding:0; overflow:hidden;
 }
+/* アバター画像（url優先）を円に収める共通ルール */
+.avatar-btn img, .drawer-head .av img, .sb-av img{width:100%; height:100%; object-fit:cover; display:block}
+.drawer-head .av, .sb-av{overflow:hidden}
 .brand{display:flex; flex-direction:column; line-height:1.05}
 .brand .name{font-size:1rem; font-weight:700; letter-spacing:.05em; display:flex; align-items:center; gap:7px}
 .brand .name::before{content:""; width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
@@ -238,7 +241,7 @@ button{font-family:inherit}
 .pf-postsec{padding:18px 16px 8px}
 .pf-postsec > h3{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .pf-postsec > h3::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
-#pfPosts,#recordsList{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px}
+#pfPosts,#recordsList,.tag-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px}
 .rec-private{display:inline-block; margin-left:6px; font-size:.62rem; font-weight:700; color:var(--sub); border:1px solid var(--line-d); border-radius:6px; padding:0 5px; vertical-align:middle}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
@@ -471,6 +474,22 @@ textarea.pf-field{resize:vertical; line-height:1.6}
    ============================================================================ */
 "use strict";
 
+/* 塗装方法マスター（単一の真実。legacy.html と同一内容を持つ） */
+var PAINT_METHODS = [
+  { slug:"grad",       label:"グラデーション塗装" },
+  { slug:"candy",      label:"キャンディ塗装" },
+  { slug:"candy_red",  label:"キャンディ塗装 レッド" },
+  { slug:"candy_blue", label:"キャンディ塗装 ブルー" },
+  { slug:"wrap",       label:"ラップ塗装" },
+  { slug:"marble",     label:"大理石塗装" },
+  { slug:"weather",    label:"ウェザリング" },
+  { slug:"brush",      label:"筆塗り" },
+  { slug:"metal",      label:"メタリック塗装" },
+  { slug:"matte",      label:"つや消し仕上げ" },
+  { slug:"mask",       label:"マスキング塗り分け" }
+];
+var METHOD_LABEL = {}; PAINT_METHODS.forEach(function(m){ METHOD_LABEL[m.slug] = m.label; });
+
 /* ----------------------------- 仮データ(MOCK) ----------------------------- */
 var MOCK = {
   // おすすめ（みんなの作品）。cardImg は将来「X共有用カード画像」に差し替える。
@@ -588,6 +607,32 @@ function openStub(title){
 }
 function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; }
 $("fvBack").addEventListener("click", closeFull);
+
+// 塗装方法タグで公開投稿を絞り込んで一覧表示（fullview）
+function openTagResults(slug, label){
+  if (!sb){ openStub(label); return; }
+  $("fvTitle").textContent = label;
+  fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
+  fullview.hidden = false;
+  sb.from("recipes").select("id,title,cover_url,owner_id,profiles!recipes_owner_id_fkey(display_name)")
+    .eq("is_public", true).contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      if (!rows.length){
+        fullviewBody.innerHTML = '<div class="stub"><h2>'+esc(label)+'</h2><p>この塗装方法の公開投稿はまだありません。</p></div>';
+        return;
+      }
+      fullviewBody.innerHTML = '<div style="padding:16px"><h3 style="font-size:1.05rem;margin:0 0 12px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:14px;background:var(--accent);border-radius:1px"></span>'+esc(label)+'</h3><div class="tag-grid"></div></div>';
+      var g = fullviewBody.querySelector(".tag-grid");
+      rows.forEach(function(r){
+        var c = document.createElement("button"); c.className = "pf-post";
+        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
+        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+'</div>';
+        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+        g.appendChild(c);
+      });
+    });
+}
 // 投稿（作る）はログイン必須。未ログインならログイン画面へ誘導
 function startCreate(){ requireLogin(function(){ openLegacy("レシピを作る", "#edit"); }); }
 $("plusBtn").addEventListener("click", startCreate);
@@ -613,13 +658,18 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
 
 var currentUserId = null, currentName = "", _namePrompted = false;
 
-// PCサイドバーのアカウント表示も連動させる
-function setSidebarAccount(ini, label){
+// アバター表示の共通ロジック：画像URLがあれば画像、無ければ頭文字テキスト
+var currentAvatar = null;
+function avatarMarkup(url, initial){
+  return url ? '<img src="'+esc(url)+'" alt="">' : esc(initial);
+}
+// PCサイドバーのアカウント表示も連動させる（画像対応）
+function setSidebarAccount(initial, label, url){
   var sbAcc = $("sbAccount");
   if (!sbAcc) return;
   var avEl = sbAcc.querySelector(".sb-av");
   var txtEl = sbAcc.querySelector("span:not(.sb-av)");
-  if (avEl) avEl.textContent = ini;
+  if (avEl) avEl.innerHTML = avatarMarkup(url, initial);
   if (txtEl) txtEl.textContent = label;
 }
 
@@ -634,15 +684,16 @@ function setAuthUI(session, profile){
     var shown = name || "（名前未設定）";
     var sub   = (profile && profile.user_id) ? "@"+profile.user_id : "ログイン中";
     var ini   = name ? name.charAt(0) : "？";
-    av.textContent = ini; n.textContent = shown; s.textContent = sub;
-    if (avBtn) avBtn.textContent = ini;
-    setSidebarAccount(ini, shown);
+    currentAvatar = (profile && profile.avatar_url) || null;
+    av.innerHTML = avatarMarkup(currentAvatar, ini); n.textContent = shown; s.textContent = sub;
+    if (avBtn) avBtn.innerHTML = avatarMarkup(currentAvatar, ini);
+    setSidebarAccount(ini, shown, currentAvatar);
     box.innerHTML = "";   // 上の認証欄は空（ログアウト/退会はメニュー一覧の最下部に出す）
   } else {
-    currentUserId = null; currentName = "";
+    currentUserId = null; currentName = ""; currentAvatar = null;
     av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
     if (avBtn) avBtn.textContent = "ゲ";
-    setSidebarAccount("ゲ", "ゲスト");
+    setSidebarAccount("ゲ", "ゲスト", null);
     box.innerHTML = sb
       ? '<button class="drawer-btn primary" id="loginBtn">ログイン</button>'
         + '<button class="drawer-btn" id="registerBtn" style="margin-top:8px">新規登録</button>'
@@ -971,7 +1022,7 @@ function openProfile(){
 function applySession(session){
   if (sb && session && session.user){
     currentUserId = session.user.id;
-    sb.from("profiles").select("user_id,display_name").eq("id", currentUserId).single()
+    sb.from("profiles").select("user_id,display_name,avatar_url").eq("id", currentUserId).single()
       .then(function(p){
         var prof = (p && !p.error) ? p.data : null;
         setAuthUI(session, prof);
@@ -1025,41 +1076,56 @@ function renderDrawer(){
 }
 
 /* ----------------------------- 探す画面の描画 ----------------------------- */
+// おすすめ＝公開レシピの新着（実データ）。タップで実閲覧ページへ
 function renderReco(){
   var row = $("recoRow"), dots = $("recoDots");
+  if (!sb){ row.innerHTML = ""; dots.innerHTML = ""; return; }
   row.innerHTML = ""; dots.innerHTML = "";
-  MOCK.recommendedWorks.forEach(function(w, i){
-    var card = document.createElement("div");
-    card.className = "reco-card";
-    var thumb = w.cardImg
-      ? '<div class="reco-thumb"><img src="'+esc(w.cardImg)+'" alt=""></div>'
-      : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
-    card.innerHTML = thumb + '<div class="reco-title">'+esc(w.title)+'</div><div class="reco-author">'+esc(w.author)+'</div>';
-    // 作品はまだ仮データ（実レシピ無し）。空の閲覧ページは崩れるので今は準備中スタブ。
-    card.addEventListener("click", function(){ openStub(w.title + "（作品ページは準備中）"); });
-    row.appendChild(card);
-    var dot = document.createElement("span");
-    dot.className = "dot" + (i === 0 ? " on" : "");
-    dots.appendChild(dot);
-  });
-  startCarousel(row, dots);
+  sb.from("recipes").select("id,title,cover_url,created_at,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
+    .eq("is_public", true).order("created_at", { ascending:false }).limit(12)
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      row.innerHTML = ""; dots.innerHTML = "";
+      if (!rows.length){
+        row.innerHTML = '<div class="note-box" style="flex:1 1 100%">まだ投稿がありません。最初の1件を作ってみましょう。</div>';
+        return;
+      }
+      rows.forEach(function(r, i){
+        var card = document.createElement("div");
+        card.className = "reco-card";
+        var thumb = r.cover_url
+          ? '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt=""></div>'
+          : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
+        var author = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "";
+        card.innerHTML = thumb + '<div class="reco-title">'+esc(r.title||"無題")+'</div><div class="reco-author">'+esc(author)+'</div>';
+        card.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+        row.appendChild(card);
+        var dot = document.createElement("span");
+        dot.className = "dot" + (i === 0 ? " on" : "");
+        dots.appendChild(dot);
+      });
+      startCarousel(row, dots);
+    });
 }
 // 画像タイル1枚を作る（人気の塗装方法・今話題の塗料作例で共用）
-function makeTile(item, hidden){
+function makeTile(item, hidden, onClick){
   var b = document.createElement("button");
   b.className = "cat-tile" + (hidden ? " cat-hidden" : "");
   var img = item.img ? '<img src="'+esc(item.img)+'" alt="">' : '';
   b.innerHTML = img + '<span class="cat-label">'+esc(item.label)+'</span>';
-  b.addEventListener("click", function(){ openStub(item.label); });
+  b.addEventListener("click", onClick || function(){ openStub(item.label); });
   return b;
 }
 var CAT_INITIAL = 4;   // 最初に見せる人気の塗装方法の数（残りは「もっと見る」で表示）
 function renderCategories(){
   var grid = $("catGrid"); grid.innerHTML = "";
-  MOCK.popularCategories.forEach(function(c, i){ grid.appendChild(makeTile(c, i >= CAT_INITIAL)); });
+  PAINT_METHODS.forEach(function(m, i){
+    var fn = (function(s, l){ return function(){ openTagResults(s, l); }; })(m.slug, m.label);
+    grid.appendChild(makeTile({ label:m.label, img:null }, i >= CAT_INITIAL, fn));
+  });
   var more = $("catMore");
   if (!more) return;
-  var extra = MOCK.popularCategories.length - CAT_INITIAL;
+  var extra = PAINT_METHODS.length - CAT_INITIAL;
   if (extra > 0){
     more.style.display = "";
     more.textContent = "もっと見る（+" + extra + "）";
@@ -1142,6 +1208,9 @@ renderPaints();
 // 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
 (function(){
   var h = (location.hash || "").replace("#","");
+  // #m/<slug> = 塗装方法の絞り込みを開く（閲覧チップからの動線）
+  var mm = h.match(/^m\/(.+)$/);
+  if (mm){ showTab("discover"); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
   showTab(h === "records" ? "records" : "discover");
 })();
 </script>
