@@ -136,6 +136,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-bar .v-edit-inline{position:static;top:auto;right:auto;margin:0;border-radius:8px}
 .v-bar .vb-back{margin-right:auto}
 .v-bar .v-del{color:var(--warn);border-color:var(--warn)}
+.vb-save{padding:6px 9px;display:inline-flex;align-items:center;justify-content:center}
+.vb-save svg{width:18px;height:18px;display:block}
 @media(max-width:560px){.v-site-logo{font-size:1.6rem}}
 
 /* カード画像ヒーロー(正方形カードをそのまま表示・見切れさせない) */
@@ -2466,12 +2468,17 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     vm.insertBefore(b, vm.firstChild);
     return b;
   }
-  // 他人の投稿を「保存」（クリップ）。記録タブに出る。トグル
-  function setSaveBtn(b, saved){ b.textContent = saved ? "保存済み" : "保存"; b.classList.toggle("on", saved); }
+  // 他人の投稿を「保存」（クリップ）。記録タブに出る。トグル。ブックマーク(旗)アイコン
+  function setSaveBtn(b, saved){
+    b.classList.toggle("on", saved);
+    b.setAttribute("aria-label", saved ? "保存済み" : "保存");
+    b.title = saved ? "保存済み" : "保存";
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="'+(saved ? "currentColor" : "none")+'" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg>';
+  }
   function ensureSaveBtn(uid){
     if (document.getElementById("vSave")) return;
     var b = document.createElement("button");
-    b.id = "vSave"; b.className = "v-edit-inline"; b.textContent = "保存";
+    b.id = "vSave"; b.className = "v-edit-inline vb-save";
     vBar().appendChild(b);
     sb.from("clips").select("recipe_id").eq("user_id", uid).eq("recipe_id", currentRecipeId).then(function(res){
       var saved = !!(res.data && res.data.length);
