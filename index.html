@@ -594,7 +594,8 @@ function renderRecords(){
   }
   var SEL = "id,title,cover_url,is_public,created_at";
   sb.from("recipes").select(SEL).eq("owner_id", currentUserId).order("created_at", { ascending:false }).then(function(m){
-    var mine = (m && !m.error && m.data) ? m.data : [];
+    if (m && m.error){ box.innerHTML = '<div class="note-box">読み込みに失敗しました。通信状況を確認して、引き下げて更新してください。</div>'; return; }
+    var mine = (m && m.data) ? m.data : [];
     sb.from("clips").select("recipe_id").eq("user_id", currentUserId).then(function(cl){
       var ids = (cl && !cl.error && cl.data) ? cl.data.map(function(x){ return x.recipe_id; }) : [];
       function paint(saved){
@@ -1106,12 +1107,16 @@ function renderDrawer(){
 function renderReco(){
   var row = $("recoRow"), dots = $("recoDots");
   if (!sb){ row.innerHTML = ""; dots.innerHTML = ""; return; }
-  row.innerHTML = ""; dots.innerHTML = "";
+  row.innerHTML = '<div class="note-box" style="flex:1 1 100%">読み込み中…</div>'; dots.innerHTML = "";
   sb.from("recipes").select("id,title,cover_url,created_at,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
     .eq("is_public", true).order("created_at", { ascending:false }).limit(12)
     .then(function(res){
-      var rows = (res && !res.error && res.data) ? res.data : [];
       row.innerHTML = ""; dots.innerHTML = "";
+      if (res && res.error){   // 通信失敗を「投稿なし」と誤表示しない
+        row.innerHTML = '<div class="note-box" style="flex:1 1 100%">読み込みに失敗しました。通信状況を確認して、引き下げて更新してください。</div>';
+        return;
+      }
+      var rows = (res && res.data) ? res.data : [];
       if (!rows.length){
         row.innerHTML = '<div class="note-box" style="flex:1 1 100%">まだ投稿がありません。最初の1件を作ってみましょう。</div>';
         return;
