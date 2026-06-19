@@ -552,13 +552,17 @@ var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
 
 /* ----------------------------- 下タブ切替 ----------------------------- */
 var screens = { discover: $("screen-discover"), records: $("screen-records") };
-function showTab(tab){
+function showTab(tab, keepHash){
+  if (!fullview.hidden) closeFull();        // プロフィール/タグ結果が開いていれば閉じてから遷移（PC不具合解消）
   for (var key in screens) screens[key].hidden = (key !== tab);
   var items = document.querySelectorAll("[data-tab]");   // 下タブ＋PCヘッダーナビ両方
   for (var i=0;i<items.length;i++) items[i].classList.toggle("active", items[i].dataset.tab === tab);
   if (tab === "records") renderRecords();   // 記録タブ＝自分の投稿一覧
+  if (!keepHash) setHash(tab === "records" ? "records" : "discover");   // リロード復元用
   window.scrollTo(0,0);
 }
+// リロードで前の画面に戻れるよう、現在地を location.hash に保持（履歴は汚さない）
+function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pathname + location.search); }catch(_){ location.hash = h || ""; } }
 
 // 記録タブ：自分が作成・保存したレシピ一覧
 function renderRecords(){
@@ -605,12 +609,13 @@ function openStub(title){
     '<p>このページは準備中です。骨組みの枠だけ用意しています（後で中身を作ります）。</p></div>';
   fullview.hidden = false;
 }
-function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; }
+function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; setHash($("screen-records").hidden ? "discover" : "records"); }
 $("fvBack").addEventListener("click", closeFull);
 
 // 塗装方法タグで公開投稿を絞り込んで一覧表示（fullview）
 function openTagResults(slug, label){
   if (!sb){ openStub(label); return; }
+  setHash("m/" + slug);
   $("fvTitle").textContent = label;
   fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
   fullview.hidden = false;
@@ -1015,6 +1020,7 @@ function renderProfileEdit(prof){
 // プロフィールを開く（ドロワーの「プロフィール」から）
 function openProfile(){
   if (!sb || !currentUserId){ openAuth("login"); return; }   // プロフィールはログイン必須
+  setHash("profile");
   sb.from("profiles").select("user_id,display_name,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
     .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}); });
 }
@@ -1208,10 +1214,12 @@ renderPaints();
 // 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
 (function(){
   var h = (location.hash || "").replace("#","");
-  // #m/<slug> = 塗装方法の絞り込みを開く（閲覧チップからの動線）
+  // #m/<slug> = 塗装方法の絞り込み（閲覧チップからの動線・リロード復元）
   var mm = h.match(/^m\/(.+)$/);
-  if (mm){ showTab("discover"); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
-  showTab(h === "records" ? "records" : "discover");
+  if (mm){ showTab("discover", true); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
+  if (h === "records"){ showTab("records", true); return; }
+  if (h === "profile"){ showTab("discover", true); openProfile(); return; }   // プロフィールでリロード→復元
+  showTab("discover", true);
 })();
 </script>
 </body>

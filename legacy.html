@@ -2394,11 +2394,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
       state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
-      // 既存投稿の編集なので「投稿する」→「編集を保存」に
+      // 既存投稿の編集：ボタンは「更新する」のみ（下書き保存は隠す）
       var pbs = document.querySelectorAll(".js-publish");
-      for (var k=0;k<pbs.length;k++) pbs[k].textContent = "編集を保存";
+      for (var k=0;k<pbs.length;k++) pbs[k].textContent = "更新する";
+      var drafts = document.querySelectorAll(".js-draft");
+      for (var d=0;d<drafts.length;d++) drafts[d].style.display = "none";
       setVis(rec.is_public);
-      // 既存投稿の編集は「投稿」でなく「保存」＝一覧の順番は変わらない旨に
       var notes = document.querySelectorAll(".publish-card .note");
       for (var j=0;j<notes.length;j++) notes[j].textContent = "編集内容を保存します（投稿一覧の順番は変わりません）。";
       renderAll();
