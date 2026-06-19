@@ -246,6 +246,9 @@ button{font-family:inherit}
 .rec-sec{margin-bottom:24px}
 .rec-h{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .rec-h::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
+.pf-tabs{display:flex; gap:8px; margin-bottom:12px}
+.pf-tab{border:1px solid var(--line); background:#fff; border-radius:18px; padding:5px 16px; font:inherit; font-size:.82rem; font-weight:700; color:var(--sub); cursor:pointer}
+.pf-tab.on{background:#FBEAE7; border-color:var(--accent); color:var(--accent)}
 .tag-back{font:inherit; font-size:.85rem; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); padding:6px 14px; cursor:pointer; margin-bottom:12px}
 .tag-back:hover{border-color:var(--ink)}
 #screen-tag .view-title{margin-bottom:14px}
@@ -952,28 +955,28 @@ function deleteAccount(){
 }
 
 // 自分の投稿一覧（段2で実投稿が入るまでは空状態）
-function renderMyPosts(){
-  var box = $("pfPosts"); if (!box || !sb || !currentUserId) return;
-  sb.from("recipes").select("id,title,cover_url,created_at").eq("owner_id", currentUserId).order("created_at", { ascending:false })
-    .then(function(res){
-      var rows = (res && !res.error && res.data) ? res.data : [];
-      if (!rows.length){
-        var where = (window.innerWidth >= 900) ? "横の" : "下の";
-        box.innerHTML = '<p class="pf-empty">まだ投稿がありません。'+where+' ＋ から作れます。</p>'; return;
-      }
-      box.innerHTML = "";
-      rows.forEach(function(r){
-        var c = document.createElement("button"); c.className = "pf-post";
-        var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
-        c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+'</div>';
-        c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
-        box.appendChild(c);
-      });
-    });
+// プロフィール投稿一覧。自分=公開/非公開を vis で切替、他人=公開のみ
+function renderProfilePosts(ownerId, isSelf, vis){
+  var box = $("pfPosts"); if (!box || !sb || !ownerId) return;
+  box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
+  var q = sb.from("recipes").select("id,title,cover_url,is_public,created_at").eq("owner_id", ownerId);
+  if (!isSelf || vis === "public") q = q.eq("is_public", true);
+  else if (vis === "private") q = q.eq("is_public", false);
+  q.order("created_at", { ascending:false }).then(function(res){
+    if (res && res.error){ box.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
+    var rows = res.data || [];
+    if (!rows.length){
+      var msg = !isSelf ? "投稿がありません。"
+        : (vis === "private" ? "非公開の投稿はありません。" : "公開した投稿はありません。"+((window.innerWidth>=900)?"横の":"下の")+" ＋ から作れます。");
+      box.innerHTML = '<p class="pf-empty">'+msg+'</p>'; return;
+    }
+    box.innerHTML = "";
+    rows.forEach(function(r){ box.appendChild(recordCard(r)); });
+  });
 }
 
-// X風プロフィール表示
-function renderProfileView(prof){
+// X風プロフィール表示。isSelf=自分（編集ボタン＋公開/非公開タブ）/他人＝閲覧のみ
+function renderProfileView(prof, isSelf){
   prof = prof || {};
   var rawName = (prof.display_name && prof.display_name.trim()) ? prof.display_name.trim() : "";
   var name = rawName || "（名前未設定）";
@@ -988,18 +991,33 @@ function renderProfileView(prof){
     '<div class="pf">'
     + '<div class="pf-header"'+hdrStyle+'></div>'
     + '<div class="pf-bar"><span class="pf-avatar">'+avInner+'</span>'
-    +   '<button class="pf-edit" id="pfEdit">編集</button></div>'
+    +   (isSelf ? '<button class="pf-edit" id="pfEdit">編集</button>' : '') + '</div>'
     + '<div class="pf-info">'
     +   '<div class="pf-name">'+esc(name)+'</div>'
     +   (handle ? '<div class="pf-handle">'+esc(handle)+'</div>' : '')
     +   (bio ? '<div class="pf-bio">'+esc(bio)+'</div>' : '')
     +   (link ? '<a class="pf-link" href="'+esc(link)+'" target="_blank" rel="noopener nofollow">'+esc(link)+'</a>' : '')
     + '</div>'
-    + '<div class="pf-postsec"><h3>投稿</h3><div id="pfPosts"></div></div>'
+    + '<div class="pf-postsec">'
+    +   (isSelf
+        ? '<div class="pf-tabs"><button class="pf-tab on" data-vis="public">公開</button><button class="pf-tab" data-vis="private">非公開</button></div>'
+        : '<h3>投稿</h3>')
+    +   '<div id="pfPosts"></div></div>'
     + '</div>';
   fullview.hidden = false;
-  $("pfEdit").onclick = function(){ renderProfileEdit(prof); };
-  renderMyPosts();
+  if (isSelf){
+    $("pfEdit").onclick = function(){ renderProfileEdit(prof); };
+    var tabs = fullviewBody.querySelectorAll(".pf-tab");
+    for (var i=0;i<tabs.length;i++)(function(t){
+      t.onclick = function(){
+        for (var j=0;j<tabs.length;j++) tabs[j].classList.toggle("on", tabs[j] === t);
+        renderProfilePosts(prof.id, true, t.getAttribute("data-vis"));
+      };
+    })(tabs[i]);
+    renderProfilePosts(prof.id, true, "public");
+  } else {
+    renderProfilePosts(prof.id, false, "public");
+  }
 }
 
 // プロフィール編集フォーム（表示名・自己紹介・リンク）
@@ -1041,11 +1059,23 @@ function renderProfileEdit(prof){
 }
 
 // プロフィールを開く（ドロワーの「プロフィール」から）
-function openProfile(){
-  if (!sb || !currentUserId){ openAuth("login"); return; }   // プロフィールはログイン必須
-  setHash("profile");
-  sb.from("profiles").select("user_id,display_name,bio,link,avatar_url,header_url").eq("id", currentUserId).single()
-    .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}); });
+// targetUserId（公開user_id/@handle）省略=自分。指定=他人（閲覧専用）
+function openProfile(targetUserId){
+  if (!sb){ openAuth("login"); return; }
+  var SEL = "id,user_id,display_name,bio,link,avatar_url,header_url";
+  if (!targetUserId){
+    if (!currentUserId){ openAuth("login"); return; }   // 自分のプロフィールはログイン必須
+    setHash("profile");
+    sb.from("profiles").select(SEL).eq("id", currentUserId).single()
+      .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}, true); });
+    return;
+  }
+  setHash("u/" + targetUserId);
+  sb.from("profiles").select(SEL).eq("user_id", targetUserId).single()
+    .then(function(p){
+      if (p.error || !p.data){ openStub("ユーザーが見つかりません"); return; }
+      renderProfileView(p.data, p.data.id === currentUserId);   // 自分のページなら編集可
+    });
 }
 
 function applySession(session){
@@ -1316,7 +1346,9 @@ renderPaints();
   var mm = h.match(/^m\/(.+)$/);
   if (mm){ showTab("discover", true); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
   if (h === "records"){ showTab("records", true); return; }
-  if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // プロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
+  var um = h.match(/^u\/(.+)$/);   // #u/<user_id> = 他人のプロフィール（公開・ログイン不要）
+  if (um){ showTab("discover", true); openProfile(decodeURIComponent(um[1])); return; }
+  if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // 自分のプロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
   showTab("discover", true);
 })();
 </script>
