@@ -2211,11 +2211,31 @@ function renderViewMode(){
   vt.innerHTML = html;
   // セルの塗料をタップ → 購入先(Amazon/楽天/ヨドバシ)を開閉。リンク自体は遷移させる
   vt.onclick = (e) => {
+    // 購入リンクをクリック→ track してそのまま遷移
+    const buy = e.target.closest(".vr-buylinks a");
+    if (buy){
+      var shop = buy.classList.contains("amazon") ? "amazon" : (buy.classList.contains("rakuten") ? "rakuten" : (buy.classList.contains("yodobashi") ? "yodobashi" : "other"));
+      var cellB = buy.closest("td.vr-cell");
+      var paintName = cellB ? (cellB.querySelector(".vrecipe-pname")?.textContent || "") : "";
+      try { window.trackLegacy && window.trackLegacy("click_buy", { shop: shop, paint_name: paintName, recipe_id: currentRecipeId }); } catch(_){}
+      return;   // 既存のhrefでそのまま遷移させる
+    }
     if (e.target.closest(".vr-buylinks")) return;
     const cmt = e.target.closest(".vr-comment");
     if (cmt){ cmt.classList.toggle("open"); return; }   // 長文コメントをタップで全文表示
     const cell = e.target.closest("td.vr-cell");
-    if (cell) cell.classList.toggle("open");
+    if (cell){
+      // 開く瞬間に塗料クリックを記録（閉じる時はスキップ）
+      var willOpen = !cell.classList.contains("open");
+      cell.classList.toggle("open");
+      if (willOpen){
+        try {
+          var pname = cell.querySelector(".vrecipe-pname")?.textContent || "";
+          var pcode = cell.querySelector(".vrecipe-pcode")?.textContent || "";
+          window.trackLegacy && window.trackLegacy("click_paint", { paint_name: pname, paint_code: pcode, recipe_id: currentRecipeId });
+        } catch(_){}
+      }
+    }
   };
 
   // --- 購入リンク ---
@@ -2396,6 +2416,32 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
   /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
 
+  // 段7-3.6: イベント計測（fire-and-forget。index.htmlと同じ仕様）
+  function getLegacySessionId(){
+    try {
+      var key = "_pl_sess", now = Date.now();
+      var raw = localStorage.getItem(key);
+      var s = raw ? JSON.parse(raw) : null;
+      if (s && s.id && (now - (s.t||0)) < 30*60*1000){ s.t = now; localStorage.setItem(key, JSON.stringify(s)); return s.id; }
+      var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (now + "-" + Math.random().toString(36).slice(2,10));
+      localStorage.setItem(key, JSON.stringify({ id:id, t:now })); return id;
+    } catch(_){ return null; }
+  }
+  function trackLegacy(event_name, properties){
+    if (!sb || !event_name) return;
+    try {
+      var uid = null;
+      try {
+        var raw = localStorage.getItem(Object.keys(localStorage).filter(function(k){return k.indexOf("supabase.auth")===0 || k.indexOf("sb-")===0;})[0]||"");
+        if (raw){ var obj = JSON.parse(raw); uid = (obj && obj.user && obj.user.id) || (obj && obj.currentSession && obj.currentSession.user && obj.currentSession.user.id) || null; }
+      } catch(_){}
+      var row = { event_name: event_name, user_id: uid, session_id: getLegacySessionId(), properties: properties || {} };
+      var p = sb.from("events").insert(row);
+      if (p && p.then) p.then(function(){}, function(){});
+    } catch(_){}
+  }
+  window.trackLegacy = trackLegacy;
+
   // 画像保存（Supabase Storage 'recipes' バケット）
   function uploadImage(uid, dataUrl, tag){
     return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
@@ -2469,6 +2515,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             sb.rpc("increment_view", { rid: rec.id }).then(function(){}, function(){});
           }
         } catch(_){ }
+        // 段7-3.6: イベント計測
+        trackLegacy("view_recipe", { recipe_id: rec.id });
       }
       // 所有者だけ「編集する」「削除」を出す
       sb.auth.getSession().then(function(s){

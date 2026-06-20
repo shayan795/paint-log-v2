@@ -611,6 +611,7 @@ function showTab(tab, keepHash){
   if (tab === "records") renderRecords();   // 記録タブ＝自分の投稿一覧
   if (!keepHash) setHash(tab === "records" ? "records" : "discover");   // リロード復元用
   window.scrollTo(0,0);
+  if (typeof track === "function") track("page_view", { tab: tab });
 }
 // リロードで前の画面に戻れるよう、現在地を location.hash に保持（履歴は汚さない）
 function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pathname + location.search); }catch(_){ location.hash = h || ""; } }
@@ -734,6 +735,7 @@ function openTagResults(slug, label){
   if (!fullview.hidden){ fullview.hidden = true; fullviewBody.innerHTML = ""; }   // プロフィール等を閉じる
   $("screen-discover").hidden = true; $("screen-records").hidden = true; $("screen-tag").hidden = false;
   setHash("m/" + slug);
+  if (typeof track === "function") track("page_view", { tab:"tag", slug: slug });
   $("tagTitle").textContent = label;
   var list = $("tagList"); list.innerHTML = '<p class="pf-empty">読み込み中…</p>';
   var recoSec = $("tagRecoSec"), recoRow = $("tagRecoRow"), recoDots = $("tagRecoDots");
@@ -806,6 +808,7 @@ function openSearchResults(q){
         }
         if (why){ r._why = why; hits.push(r); }
       });
+      if (typeof track === "function") track("search", { q: q, hit_count: hits.length });
       if (!hits.length){ list.innerHTML = '<p class="pf-empty">「'+esc(q)+'」に一致する公開投稿はありません。</p>'; return; }
       list.innerHTML = "";
       hits.forEach(function(r){
@@ -866,6 +869,31 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   : null;
 
 var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false;
+
+/* ===== 段7-3.6 イベント計測（プロダクト・アナリティクス） ===== */
+// 30分非活動でリセットする session_id。匿名でも同一訪問を1セッションに束ねる
+function getSessionId(){
+  try {
+    var key = "_pl_sess", now = Date.now();
+    var raw = localStorage.getItem(key);
+    var s = raw ? JSON.parse(raw) : null;
+    if (s && s.id && (now - (s.t||0)) < 30*60*1000){
+      s.t = now; localStorage.setItem(key, JSON.stringify(s)); return s.id;
+    }
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (now + "-" + Math.random().toString(36).slice(2,10));
+    localStorage.setItem(key, JSON.stringify({ id:id, t:now })); return id;
+  } catch(_){ return null; }
+}
+// fire-and-forget。失敗してもアプリは止まらない（必ずtryで囲む）
+function track(event_name, properties){
+  if (!sb || !event_name) return;
+  try {
+    var row = { event_name: event_name, user_id: currentUserId || null, session_id: getSessionId(), properties: properties || {} };
+    var p = sb.from("events").insert(row);
+    if (p && p.then) p.then(function(){}, function(){});
+  } catch(_){}
+}
+window.track = track;   // legacy.html から共有して使う
 
 // アバター表示の共通ロジック：画像URLがあれば画像、無ければ頭文字テキスト
 var currentAvatar = null;
@@ -1258,11 +1286,13 @@ function openProfile(targetUserId){
   if (!targetUserId){
     if (!currentUserId){ openAuth("login"); return; }   // 自分のプロフィールはログイン必須
     setHash("profile");
+    if (typeof track === "function") track("page_view", { tab:"profile", self: true });
     sb.from("profiles").select(SEL).eq("id", currentUserId).single()
       .then(function(p){ renderProfileView((p && !p.error) ? p.data : {}, true); });
     return;
   }
   setHash("u/" + targetUserId);
+  if (typeof track === "function") track("page_view", { tab:"profile", target_user_id: targetUserId });
   sb.from("profiles").select(SEL).eq("user_id", targetUserId).single()
     .then(function(p){
       if (p.error || !p.data){ openStub("ユーザーが見つかりません"); return; }
@@ -1399,6 +1429,69 @@ function openInquiriesAdmin(){
     });
 }
 
+// 運営：アクセス分析ダッシュボード（is_admin のみ。RLSで一般は0件）
+function openAnalyticsAdmin(){
+  if (!sb) return;
+  $("fvTitle").textContent = "アクセス分析（運営）";
+  fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
+  fullview.hidden = false; setHash("analytics");
+  var since = new Date(Date.now() - 30*24*3600*1000).toISOString();   // 直近30日
+  sb.from("events").select("occurred_at,event_name,properties").gte("occurred_at", since)
+    .order("occurred_at", { ascending:false }).limit(5000)
+    .then(function(res){
+      if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
+      var rows = res.data || [];
+      // 集計
+      var pvByDay = {}, popularRecipes = {}, popularPaints = {}, searchWords = {}, clickBuy = {};
+      var dayMs = 24*3600*1000, now = Date.now();
+      rows.forEach(function(e){
+        var p = e.properties || {};
+        if (e.event_name === "page_view"){
+          var ageDays = Math.floor((now - new Date(e.occurred_at).getTime()) / dayMs);
+          if (ageDays < 7){
+            var d = new Date(e.occurred_at); var key = d.getMonth()+1 + "/" + d.getDate();
+            pvByDay[key] = (pvByDay[key]||0) + 1;
+          }
+        } else if (e.event_name === "view_recipe" && p.recipe_id){
+          popularRecipes[p.recipe_id] = (popularRecipes[p.recipe_id]||0) + 1;
+        } else if (e.event_name === "click_paint"){
+          var k = p.paint_id || p.paint_name || "?"; popularPaints[k] = (popularPaints[k]||0) + 1;
+        } else if (e.event_name === "search" && p.q){
+          var q = String(p.q).toLowerCase(); searchWords[q] = (searchWords[q]||0) + 1;
+        } else if (e.event_name === "click_buy"){
+          var sk = (p.shop||"?") + " / " + (p.paint_name||"?"); clickBuy[sk] = (clickBuy[sk]||0) + 1;
+        }
+      });
+      function topN(obj, n){
+        return Object.keys(obj).map(function(k){ return [k, obj[k]]; })
+          .sort(function(a,b){ return b[1]-a[1]; }).slice(0, n);
+      }
+      function table(title, rows, head){
+        var html = '<h3 class="set-h">'+esc(title)+'</h3>';
+        if (!rows.length){ html += '<p style="color:var(--sub);font-size:.88rem;margin:0 0 18px">記録なし</p>'; return html; }
+        html += '<table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:.86rem">';
+        html += '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--sub);border-bottom:1px solid var(--line)">'+esc(head[0])+'</th><th style="text-align:right;padding:6px 8px;color:var(--sub);border-bottom:1px solid var(--line);width:80px">'+esc(head[1])+'</th></tr></thead><tbody>';
+        rows.forEach(function(r){ html += '<tr><td style="padding:7px 8px;border-bottom:1px solid var(--line);word-break:break-all">'+esc(String(r[0]))+'</td><td style="padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-weight:700">'+r[1]+'</td></tr>'; });
+        html += '</tbody></table>'; return html;
+      }
+      // 直近7日PVを日付で並べ替え
+      var pvList = Object.keys(pvByDay).map(function(k){ return [k, pvByDay[k]]; }).sort(function(a,b){
+        var pa = a[0].split("/").map(Number), pb = b[0].split("/").map(Number);
+        return (pa[0]-pb[0]) || (pa[1]-pb[1]);
+      });
+      var html = '<div style="padding:20px 16px"><h2 style="font-size:1.1rem;margin:0 0 4px">アクセス分析</h2>'
+        + '<p style="font-size:.78rem;color:var(--sub);margin:0 0 20px">直近30日のイベント／集計：直近7日PV・人気投稿・人気塗料・人気検索・収益クリック</p>'
+        + table("直近7日 ページビュー（日別）", pvList, ["日付","PV"])
+        + table("人気の投稿 Top10（閲覧）", topN(popularRecipes, 10), ["recipe_id","回数"])
+        + table("人気の塗料 Top10（タップ）", topN(popularPaints, 10), ["塗料","回数"])
+        + table("人気の検索ワード Top20", topN(searchWords, 20), ["検索ワード","回数"])
+        + table("収益クリック Top10（Buyボタン）", topN(clickBuy, 10), ["ショップ/塗料","回数"])
+        + '<p style="font-size:.72rem;color:var(--sub);margin-top:14px">※ 詳細は Supabase ダッシュボードの events テーブルから直接見られます。</p>'
+        + '</div>';
+      fullviewBody.innerHTML = html;
+    });
+}
+
 function renderDrawer(){
   var list = $("drawerList"); list.innerHTML = "";
   MOCK.drawerItems.forEach(function(item){
@@ -1415,7 +1508,7 @@ function renderDrawer(){
     });
     list.appendChild(b);
   });
-  // 管理者だけ「通報一覧」「お問い合わせ一覧」を表示
+  // 管理者だけ「通報一覧」「お問い合わせ一覧」「アクセス分析」を表示
   if (currentIsAdmin){
     var ab = document.createElement("button");
     ab.textContent = "通報一覧（運営）";
@@ -1425,6 +1518,10 @@ function renderDrawer(){
     ib.textContent = "お問い合わせ一覧（運営）";
     ib.addEventListener("click", function(){ closeDrawer(); openInquiriesAdmin(); });
     list.appendChild(ib);
+    var anb = document.createElement("button");
+    anb.textContent = "アクセス分析（運営）";
+    anb.addEventListener("click", function(){ closeDrawer(); openAnalyticsAdmin(); });
+    list.appendChild(anb);
   }
   // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
   if (currentUserId){

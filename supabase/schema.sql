@@ -341,6 +341,27 @@ create policy inquiries_select on public.inquiries for select using (public.is_a
 create policy inquiries_update on public.inquiries for update using (public.is_admin()) with check (public.is_admin());
 create policy inquiries_delete on public.inquiries for delete using (public.is_admin());
 
+-- ----------------------------------------------------------------------------
+-- 10) events — プロダクト・アナリティクス（段7-3.6）
+--   匿名含め全員が書き込み可（fire-and-forget）／読み取りは管理者のみ
+-- ----------------------------------------------------------------------------
+create table if not exists public.events(
+  id bigint generated always as identity primary key,
+  occurred_at timestamptz not null default now(),
+  user_id uuid references public.profiles(id) on delete set null,
+  session_id text,
+  event_name text not null,
+  properties jsonb not null default '{}'::jsonb
+);
+create index if not exists idx_events_name_at on public.events(event_name, occurred_at desc);
+create index if not exists idx_events_user on public.events(user_id);
+
+alter table public.events enable row level security;
+drop policy if exists events_insert on public.events;
+drop policy if exists events_select on public.events;
+create policy events_insert on public.events for insert with check (true);
+create policy events_select on public.events for select using (public.is_admin());
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
