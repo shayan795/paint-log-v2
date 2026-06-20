@@ -1239,6 +1239,43 @@ function openReportsAdmin(){
     });
 }
 
+// 運営：お問い合わせ一覧（is_admin のみ。RLSで一般ユーザーは0件）
+function openInquiriesAdmin(){
+  if (!sb) return;
+  var CAT = { question:"質問", bug:"不具合", request:"要望", other:"その他" };
+  $("fvTitle").textContent = "お問い合わせ一覧（運営）";
+  fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
+  fullview.hidden = false; setHash("inquiries");
+  sb.from("inquiries").select("id,category,body,status,created_at,user_id,profiles(user_id,display_name)")
+    .eq("status", "open").order("created_at", { ascending:false })
+    .then(function(res){
+      if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
+      var rows = res.data || [];
+      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>お問い合わせ一覧</h2><p>未対応のお問い合わせはありません。</p></div>'; return; }
+      var wrap = document.createElement("div"); wrap.style.padding = "16px";
+      rows.forEach(function(r){
+        var who = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "（不明）";
+        var d = new Date(r.created_at).toLocaleString("ja-JP");
+        var card = document.createElement("div"); card.className = "rep-card";
+        card.innerHTML = '<div class="rep-reason">'+esc(CAT[r.category]||"その他")+'</div>'
+          + '<div class="rep-detail">'+esc(r.body||"")+'</div>'
+          + '<div class="rep-meta">'+esc(who)+' ／ '+esc(d)+'</div>';
+        var act = document.createElement("div"); act.className = "rep-act";
+        var done = document.createElement("button"); done.className = "rep-btn"; done.textContent = "対応済みにする";
+        done.onclick = function(){
+          done.disabled = true;
+          sb.from("inquiries").update({ status:"reviewed" }).eq("id", r.id).then(function(u){
+            if (u.error){ done.disabled = false; alert("更新に失敗：" + u.error.message); return; }
+            card.parentNode.removeChild(card);
+            if (!wrap.querySelector(".rep-card")) fullviewBody.innerHTML = '<div class="stub"><h2>お問い合わせ一覧</h2><p>未対応のお問い合わせはありません。</p></div>';
+          });
+        };
+        act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
+      });
+      fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
+    });
+}
+
 function renderDrawer(){
   var list = $("drawerList"); list.innerHTML = "";
   MOCK.drawerItems.forEach(function(item){
@@ -1255,12 +1292,16 @@ function renderDrawer(){
     });
     list.appendChild(b);
   });
-  // 管理者だけ「通報一覧（運営）」を表示
+  // 管理者だけ「通報一覧」「お問い合わせ一覧」を表示
   if (currentIsAdmin){
     var ab = document.createElement("button");
     ab.textContent = "通報一覧（運営）";
     ab.addEventListener("click", function(){ closeDrawer(); openReportsAdmin(); });
     list.appendChild(ab);
+    var ib = document.createElement("button");
+    ib.textContent = "お問い合わせ一覧（運営）";
+    ib.addEventListener("click", function(){ closeDrawer(); openInquiriesAdmin(); });
+    list.appendChild(ib);
   }
   // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
   if (currentUserId){

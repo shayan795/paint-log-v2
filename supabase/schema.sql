@@ -316,6 +316,26 @@ drop policy if exists recipes_delete on public.recipes;
 create policy recipes_delete on public.recipes
   for delete using (owner_id = auth.uid() or public.is_admin());
 
+-- ----------------------------------------------------------------------------
+-- 9) inquiries — お問い合わせ(段6)。送信=ログイン本人 / 閲覧・更新=管理者のみ
+-- ----------------------------------------------------------------------------
+create table if not exists public.inquiries (
+  id         bigint generated always as identity primary key,
+  user_id    uuid references public.profiles(id) on delete set null,
+  category   text,
+  body       text not null,
+  status     text not null default 'open',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_inquiries_status on public.inquiries(status, created_at desc);
+alter table public.inquiries enable row level security;
+drop policy if exists inquiries_insert on public.inquiries;
+drop policy if exists inquiries_select on public.inquiries;
+drop policy if exists inquiries_update on public.inquiries;
+create policy inquiries_insert on public.inquiries for insert with check (user_id = auth.uid());
+create policy inquiries_select on public.inquiries for select using (public.is_admin());
+create policy inquiries_update on public.inquiries for update using (public.is_admin()) with check (public.is_admin());
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
