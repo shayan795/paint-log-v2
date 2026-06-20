@@ -1106,12 +1106,11 @@ function openProfile(targetUserId){
 function applySession(session){
   if (sb && session && session.user){
     currentUserId = session.user.id;
-    sb.from("profiles").select("user_id,display_name,avatar_url,is_admin").eq("id", currentUserId).single()
+    sb.from("profiles").select("user_id,display_name,avatar_url").eq("id", currentUserId).single()
       .then(function(p){
         var prof = (p && !p.error) ? p.data : null;
-        currentIsAdmin = !!(prof && prof.is_admin);
         setAuthUI(session, prof);
-        renderDrawer();   // 管理者なら「通報一覧」を出す
+        renderDrawer();
         // 初回（user_id または ニックネームが未設定）なら初期設定モーダルを一度だけ表示
         var needsSetup = prof && (!prof.user_id || !prof.display_name || !prof.display_name.trim());
         if (needsSetup && !_namePrompted){
@@ -1121,6 +1120,8 @@ function applySession(session){
         if (!$("screen-records").hidden) renderRecords();   // 記録タブ表示中ならログイン反映
         if (_pendingProfile){ _pendingProfile = false; openProfile(); }   // リロード復元はセッション確定後に
       });
+    // 管理者判定は is_admin 列を読まずサーバ関数で（誰が管理者かを一般に見せない）
+    sb.rpc("is_admin").then(function(a){ currentIsAdmin = !!(a && a.data === true); renderDrawer(); });
   } else {
     setAuthUI(null, null);
     if (!$("screen-records").hidden) renderRecords();
