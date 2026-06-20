@@ -84,9 +84,9 @@ button{font-family:inherit}
 /* おすすめカルーセル */
 .card-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch}
 .card-row::-webkit-scrollbar{display:none}
-.reco-card{flex:none; width:208px; cursor:pointer}
+.reco-card{flex:none; width:280px; cursor:pointer}
 .reco-thumb{
-  width:100%; aspect-ratio:16/9; border-radius:14px; overflow:hidden;
+  width:100%; aspect-ratio:4/3; border-radius:14px; overflow:hidden;
   background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px);
   display:flex; align-items:center; justify-content:center;
 }
@@ -152,6 +152,9 @@ button{font-family:inherit}
 
 /* ドロワー */
 .scrim{position:fixed; inset:0; background:rgba(20,24,32,.45); opacity:0; pointer-events:none; transition:opacity .2s; z-index:50}
+.toast{position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:11px 22px; border-radius:24px; font-size:.86rem; font-weight:700; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:200; box-shadow:0 6px 20px rgba(20,24,32,.25)}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+@media(min-width:900px){ .toast{bottom:32px} }
 .scrim.show{opacity:1; pointer-events:auto}
 .drawer{
   position:fixed; top:0; left:0; width:min(312px,82%); height:100%; background:var(--paper);
@@ -258,6 +261,7 @@ button{font-family:inherit}
 .rep-meta{font-size:.74rem; color:var(--sub); margin-top:6px}
 .rep-act{display:flex; gap:8px; margin-top:10px}
 .rep-btn{font:inherit; font-size:.82rem; font-weight:700; padding:7px 14px; border:1px solid var(--line-d); border-radius:8px; background:#fff; color:var(--ink); cursor:pointer}
+.rep-btn.on{background:var(--bp-bg); border-color:var(--bp); color:var(--bp)}
 .rep-btn:hover{border-color:var(--ink)}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
@@ -686,7 +690,7 @@ function openSettings(){
         + '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>'
         + '<p class="set-ver">塗装レシピ録 v2</p>';
       $("setProfile").onclick = function(){ openProfile(); };
-      $("setLogout").onclick = function(){ sb.auth.signOut(); };
+      $("setLogout").onclick = doLogout;
       $("setDelete").onclick = deleteAccount;
     });
 }
@@ -846,6 +850,19 @@ function switchAccount(){
   sb.auth.signOut().then(googleLogin);
 }
 
+// 画面下部から3秒だけ出る軽いトースト（成功時の通知用）
+function toast(msg){
+  var t = document.getElementById("_toast");
+  if (!t){ t = document.createElement("div"); t.id = "_toast"; t.className = "toast"; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+
+function doLogout(){
+  if (!sb) return;
+  sb.auth.signOut().then(function(){ toast("ログアウトしました"); });
+}
+
 /* ============ ログイン / 新規登録 / パスワード再設定 ============ */
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function openAuth(mode){
@@ -928,6 +945,7 @@ function doRegister(){
       if (r.error){ err.textContent="登録に失敗：" + r.error.message; btn.disabled=false; return; }
       if (r.data && r.data.session){
         currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF）→ user_id等を保存
+        _namePrompted = true;            // 既に user_id/ニックネームを決めたのでオンボーディングを抑制（2重入力防止）
         saveProfile({ user_id:id, display_name:id, terms_agreed_at:new Date().toISOString() }, function(){ closeAuth(); });
       } else {
         authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。完了後にログインしてください。");
@@ -1206,6 +1224,25 @@ if (sb){
   setAuthUI(null, null);   // ライブラリ未読込（file:///オフライン）でもゲストUIは描く
 }
 
+// 運営：対応済みのトグル（誤操作時に未対応へ戻せる。次回リロードで open のみが残る）
+function bindToggleDone(btn, table, id){
+  var current = "open";
+  function paint(){
+    btn.textContent = current === "open" ? "対応済みにする" : "✓ 対応済み（取り消す）";
+    btn.classList.toggle("on", current !== "open");
+  }
+  paint();
+  btn.onclick = function(){
+    btn.disabled = true;
+    var next = current === "open" ? "reviewed" : "open";
+    sb.from(table).update({ status: next }).eq("id", id).then(function(u){
+      btn.disabled = false;
+      if (u.error){ alert("更新に失敗：" + u.error.message); return; }
+      current = next; paint();
+      toast(next === "reviewed" ? "対応済みにしました" : "未対応に戻しました");
+    });
+  };
+}
 // 運営：通報一覧（is_admin のみ。RLSで一般ユーザーは0件）
 function openReportsAdmin(){
   if (!sb) return;
@@ -1229,15 +1266,8 @@ function openReportsAdmin(){
         var act = document.createElement("div"); act.className = "rep-act";
         var view = document.createElement("button"); view.className = "rep-btn"; view.textContent = "投稿を見る";
         view.onclick = function(){ location.href = "legacy.html?id=" + r.recipe_id + "#view"; };
-        var done = document.createElement("button"); done.className = "rep-btn"; done.textContent = "対応済みにする";
-        done.onclick = function(){
-          done.disabled = true;
-          sb.from("reports").update({ status:"reviewed" }).eq("id", r.id).then(function(u){
-            if (u.error){ done.disabled = false; alert("更新に失敗：" + u.error.message); return; }
-            card.parentNode.removeChild(card);
-            if (!wrap.querySelector(".rep-card")) fullviewBody.innerHTML = '<div class="stub"><h2>通報一覧</h2><p>未対応の通報はありません。</p></div>';
-          });
-        };
+        var done = document.createElement("button"); done.className = "rep-btn";
+        bindToggleDone(done, "reports", r.id);
         act.appendChild(view); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
       fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
@@ -1266,15 +1296,8 @@ function openInquiriesAdmin(){
           + '<div class="rep-detail">'+esc(r.body||"")+'</div>'
           + '<div class="rep-meta">'+esc(who)+' ／ '+esc(d)+'</div>';
         var act = document.createElement("div"); act.className = "rep-act";
-        var done = document.createElement("button"); done.className = "rep-btn"; done.textContent = "対応済みにする";
-        done.onclick = function(){
-          done.disabled = true;
-          sb.from("inquiries").update({ status:"reviewed" }).eq("id", r.id).then(function(u){
-            if (u.error){ done.disabled = false; alert("更新に失敗：" + u.error.message); return; }
-            card.parentNode.removeChild(card);
-            if (!wrap.querySelector(".rep-card")) fullviewBody.innerHTML = '<div class="stub"><h2>お問い合わせ一覧</h2><p>未対応のお問い合わせはありません。</p></div>';
-          });
-        };
+        var done = document.createElement("button"); done.className = "rep-btn";
+        bindToggleDone(done, "inquiries", r.id);
         act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
       fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
@@ -1311,7 +1334,7 @@ function renderDrawer(){
   // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
   if (currentUserId){
     [ { label:"別のアカウントでログイン", fn: switchAccount },
-      { label:"ログアウト",               fn: function(){ sb.auth.signOut(); } },
+      { label:"ログアウト",               fn: doLogout },
       { label:"退会（アカウント削除）",     fn: deleteAccount, danger:true }
     ].forEach(function(it){
       var b = document.createElement("button");
@@ -1497,6 +1520,10 @@ renderTrending();
 renderPaints();
 // 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
 (function(){
+  // ?tab=records 形式（legacyのサイドバーから来たとき。hashの方が他のロジックで上書きされる事故を回避）
+  var sp = new URLSearchParams(location.search);
+  if (sp.get("tab") === "records"){ showTab("records", true); return; }
+  if (sp.get("tab") === "discover"){ showTab("discover", true); return; }
   var h = (location.hash || "").replace("#","");
   // #m/<slug> = 塗装方法の絞り込み（閲覧チップからの動線・リロード復元）
   var mm = h.match(/^m\/(.+)$/);

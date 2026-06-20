@@ -561,7 +561,7 @@ body{background-image:none}
     <a class="sb-item sb-create" href="legacy.html#edit">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>作る</span>
     </a>
-    <a class="sb-item" href="index.html#records">
+    <a class="sb-item" href="index.html?tab=records">
       <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg><span>記録</span>
     </a>
   </nav>
@@ -2153,8 +2153,8 @@ function renderViewMode(){
   let methodsHtml = "";
   if (Array.isArray(state.methods) && state.methods.length){
     methodsHtml = '<div class="vmethods">' + state.methods.map(function(s){
-      var lbl = METHOD_LABEL[s] ? METHOD_LABEL[s] : ("#" + s);   // プリセット名 or 独自#タグ
-      return '<a class="vmethod" href="index.html#m/'+esc(s)+'">'+esc(lbl)+'</a>';
+      var lbl = "#" + (METHOD_LABEL[s] || s);   // プリセット名／独自どちらも # 付きで雰囲気を出す
+      return '<a class="vmethod" href="index.html?m='+encodeURIComponent(s)+'#m/'+esc(s)+'">'+esc(lbl)+'</a>';
     }).join("") + '</div>';
   }
   band.innerHTML = `
@@ -2630,6 +2630,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       var v = card ? card.querySelector('input[type="radio"]:checked') : null;
       var isPublic = !(v && v.value === "private");
       if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに使えます。"); return; }
+      // 未確定の#タグ入力（Enter押し忘れ救済）を state.methods に反映
+      var pendingInput = document.querySelector('#methodChips .mchip-input');
+      if (pendingInput && pendingInput.value.trim()){
+        if (typeof addCustomTag === "function") addCustomTag(pendingInput.value);
+        pendingInput.value = "";
+      }
       btn.disabled = true; var orig = btn.textContent; btn.textContent = "保存中…";
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
@@ -2662,7 +2668,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             return q.select("id").single().then(function(res){
               if (res.error) throw res.error;
               alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
-              location.href = "index.html#records";
+              location.href = "index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
             });
           });
         });
