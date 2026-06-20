@@ -262,10 +262,13 @@ button{font-family:inherit}
 .rep-act{display:flex; gap:8px; margin-top:10px}
 .rep-btn{font:inherit; font-size:.82rem; font-weight:700; padding:7px 14px; border:1px solid var(--line-d); border-radius:8px; background:#fff; color:var(--ink); cursor:pointer}
 .rep-btn.on{background:var(--bp-bg); border-color:var(--bp); color:var(--bp)}
+.rep-btn.danger{color:var(--warn); border-color:var(--warn)}
+.rep-btn.danger:hover{background:#FBEAE7}
 .rep-btn:hover{border-color:var(--ink)}
 .pf-empty{grid-column:1/-1; color:var(--sub); font-size:.84rem; margin:0}
 .pf-post{border:none; background:none; padding:0; text-align:left; cursor:pointer}
-.pf-post-thumb{display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
+.pf-post-thumb{position:relative; display:block; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)}
+.match-why{position:absolute; top:8px; left:8px; background:rgba(20,24,32,.78); color:#fff; padding:3px 8px; border-radius:10px; font-size:.66rem; font-weight:700; letter-spacing:.05em}
 .pf-post-thumb img{width:100%; height:100%; object-fit:cover; display:block}
 .pf-post-title{font-size:.82rem; font-weight:700; margin-top:6px; line-height:1.3; color:var(--accent)}
 /* プロフィール編集フォーム */
@@ -381,6 +384,9 @@ textarea.pf-field{resize:vertical; line-height:1.6}
       <button class="sb-item" data-tab="records">
         <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg><span>記録</span>
       </button>
+      <button class="sb-item" id="sbBell">
+        <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg><span>通知</span>
+      </button>
     </nav>
     <button class="sb-account" id="sbAccount"><span class="sb-av">K</span><span>ゲスト</span></button>
   </aside>
@@ -400,7 +406,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <!-- 探す（起動時デフォルト） -->
   <main class="view" id="screen-discover">
     <div class="searchbox">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <svg id="searchIcon" viewBox="0 0 24 24" style="cursor:pointer"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="search" id="searchInput" placeholder="作品・塗料・塗装方法を探す" enterkeyhint="search">
     </div>
     <section class="block">
@@ -759,6 +765,67 @@ function openTagResults(slug, label){
     });
 }
 $("tagBack").addEventListener("click", function(){ showTab("discover"); });
+
+// 検索：タイトル＋#タグ＋塗料名（grid内自由入力 c）で公開投稿を絞り込み
+function openSearchResults(q){
+  q = String(q || "").trim();
+  if (!q || !sb) return;
+  if (!fullview.hidden){ fullview.hidden = true; fullviewBody.innerHTML = ""; }
+  $("screen-discover").hidden = true; $("screen-records").hidden = true; $("screen-tag").hidden = false;
+  setHash("q/" + encodeURIComponent(q));
+  $("tagTitle").textContent = "検索：" + q;
+  var list = $("tagList"); list.innerHTML = '<p class="pf-empty">読み込み中…</p>';
+  var recoSec = $("tagRecoSec"); recoSec.hidden = true;
+  window.scrollTo(0,0);
+  var qLow = q.toLowerCase();
+  // 公開投稿を新着300件取得→ クライアント側でtitle/methods/grid内自由入力塗料名でフィルタ
+  sb.from("recipes").select("id,title,cover_url,is_public,created_at,methods,grid,owner_id").eq("is_public", true)
+    .order("created_at", { ascending:false }).limit(300)
+    .then(function(res){
+      if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
+      var rows = res.data || [];
+      var hits = [];
+      rows.forEach(function(r){
+        var why = null;
+        if (r.title && r.title.toLowerCase().indexOf(qLow) >= 0) why = "タイトル一致";
+        else if (Array.isArray(r.methods)){
+          var hit = r.methods.some(function(s){
+            var lab = (METHOD_LABEL[s] || s).toLowerCase();
+            return s.toLowerCase() === qLow || s.toLowerCase().indexOf(qLow) >= 0 || lab.indexOf(qLow) >= 0;
+          });
+          if (hit) why = "#タグ一致";
+        }
+        if (!why && r.grid && Array.isArray(r.grid.rows)){
+          var paintHit = r.grid.rows.some(function(row){
+            if (!row || !row.cells) return false;
+            return Object.keys(row.cells).some(function(k){
+              var c = row.cells[k]; return c && typeof c.c === "string" && c.c.toLowerCase().indexOf(qLow) >= 0;
+            });
+          });
+          if (paintHit) why = "塗料一致";
+        }
+        if (why){ r._why = why; hits.push(r); }
+      });
+      if (!hits.length){ list.innerHTML = '<p class="pf-empty">「'+esc(q)+'」に一致する公開投稿はありません。</p>'; return; }
+      list.innerHTML = "";
+      hits.forEach(function(r){
+        var c = recordCard(r);
+        // マッチ理由ラベル
+        var tip = document.createElement("span"); tip.className = "match-why"; tip.textContent = r._why;
+        c.querySelector(".pf-post-thumb")?.appendChild(tip);
+        list.appendChild(c);
+      });
+    });
+}
+function doSearch(){
+  var q = $("searchInput").value;
+  if (q && q.trim()) openSearchResults(q.trim());
+}
+$("searchInput").addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); doSearch(); } });
+$("searchIcon").addEventListener("click", doSearch);
+// PC上部にも同名の検索欄があれば連動（PCヘッダー検索）
+var sidx = document.getElementById("searchInputDesktop");
+if (sidx){ sidx.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); openSearchResults(sidx.value); } }); }
 // 投稿（作る）はログイン必須。未ログインならログイン画面へ誘導
 function startCreate(){ requireLogin(function(){ openLegacy("レシピを作る", "#edit"); }); }
 $("plusBtn").addEventListener("click", startCreate);
@@ -773,12 +840,15 @@ $("avatarBtn").addEventListener("click", openDrawer);
 var sbAccount = $("sbAccount");
 if (sbAccount) sbAccount.addEventListener("click", openDrawer);
 scrim.addEventListener("click", closeDrawer);
-$("bellBtn").addEventListener("click", function(){
+function openBellStub(){
   $("fvTitle").textContent = "通知";
   fullviewBody.innerHTML = '<div class="stub"><h2>通知</h2>'
     + '<p>通知機能は準備中です。重要なお知らせは、サイト内の「お問い合わせ」返信またはサイト内告知でお伝えします。</p></div>';
   fullview.hidden = false;
-});
+}
+$("bellBtn").addEventListener("click", openBellStub);
+var sbBellEl = document.getElementById("sbBell");
+if (sbBellEl) sbBellEl.addEventListener("click", openBellStub);
 $("authClose").addEventListener("click", closeAuth);
 $("authOverlay").addEventListener("click", function(e){ if (e.target === $("authOverlay")) closeAuth(); });
 
@@ -1224,6 +1294,21 @@ if (sb){
   setAuthUI(null, null);   // ライブラリ未読込（file:///オフライン）でもゲストUIは描く
 }
 
+// 運営：完全削除ボタンを作る（管理者のみ。confirm 1回→toast→card削除）
+function makeDeleteBtn(table, id, card){
+  var b = document.createElement("button");
+  b.className = "rep-btn danger"; b.textContent = "削除";
+  b.onclick = function(){
+    if (!confirm("この" + (table === "reports" ? "通報" : "お問い合わせ") + "を完全に削除します。元に戻せません。")) return;
+    b.disabled = true;
+    sb.from(table).delete().eq("id", id).then(function(d){
+      if (d.error){ b.disabled = false; alert("削除に失敗：" + d.error.message); return; }
+      if (card && card.parentNode) card.parentNode.removeChild(card);
+      toast("削除しました");
+    });
+  };
+  return b;
+}
 // 運営：対応済みのトグル（誤操作時に未対応へ戻せる。次回リロードで open のみが残る）
 function bindToggleDone(btn, table, id){
   var current = "open";
@@ -1268,7 +1353,8 @@ function openReportsAdmin(){
         view.onclick = function(){ location.href = "legacy.html?id=" + r.recipe_id + "#view"; };
         var done = document.createElement("button"); done.className = "rep-btn";
         bindToggleDone(done, "reports", r.id);
-        act.appendChild(view); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
+        var del = makeDeleteBtn("reports", r.id, card);
+        act.appendChild(view); act.appendChild(del); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
       fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
     });
@@ -1298,7 +1384,8 @@ function openInquiriesAdmin(){
         var act = document.createElement("div"); act.className = "rep-act";
         var done = document.createElement("button"); done.className = "rep-btn";
         bindToggleDone(done, "inquiries", r.id);
-        act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
+        var del = makeDeleteBtn("inquiries", r.id, card);
+        act.appendChild(del); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
       fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
     });
@@ -1528,6 +1615,9 @@ renderPaints();
   // #m/<slug> = 塗装方法の絞り込み（閲覧チップからの動線・リロード復元）
   var mm = h.match(/^m\/(.+)$/);
   if (mm){ showTab("discover", true); openTagResults(mm[1], METHOD_LABEL[mm[1]] || mm[1]); return; }
+  // #q/<query> = 検索のリロード復元
+  var qm = h.match(/^q\/(.+)$/);
+  if (qm){ showTab("discover", true); openSearchResults(decodeURIComponent(qm[1])); return; }
   if (h === "records"){ showTab("records", true); return; }
   var um = h.match(/^u\/(.+)$/);   // #u/<user_id> = 他人のプロフィール（公開・ログイン不要）
   if (um){ showTab("discover", true); openProfile(decodeURIComponent(um[1])); return; }

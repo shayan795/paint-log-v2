@@ -279,6 +279,7 @@ drop policy if exists rt_delete         on public.recipe_tags;
 drop policy if exists reports_insert    on public.reports;
 drop policy if exists reports_select    on public.reports;
 drop policy if exists reports_update    on public.reports;
+drop policy if exists reports_delete    on public.reports;
 
 -- tags: 読みは全員 / 書きは管理者のみ
 create policy tags_select on public.tags
@@ -310,6 +311,8 @@ create policy reports_select on public.reports
   for select using (public.is_admin());
 create policy reports_update on public.reports
   for update using (public.is_admin()) with check (public.is_admin());
+create policy reports_delete on public.reports
+  for delete using (public.is_admin());
 
 -- recipes: 削除に管理者例外を追加(運営は通報対応で消せる)
 drop policy if exists recipes_delete on public.recipes;
@@ -332,9 +335,11 @@ alter table public.inquiries enable row level security;
 drop policy if exists inquiries_insert on public.inquiries;
 drop policy if exists inquiries_select on public.inquiries;
 drop policy if exists inquiries_update on public.inquiries;
+drop policy if exists inquiries_delete on public.inquiries;
 create policy inquiries_insert on public.inquiries for insert with check (user_id = auth.uid());
 create policy inquiries_select on public.inquiries for select using (public.is_admin());
 create policy inquiries_update on public.inquiries for update using (public.is_admin()) with check (public.is_admin());
+create policy inquiries_delete on public.inquiries for delete using (public.is_admin());
 
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
