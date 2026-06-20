@@ -205,6 +205,14 @@ alter table public.profiles add column if not exists terms_agreed_at timestamptz
 alter table public.profiles add column if not exists user_id text;
 create unique index if not exists profiles_user_id_key on public.profiles(lower(user_id));  -- 大小無視で一意
 
+-- 段5: 閲覧数（人気/トレンド表示用）。公開投稿のみ加算。他人投稿も増やせるよう SECURITY DEFINER RPC
+alter table public.recipes add column if not exists view_count int not null default 0;
+create or replace function public.increment_view(rid uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.recipes set view_count = view_count + 1 where id = rid and is_public = true;
+$$;
+grant execute on function public.increment_view(uuid) to anon, authenticated;
+
 -- user_id を不変にする（一度設定したら変更不可）
 create or replace function public.lock_user_id()
 returns trigger language plpgsql as $$

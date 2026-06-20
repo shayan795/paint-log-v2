@@ -2448,6 +2448,16 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       setPublishCard(false);            // 既存投稿の閲覧では公開設定/投稿ボタン・プレビューバナーを出さない
       ensureBackBtn();                  // 「← 戻る」を表示
       ensureAuthorChip(rec.owner_id);   // 投稿者チップ（タップでその人のプロフィールへ）
+      // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）
+      if (rec.is_public){
+        try {
+          var today = new Date().toISOString().slice(0,10);
+          if (localStorage.getItem("pv_" + rec.id) !== today){
+            localStorage.setItem("pv_" + rec.id, today);
+            sb.rpc("increment_view", { rid: rec.id }).then(function(){}, function(){});
+          }
+        } catch(_){ }
+      }
       // 所有者だけ「編集する」「削除」を出す
       sb.auth.getSession().then(function(s){
         var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;

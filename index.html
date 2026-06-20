@@ -663,14 +663,14 @@ function openTagResults(slug, label){
   var recoSec = $("tagRecoSec"), recoRow = $("tagRecoRow"), recoDots = $("tagRecoDots");
   recoSec.hidden = true; recoRow.innerHTML = ""; recoDots.innerHTML = "";
   window.scrollTo(0,0);
-  sb.from("recipes").select("id,title,cover_url,owner_id").eq("is_public", true)
+  sb.from("recipes").select("id,title,cover_url,created_at,view_count,owner_id").eq("is_public", true)
     .contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
     .then(function(res){
       if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
       var rows = res.data || [];
       if (!rows.length){ list.innerHTML = '<p class="pf-empty">この塗装方法の公開投稿はまだありません。</p>'; return; }
-      // 上部おすすめ＝画像のある投稿を横スクロール（最大8件・メインと同じカルーセル）
-      var withCover = rows.filter(function(r){ return r.cover_url; }).slice(0, 8);
+      // 上部おすすめ＝画像のある投稿を人気（トレンド）順で横スクロール（最大8件）
+      var withCover = rows.filter(function(r){ return r.cover_url; }).sort(byTrending).slice(0, 8);
       if (withCover.length){
         recoSec.hidden = false;
         withCover.forEach(function(r, i){
@@ -1210,12 +1210,21 @@ function renderDrawer(){
 
 /* ----------------------------- 探す画面の描画 ----------------------------- */
 // おすすめ＝公開レシピの新着（実データ）。タップで実閲覧ページへ
+// 段5: トレンドスコア＝閲覧数 ÷ 経過日数（新しくて伸びてる投稿が上位／同点は新着優先）
+function trendingScore(r){
+  var ageDays = (Date.now() - new Date(r.created_at).getTime()) / 86400000;
+  return (r.view_count || 0) / (ageDays + 1.5);
+}
+function byTrending(a, b){
+  var d = trendingScore(b) - trendingScore(a);
+  return d !== 0 ? d : (new Date(b.created_at) - new Date(a.created_at));
+}
 function renderReco(){
   var row = $("recoRow"), dots = $("recoDots");
   if (!sb){ row.innerHTML = ""; dots.innerHTML = ""; return; }
   row.innerHTML = '<div class="note-box" style="flex:1 1 100%">読み込み中…</div>'; dots.innerHTML = "";
-  sb.from("recipes").select("id,title,cover_url,created_at,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
-    .eq("is_public", true).order("created_at", { ascending:false }).limit(12)
+  sb.from("recipes").select("id,title,cover_url,created_at,view_count,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
+    .eq("is_public", true).order("created_at", { ascending:false }).limit(40)
     .then(function(res){
       row.innerHTML = ""; dots.innerHTML = "";
       if (res && res.error){   // 通信失敗を「投稿なし」と誤表示しない
@@ -1227,6 +1236,7 @@ function renderReco(){
         row.innerHTML = '<div class="note-box" style="flex:1 1 100%">まだ投稿がありません。最初の1件を作ってみましょう。</div>';
         return;
       }
+      rows = rows.sort(byTrending).slice(0, 12);   // 人気（トレンド）順 上位12
       rows.forEach(function(r, i){
         var card = document.createElement("div");
         card.className = "reco-card";
@@ -1278,15 +1288,21 @@ function renderCategories(){
     more.style.display = "none";
   }
 }
-// 人気の塗装方法タイルに代表画像（そのタグの最新公開投稿のcover）を差し込む
+// 人気の塗装方法タイルに代表画像（そのタグの人気＝トレンド最上位投稿のcover）を差し込む
 function loadTileCovers(){
   if (!sb) return;
-  sb.from("recipes").select("cover_url,methods,created_at").eq("is_public", true)
-    .not("cover_url", "is", null).order("created_at", { ascending:false }).limit(80)
+  sb.from("recipes").select("cover_url,methods,created_at,view_count").eq("is_public", true)
+    .not("cover_url", "is", null).order("created_at", { ascending:false }).limit(120)
     .then(function(res){
       var rows = (res && !res.error && res.data) ? res.data : [];
+      var best = {};   // slug -> 最高スコアの投稿
+      rows.forEach(function(r){
+        (r.methods || []).forEach(function(s){
+          if (!best[s] || trendingScore(r) > trendingScore(best[s])) best[s] = r;
+        });
+      });
       var cover = {};
-      rows.forEach(function(r){ (r.methods || []).forEach(function(s){ if (!cover[s] && r.cover_url) cover[s] = r.cover_url; }); });
+      Object.keys(best).forEach(function(s){ cover[s] = best[s].cover_url; });
       var tiles = document.querySelectorAll("#catGrid .cat-tile");
       for (var i=0;i<tiles.length;i++){
         var t = tiles[i], s = t.getAttribute("data-slug");
