@@ -194,7 +194,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .vr-cell.open .vr-buylinks{display:flex}
 /* 色グループのコメント。長文は3行で省略し、タップで全文表示 */
 .vr-comment-cell{display:none}  /* スマホ用セル。PCでは独立行(.vr-comment-row)を使う */
-.vr-comment-row td{padding:0 0 12px 12px;border-bottom:1px solid var(--line);border-left:3px solid var(--accent)}
+.vr-comment-row td{padding:0 0 12px 12px;border-bottom:1px solid var(--line)}
 .vr-comment{font-size:.8rem;color:var(--ink);line-height:1.7;background:var(--bp-bg);border-left:3px solid var(--accent);padding:9px 12px;white-space:pre-wrap;cursor:pointer;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .vr-comment::before{content:"💬 ";opacity:.7}
@@ -225,6 +225,12 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 #viewMode .scroll{border:1px solid var(--line)!important;border-radius:12px;overflow:hidden!important}
 @media(max-width:640px){
   #viewMode .scroll{border:none!important;border-radius:0!important;overflow:visible!important}
+}
+/* PC: コメント行を見やすく（赤縦線を撤去、軽い枠＋角丸＋淡い背景の吹き出しに） */
+@media(min-width:641px){
+  .vr-comment-row td{padding:4px 12px 14px}
+  #viewMode .vr-comment{border-left:none;background:#FBF8F4;border:1px solid var(--line);border-radius:8px;padding:10px 14px;color:#2B313C;font-size:.82rem}
+  #viewMode .vr-comment::before{content:""}   /* 💬 は無くてOK（PCはスペースに余裕があり装飾より読みやすさ優先） */
 }
 
 /* 購入セクション */
@@ -2668,5 +2674,44 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   }
 })();
 </script>
+
+<!-- v2: PCサイドバーのアカウント表示をログイン中ユーザーに同期（他人の投稿を見ているときもゲスト表示にならないように） -->
+<script>
+(function(){
+  var cfg = window.PAINTLOG_CONFIG || {};
+  if (!window.supabase || !cfg.SUPABASE_URL) return;
+  var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  function set(prof){
+    var acc = document.querySelector('.sidebar .sb-account'); if (!acc) return;
+    var av = acc.querySelector('.sb-av'); var name = acc.querySelector('span:not(.sb-av)');
+    if (!prof){
+      if (av){ av.innerHTML=''; av.textContent='ゲ'; av.style.background=''; }
+      if (name) name.textContent='ゲスト';
+      acc.setAttribute('href','index.html');
+      return;
+    }
+    var label = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
+    var ini = label.charAt(0);
+    if (av){
+      av.style.overflow='hidden';
+      if (prof.avatar_url){ av.textContent=''; av.innerHTML = '<img src="'+prof.avatar_url+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'; }
+      else { av.innerHTML=''; av.textContent=ini; }
+    }
+    if (name) name.textContent=label;
+    acc.setAttribute('href','index.html#profile');   // タップで自分のプロフィールへ
+  }
+  function refresh(){
+    sb.auth.getSession().then(function(r){
+      var s=r&&r.data&&r.data.session;
+      if (!s){ set(null); return; }
+      sb.from('profiles').select('user_id,display_name,avatar_url').eq('id', s.user.id).single()
+        .then(function(p){ set(p && !p.error ? p.data : null); });
+    });
+  }
+  refresh();
+  sb.auth.onAuthStateChange(function(){ refresh(); });
+})();
+</script>
+
 </body>
 </html>
