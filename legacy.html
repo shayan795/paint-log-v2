@@ -221,8 +221,11 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   .vrecipe-table td.vr-comment-cell::before{content:none}
 }
 
-/* 閲覧ページ：塗装レシピ表の外枠を優しい色＋角丸（PC/スマホ共通。inline overflow-x:autoは!importantで上書き） */
+/* 閲覧ページ：表の外枠（PCのみ角丸枠。スマホは各カードが自前の枠を持つので外枠は無し＝カード間の縦線を解消） */
 #viewMode .scroll{border:1px solid var(--line)!important;border-radius:12px;overflow:hidden!important}
+@media(max-width:640px){
+  #viewMode .scroll{border:none!important;border-radius:0!important;overflow:visible!important}
+}
 
 /* 購入セクション */
 .vpaint-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
