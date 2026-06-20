@@ -300,7 +300,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   #recipeTable thead{display:none}
   #recipeTable, #recipeTable tbody, #recipeTable tr, #recipeTable td{display:block;width:100%}
   #editMode .scroll{overflow-x:visible;border:none}
-  #recipeTable tr{border:1px solid var(--line-d);border-left:3px solid var(--bp);margin-bottom:14px;background:#fff}
+  #recipeTable tr{border:1px solid var(--line-d);margin-bottom:14px;background:#fff}  /* 左の3px赤縦棒は廃止（カード感を保つ） */
   #recipeTable td{border:none;border-bottom:1px solid var(--line);min-width:0;height:auto}
   #recipeTable td.part{min-width:0;border-right:none;background:var(--bp-bg)}
   #recipeTable td.part input{width:100%;min-width:0;font-size:1rem}
@@ -395,7 +395,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #editMode #kit, #editMode #author{border:none; border-bottom:1.5px solid var(--line); border-radius:0; background:transparent; padding:9px 2px}
 #editMode #kit:focus, #editMode #author:focus{outline:none; border-color:#D98A80}
 #editMode #kit{font-size:1.25rem; font-weight:700}      /* タイトルは大きく */
-#editMode #memo{border:1px solid var(--line); border-radius:8px}
+#editMode #memo{border:1px solid var(--line); border-radius:12px}
 #editMode label{font-size:.74rem; color:var(--sub); margin-bottom:1px}
 #editMode .note{font-size:.72rem; color:var(--line-d)}
 
@@ -405,7 +405,7 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #editMode .modetab.active{background:#FBEAE7; color:#E01E28}
 
 /* 表：角丸・薄枠・薄グレーヘッダー・薄赤アクセント */
-@media(min-width:641px){ #editMode .scroll{border:1px solid var(--line); border-radius:10px} }  /* 表の外枠はPCのみ（モバイルのカード表示には付けない） */
+@media(min-width:641px){ #editMode .scroll{border:1px solid var(--line); border-radius:12px; overflow:hidden} }  /* PC表の外枠を角丸＋クリップで内側も丸く */
 @media(max-width:640px){ #editMode .row{flex-direction:column} }                              /* スマホは作品名/制作者名を縦積み（重なり防止） */
 #editMode table.recipe thead th{background:#EDEDE8; color:var(--ink); font-weight:700}
 #editMode table.recipe thead th input{color:var(--ink)}
