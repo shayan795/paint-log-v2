@@ -769,7 +769,12 @@ $("avatarBtn").addEventListener("click", openDrawer);
 var sbAccount = $("sbAccount");
 if (sbAccount) sbAccount.addEventListener("click", openDrawer);
 scrim.addEventListener("click", closeDrawer);
-$("bellBtn").addEventListener("click", function(){ openStub("通知"); });
+$("bellBtn").addEventListener("click", function(){
+  $("fvTitle").textContent = "通知";
+  fullviewBody.innerHTML = '<div class="stub"><h2>通知</h2>'
+    + '<p>通知機能は準備中です。重要なお知らせは、サイト内の「お問い合わせ」返信またはサイト内告知でお伝えします。</p></div>';
+  fullview.hidden = false;
+});
 $("authClose").addEventListener("click", closeAuth);
 $("authOverlay").addEventListener("click", function(e){ if (e.target === $("authOverlay")) closeAuth(); });
 
