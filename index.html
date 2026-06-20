@@ -371,8 +371,8 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <aside class="sidebar">
     <div class="sb-logo"><span class="dot"></span>塗装レシピ録</div>
     <div class="sb-search">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input type="search" placeholder="探す">
+      <svg id="searchIconSidebar" viewBox="0 0 24 24" style="cursor:pointer"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="searchInputSidebar" placeholder="探す" enterkeyhint="search">
     </div>
     <nav class="sb-nav">
       <button class="sb-item" data-tab="discover">
@@ -817,15 +817,23 @@ function openSearchResults(q){
       });
     });
 }
-function doSearch(){
-  var q = $("searchInput").value;
-  if (q && q.trim()) openSearchResults(q.trim());
+function doSearchFrom(inp){
+  var v = inp && inp.value ? inp.value.trim() : "";
+  if (v) openSearchResults(v);
 }
-$("searchInput").addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); doSearch(); } });
-$("searchIcon").addEventListener("click", doSearch);
-// PC上部にも同名の検索欄があれば連動（PCヘッダー検索）
-var sidx = document.getElementById("searchInputDesktop");
-if (sidx){ sidx.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); openSearchResults(sidx.value); } }); }
+// 検索の入力欄＋虫眼鏡アイコンをペアでバインド（スマホ／PCサイドバー／PC上部 すべて対応）
+[
+  { inp:"searchInput",        ico:"searchIcon" },         // スマホ（探す画面の検索欄）
+  { inp:"searchInputSidebar", ico:"searchIconSidebar" },  // PC サイドバー上部
+  { inp:"searchInputDesktop", ico:"searchIconDesktop" }   // PC上部に置く場合（任意）
+].forEach(function(p){
+  var inp = document.getElementById(p.inp);
+  var ico = document.getElementById(p.ico);
+  if (inp) inp.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); doSearchFrom(inp); } });
+  if (ico) ico.addEventListener("click", function(){ doSearchFrom(inp); });
+});
+// 後方互換：他コードが呼ぶかも知れない doSearch（スマホ用 #searchInput を使う）
+function doSearch(){ doSearchFrom(document.getElementById("searchInput")); }
 // 投稿（作る）はログイン必須。未ログインならログイン画面へ誘導
 function startCreate(){ requireLogin(function(){ openLegacy("レシピを作る", "#edit"); }); }
 $("plusBtn").addEventListener("click", startCreate);
