@@ -294,6 +294,15 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 .stub{padding:32px 22px}
 .stub h2{font-size:1.15rem; margin:0 0 8px}
 .stub p{font-size:.86rem; color:var(--sub); margin:0}
+/* 設定ページ */
+.set-sec{border:1px solid var(--line); border-radius:12px; padding:6px 14px; margin:14px 0}
+.set-k{font-size:.72rem; font-weight:700; color:var(--sub); padding:8px 0 4px}
+.set-row{display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--line); font-size:.86rem}
+.set-row span{color:var(--sub)}
+.set-item{display:block; width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:10px; padding:13px 15px; margin-top:8px; font:inherit; font-size:.9rem; font-weight:700; color:var(--ink); cursor:pointer; text-decoration:none}
+.set-item:hover{border-color:var(--ink)}
+.set-item.danger{color:var(--warn); border-color:var(--warn)}
+.set-ver{font-size:.78rem; color:var(--sub); margin:18px 0 0}
 
 /* ============================================================================
    PC（デスクトップ）レイアウト — クックパッドPC風。横長ヘッダー＋多段カラム。
@@ -568,10 +577,10 @@ var MOCK = {
   drawerItems: [
     { id:"profile",  label:"プロフィール",         kind:"stub" },
     { id:"about",    label:"塗装レシピ録とは",     kind:"legacy", hash:"#about" },
-    { id:"course",   label:"初心者向け塗装講座",   kind:"stub" },
-    { id:"settings", label:"設定",                 kind:"stub" },
-    { id:"help",     label:"ヘルプ",               kind:"stub" },
-    { id:"feedback", label:"お問い合わせ",         kind:"stub" },
+    { id:"course",   label:"初心者向け塗装講座",   kind:"page", url:"course.html" },
+    { id:"settings", label:"設定",                 kind:"settings" },
+    { id:"help",     label:"ヘルプ",               kind:"page", url:"help.html" },
+    { id:"feedback", label:"お問い合わせ",         kind:"contact" },
     { id:"terms",    label:"利用規約",             kind:"page", url:"terms.html" },
     { id:"privacy",  label:"プライバシーポリシー", kind:"page", url:"privacy.html" }
   ]
@@ -650,6 +659,63 @@ function openStub(title){
 }
 function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; setHash($("screen-records").hidden ? "discover" : "records"); }
 $("fvBack").addEventListener("click", closeFull);
+
+// 設定（アカウントのハブ。ログイン必須）
+function openSettings(){
+  if (!sb || !currentUserId){ openAuth("login"); return; }
+  $("fvTitle").textContent = "設定";
+  fullviewBody.innerHTML = '<div class="stub" id="settingsBody"><p class="pf-empty">読み込み中…</p></div>';
+  fullview.hidden = false;
+  Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name").eq("id", currentUserId).single() ])
+    .then(function(r){
+      var email = (r[0] && r[0].data && r[0].data.user) ? r[0].data.user.email : "";
+      var prof = (r[1] && !r[1].error) ? (r[1].data || {}) : {};
+      var box = $("settingsBody"); if (!box) return;
+      box.innerHTML =
+        '<h2>設定</h2>'
+        + '<div class="set-sec"><div class="set-k">アカウント</div>'
+        +   '<div class="set-row"><span>表示名</span><b>'+esc(prof.display_name||"未設定")+'</b></div>'
+        +   '<div class="set-row"><span>ユーザーID</span><b>'+(prof.user_id?"@"+esc(prof.user_id):"未設定")+'</b></div>'
+        +   (email ? '<div class="set-row"><span>メール</span><b>'+esc(email)+'</b></div>' : '')
+        + '</div>'
+        + '<button class="set-item" id="setProfile">プロフィールを編集</button>'
+        + '<a class="set-item" href="terms.html">利用規約</a>'
+        + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
+        + '<a class="set-item" href="help.html">ヘルプ</a>'
+        + '<button class="set-item" id="setLogout">ログアウト</button>'
+        + '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>'
+        + '<p class="set-ver">塗装レシピ録 v2</p>';
+      $("setProfile").onclick = function(){ openProfile(); };
+      $("setLogout").onclick = function(){ sb.auth.signOut(); };
+      $("setDelete").onclick = deleteAccount;
+    });
+}
+
+// お問い合わせ（ログイン必須・inquiriesに保存）
+function openContact(){
+  if (!sb || !currentUserId){ openAuth("login"); return; }
+  $("fvTitle").textContent = "お問い合わせ";
+  fullviewBody.innerHTML =
+    '<div class="stub"><h2>お問い合わせ</h2>'
+    + '<p class="set-ver" style="margin:0 0 14px">ご質問・不具合・ご要望をお送りください。運営が確認します。</p>'
+    + '<label class="auth-label">種別</label>'
+    + '<select id="cCat" class="auth-field"><option value="question">質問</option><option value="bug">不具合の報告</option><option value="request">要望</option><option value="other">その他</option></select>'
+    + '<label class="auth-label">内容</label>'
+    + '<textarea id="cBody" class="auth-field" rows="6" placeholder="できるだけ具体的にご記入ください"></textarea>'
+    + '<div class="auth-err" id="cErr"></div>'
+    + '<button class="auth-submit" id="cSend">送信する</button></div>';
+  fullview.hidden = false;
+  $("cSend").onclick = function(){
+    var body = $("cBody").value.trim(), cat = $("cCat").value, err = $("cErr"), btn = $("cSend");
+    if (!body){ err.textContent = "内容を入力してください"; return; }
+    btn.disabled = true; err.textContent = "送信中…";
+    sb.from("inquiries").insert({ user_id: currentUserId, category: cat, body: body }).then(function(res){
+      if (res.error){ btn.disabled = false; err.textContent = "送信に失敗しました：" + res.error.message; return; }
+      fullviewBody.innerHTML = '<div class="stub"><h2>送信しました</h2><p class="set-ver">お問い合わせありがとうございます。運営が確認します。</p><button class="auth-submit" id="cClose">閉じる</button></div>';
+      $("cClose").onclick = closeFull;
+    });
+  };
+}
 
 // 塗装方法タグで公開投稿を絞り込んで一覧表示（fullview）
 // 塗装方法/タグの絞り込み結果（独立画面＝上バーのアバター/ロゴ/通知はそのまま表示）
@@ -1181,6 +1247,8 @@ function renderDrawer(){
     b.addEventListener("click", function(){
       closeDrawer();
       if (item.id === "profile") openProfile();
+      else if (item.kind === "settings") openSettings();
+      else if (item.kind === "contact") openContact();
       else if (item.kind === "legacy") openLegacy(item.label, item.hash);
       else if (item.kind === "page") location.href = item.url;
       else openStub(item.label);
