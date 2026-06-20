@@ -204,7 +204,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 @media(max-width:640px){
   .vrecipe-table thead{display:none}
   .vrecipe-table, .vrecipe-table tbody, .vrecipe-table tr, .vrecipe-table td{display:block;width:100%}
-  .vrecipe-table tr{border:1px solid var(--line-d);border-left:3px solid var(--accent);margin-bottom:14px;background:#fff}
+  .vrecipe-table tr{border:1px solid var(--line);margin-bottom:14px;background:#fff;border-radius:12px;overflow:hidden}
   .vrecipe-table td{border:none;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
   .vrecipe-table td:last-child{border-bottom:none}
   .vrecipe-table td.vr-part{font-size:1rem;font-weight:700;background:var(--bp-bg);border-bottom:1px solid var(--line);padding:11px 14px;display:block;
@@ -220,6 +220,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   .vrecipe-table td.vr-comment-cell{display:block;padding:10px 14px;border-bottom:none}  /* カード内に表示 */
   .vrecipe-table td.vr-comment-cell::before{content:none}
 }
+
+/* 閲覧ページ：塗装レシピ表の外枠を優しい色＋角丸（PC/スマホ共通。inline overflow-x:autoは!importantで上書き） */
+#viewMode .scroll{border:1px solid var(--line)!important;border-radius:12px;overflow:hidden!important}
 
 /* 購入セクション */
 .vpaint-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
