@@ -674,11 +674,11 @@ body{background-image:none}
 .c-mod{font-size:.78rem;color:var(--sub);margin:6px 0 12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FFFCF4;border:1px solid var(--line);border-radius:10px}
 .c-mod input{width:auto;margin:0}
 /* いいね */
-.c-row .c-actions .c-like{display:inline-flex;align-items:center;gap:4px;color:var(--sub)}
-.c-row .c-actions .c-like .c-like-icon{font-size:.95rem;line-height:1}
+.c-row .c-actions .c-like{display:inline-flex;align-items:center;gap:5px;color:var(--sub);padding:3px 9px;border-radius:14px;border:1px solid transparent;background:transparent;transition:background .15s,border-color .15s,color .15s}
+.c-row .c-actions .c-like .c-like-icon{font-size:.95rem;line-height:1;filter:grayscale(1);opacity:.55}
 .c-row .c-actions .c-like .c-like-n{font-variant-numeric:tabular-nums}
-.c-row .c-actions .c-like.on{color:var(--accent);font-weight:700}
-.c-row .c-actions .c-like.on .c-like-icon{color:var(--accent)}
+.c-row .c-actions .c-like.on{color:var(--accent);font-weight:700;background:#FCEDEA;border-color:#F2C7BF}
+.c-row .c-actions .c-like.on .c-like-icon{filter:none;opacity:1}
 /* 返信フォーム */
 .c-reply-form{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px;padding:10px;background:#FBF8F4;border:1px solid var(--line);border-radius:10px}
 .c-reply-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:.9rem;resize:vertical;min-height:54px;background:#fff}
@@ -1942,8 +1942,8 @@ function renderUsed(targetId){
     }
     return div;
   }
-  // viewMode のみ 5件で畳む。編集中は全部表示（チェックしやすさを優先）
-  const LIMIT = 5;
+  // viewMode のみ 3件で畳む。編集中は全部表示（チェックしやすさを優先）
+  const LIMIT = 3;
   const overflow = isView && list.length > LIMIT;
   function renderRows(showAll){
     wrap.innerHTML = "";
@@ -3389,7 +3389,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     var liked = !!mine[c.id];
     var acts = '<div class="c-actions">';
     acts += '<button data-act="like" data-cid="'+c.id+'" class="c-like'+(liked?' on':'')+'" aria-label="いいね">'
-         +    '<span class="c-like-icon">'+(liked?'♥':'♡')+'</span>'
+         +    '<span class="c-like-icon">👍</span>'
          +    (likeN ? '<span class="c-like-n">'+likeN+'</span>' : '')
          + '</button>';
     if (meId && !currentRec.comments_disabled){
@@ -3410,21 +3410,24 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     var replyHolder = document.createElement('div'); replyHolder.className = 'c-reply-holder';
     main.appendChild(replyHolder);
 
-    // 返信一覧（toggle）
+    // 返信一覧：2件以下は常時展開、3件以上はトグル
     if (replies.length){
       var wrap = document.createElement('div'); wrap.className = 'c-replies-wrap';
-      var toggle = document.createElement('button');
-      toggle.className = 'c-reply-toggle'; toggle.type = 'button';
-      toggle.textContent = '返信 '+replies.length+' 件を表示';
       var rList = document.createElement('div'); rList.className = 'c-replies';
-      rList.style.display = 'none';
       replies.forEach(function(rep){ rList.appendChild(makeReplyRow(rep, counts, mine, c.id)); });
-      toggle.onclick = function(){
-        var shown = rList.style.display !== 'none';
-        rList.style.display = shown ? 'none' : '';
-        toggle.textContent = shown ? ('返信 '+replies.length+' 件を表示') : '返信を隠す';
-      };
-      wrap.appendChild(toggle); wrap.appendChild(rList);
+      if (replies.length >= 3){
+        var toggle = document.createElement('button');
+        toggle.className = 'c-reply-toggle'; toggle.type = 'button';
+        toggle.textContent = '返信 '+replies.length+' 件を表示';
+        rList.style.display = 'none';
+        toggle.onclick = function(){
+          var shown = rList.style.display !== 'none';
+          rList.style.display = shown ? 'none' : '';
+          toggle.textContent = shown ? ('返信 '+replies.length+' 件を表示') : '返信を隠す';
+        };
+        wrap.appendChild(toggle);
+      }
+      wrap.appendChild(rList);
       main.appendChild(wrap);
     }
 
@@ -3456,7 +3459,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     var liked = !!mine[c.id];
     var acts = '<div class="c-actions">';
     acts += '<button data-act="like" data-cid="'+c.id+'" class="c-like'+(liked?' on':'')+'" aria-label="いいね">'
-         +    '<span class="c-like-icon">'+(liked?'♥':'♡')+'</span>'
+         +    '<span class="c-like-icon">👍</span>'
          +    (likeN ? '<span class="c-like-n">'+likeN+'</span>' : '')
          + '</button>';
     if (meId && !currentRec.comments_disabled){
