@@ -363,6 +363,129 @@ drop policy if exists events_select on public.events;
 create policy events_insert on public.events for insert with check (true);
 create policy events_select on public.events for select using (public.is_admin());
 
+-- ----------------------------------------------------------------------------
+-- 11) notifications — アプリ内通知（段7-3.8）
+-- ----------------------------------------------------------------------------
+create table if not exists public.notifications(
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz not null default now(),
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  type        text not null,
+  title       text,
+  body        text,
+  link        text,
+  read_at     timestamptz
+);
+create index if not exists idx_notifications_user_unread
+  on public.notifications(user_id, read_at, created_at desc);
+
+alter table public.notifications enable row level security;
+drop policy if exists notifications_select on public.notifications;
+drop policy if exists notifications_update on public.notifications;
+create policy notifications_select on public.notifications
+  for select using (user_id = auth.uid());
+create policy notifications_update on public.notifications
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- 共通：認証ユーザーが自分宛にだけ通知を作れるRPC（セキュリティ変更通知用）
+create or replace function public.notify_self(_type text, _title text, _body text, _link text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.notifications(user_id, type, title, body, link)
+  values (auth.uid(), _type, _title, _body, _link);
+end; $$;
+revoke all on function public.notify_self(text,text,text,text) from public, anon;
+grant execute on function public.notify_self(text,text,text,text) to authenticated;
+
+-- clips→saved（投稿者に通知）。自分が自分の投稿を保存した時はスキップ
+create or replace function public.on_clip_inserted()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ownerid uuid; rtitle text;
+begin
+  select owner_id, coalesce(title,'無題') into ownerid, rtitle
+    from public.recipes where id = NEW.recipe_id;
+  if ownerid is not null and ownerid <> NEW.user_id then
+    insert into public.notifications(user_id, type, title, body, link)
+    values (ownerid, 'saved', '投稿が保存されました',
+            'あなたの投稿「'||rtitle||'」が保存されました。',
+            'legacy.html?id='||NEW.recipe_id::text||'#view');
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_clip_inserted on public.clips;
+create trigger trg_clip_inserted after insert on public.clips
+  for each row execute function public.on_clip_inserted();
+
+-- reports insert → 管理者全員へ new_report
+create or replace function public.on_report_inserted()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare admin_id uuid;
+begin
+  for admin_id in select id from public.profiles where is_admin = true loop
+    insert into public.notifications(user_id, type, title, body, link)
+    values (admin_id, 'new_report', '新しい通報',
+            '通報が届きました（理由: '||coalesce(NEW.reason,'未指定')||'）',
+            'index.html#reports');
+  end loop;
+  return NEW;
+end; $$;
+drop trigger if exists trg_report_inserted on public.reports;
+create trigger trg_report_inserted after insert on public.reports
+  for each row execute function public.on_report_inserted();
+
+-- reports update（open→reviewed）→ 通報対象投稿の所有者へ report_reviewed
+create or replace function public.on_report_status_changed()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ownerid uuid;
+begin
+  if (OLD.status is distinct from NEW.status) and NEW.status = 'reviewed' then
+    select owner_id into ownerid from public.recipes where id = NEW.recipe_id;
+    if ownerid is not null then
+      insert into public.notifications(user_id, type, title, body, link)
+      values (ownerid, 'report_reviewed', '通報の確認が完了しました',
+              'あなたの投稿に対する通報が運営により確認されました。',
+              'legacy.html?id='||NEW.recipe_id::text||'#view');
+    end if;
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_report_status on public.reports;
+create trigger trg_report_status after update on public.reports
+  for each row execute function public.on_report_status_changed();
+
+-- inquiries insert → 管理者全員へ new_inquiry
+create or replace function public.on_inquiry_inserted()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare admin_id uuid;
+begin
+  for admin_id in select id from public.profiles where is_admin = true loop
+    insert into public.notifications(user_id, type, title, body, link)
+    values (admin_id, 'new_inquiry', '新しいお問い合わせ',
+            'お問い合わせが届きました。',
+            'index.html#inquiries');
+  end loop;
+  return NEW;
+end; $$;
+drop trigger if exists trg_inquiry_inserted on public.inquiries;
+create trigger trg_inquiry_inserted after insert on public.inquiries
+  for each row execute function public.on_inquiry_inserted();
+
+-- inquiries update（open→reviewed）→ 問い合わせ者へ inquiry_replied
+create or replace function public.on_inquiry_status_changed()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (OLD.status is distinct from NEW.status) and NEW.status = 'reviewed' then
+    insert into public.notifications(user_id, type, title, body, link)
+    values (NEW.user_id, 'inquiry_replied', 'お問い合わせの対応が完了',
+            '運営があなたのお問い合わせを確認しました。',
+            'index.html#settings');
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_inquiry_status on public.inquiries;
+create trigger trg_inquiry_status after update on public.inquiries
+  for each row execute function public.on_inquiry_status_changed();
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================

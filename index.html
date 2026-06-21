@@ -60,6 +60,19 @@ button{font-family:inherit}
   cursor:pointer; flex:none; padding:0;
 }
 .bell-btn svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7}
+.bell-btn{position:relative}
+.bell-badge{position:absolute; top:-2px; right:-2px; background:var(--accent); color:#fff; font-size:.6rem; font-weight:700; line-height:1; min-width:16px; height:16px; padding:0 4px; border-radius:8px; display:flex; align-items:center; justify-content:center; border:2px solid var(--paper)}
+/* 通知一覧 */
+.notif-list{padding:6px 12px 24px}
+.notif-row{display:flex; align-items:flex-start; gap:10px; width:100%; padding:14px 12px; border:none; border-bottom:1px solid var(--line); background:none; text-align:left; font:inherit; cursor:pointer}
+.notif-row:hover{background:#FFFCF7}
+.notif-row.unread .notif-title{font-weight:700; color:var(--ink)}
+.notif-row .notif-title{font-weight:500; color:var(--sub); font-size:.92rem; line-height:1.4}
+.notif-row .notif-body{font-size:.82rem; color:var(--sub); margin-top:3px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.notif-row .notif-main{flex:1; min-width:0}
+.notif-row .notif-time{flex:none; font-size:.7rem; color:var(--line-d)}
+.notif-dot{flex:none; width:8px; height:8px; border-radius:50%; background:transparent; margin-top:6px}
+.notif-row.unread .notif-dot{background:var(--accent)}
 
 /* PC左サイドバー（既定は非表示／PCのみ表示。スタイルはmin-width:900px内） */
 .sidebar{display:none}
@@ -764,6 +777,7 @@ function openEmailChange(currentEmail, hasPassword){
       sb.auth.updateUser({ email: newEm }).then(function(res){
         if (res.error){ btn.disabled = false; err.textContent = "送信に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_email_change_failed", { reason: res.error.message.slice(0,80) }); return; }
         if (typeof track === "function") track("settings_email_change_requested", {});
+        notifySelf("email_changed", "メールアドレス変更を申請しました", "新しいメールアドレス: "+newEm+"（確認リンクをクリックすると変更が完了します）", "index.html#settings");
         $("authBody").innerHTML = '<h2>確認メールを送信しました</h2>'
           + '<p style="font-size:.92rem;line-height:1.7;color:var(--sub);margin:0 0 14px">新しいメールアドレス <b>'+esc(newEm)+'</b> 宛にリンクを送りました。<br>リンクをクリックすると変更が完了します。</p>'
           + '<p style="font-size:.78rem;color:var(--sub);margin:0 0 14px">※ セキュリティのため、旧メールアドレスにも通知が届きます。</p>'
@@ -806,6 +820,7 @@ function openPasswordChange(currentEmail){
         // パスワードを実際に設定したので has_password=true を立てる（次回設定画面で「変更する」が出る）
         sb.from("profiles").update({ has_password: true }).eq("id", currentUserId).then(function(){});
         if (typeof track === "function") track("settings_password_changed", {});
+        notifySelf("password_changed", "パスワードを変更しました", "心当たりがない場合はすぐにパスワード再設定してください。", "index.html#settings");
         closeAuth();
         if (typeof toast === "function") toast("パスワードを変更しました");
       });
@@ -962,15 +977,71 @@ $("avatarBtn").addEventListener("click", openDrawer);
 var sbAccount = $("sbAccount");
 if (sbAccount) sbAccount.addEventListener("click", openDrawer);
 scrim.addEventListener("click", closeDrawer);
-function openBellStub(){
-  $("fvTitle").textContent = "通知";
-  fullviewBody.innerHTML = '<div class="stub"><h2>通知</h2>'
-    + '<p>通知機能は準備中です。重要なお知らせは、サイト内の「お問い合わせ」返信またはサイト内告知でお伝えします。</p></div>';
-  fullview.hidden = false;
+// 相対時刻（「3分前」「昨日」など）
+function relTime(iso){
+  if (!iso) return "";
+  var d = new Date(iso), now = new Date(), sec = Math.floor((now-d)/1000);
+  if (sec < 60) return "たった今";
+  if (sec < 3600) return Math.floor(sec/60)+"分前";
+  if (sec < 86400) return Math.floor(sec/3600)+"時間前";
+  if (sec < 86400*2) return "昨日";
+  if (sec < 86400*7) return Math.floor(sec/86400)+"日前";
+  return d.getFullYear()+"/"+(d.getMonth()+1)+"/"+d.getDate();
 }
-$("bellBtn").addEventListener("click", openBellStub);
+function openNotifications(){
+  if (!sb || !currentUserId){ openAuth("login"); return; }
+  setHash("notifications");
+  $("fvTitle").textContent = "通知";
+  fullviewBody.innerHTML = '<div class="notif-list"><p class="pf-empty" style="padding:24px 16px">読み込み中…</p></div>';
+  fullview.hidden = false;
+  sb.from("notifications").select("id,type,title,body,link,created_at,read_at").eq("user_id", currentUserId).order("created_at",{ascending:false}).limit(50)
+    .then(function(res){
+      var list = (res && res.data) ? res.data : [];
+      var box = fullviewBody.querySelector(".notif-list");
+      if (!list.length){ box.innerHTML = '<p class="pf-empty" style="padding:24px 16px;text-align:center">通知はありません</p>'; return; }
+      box.innerHTML = "";
+      list.forEach(function(n){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "notif-row" + (n.read_at ? "" : " unread");
+        row.innerHTML = '<span class="notif-dot"></span>'
+          + '<div class="notif-main"><div class="notif-title">'+esc(n.title||"")+'</div>'
+          + '<div class="notif-body">'+esc(n.body||"")+'</div></div>'
+          + '<div class="notif-time">'+esc(relTime(n.created_at))+'</div>';
+        row.onclick = function(){ if (n.link) location.href = n.link; };
+        box.appendChild(row);
+      });
+      // 開いた瞬間に未読を全件既読化
+      var unreadIds = list.filter(function(x){ return !x.read_at; }).map(function(x){ return x.id; });
+      if (unreadIds.length){
+        sb.from("notifications").update({ read_at: new Date().toISOString() }).in("id", unreadIds).then(refreshBellBadge);
+      }
+    });
+}
+// ベル🔔バッジ：未読数を取得して bell-btn に表示
+function refreshBellBadge(){
+  if (!sb || !currentUserId){ setBellBadge(0); return; }
+  sb.from("notifications").select("id", { count:"exact", head:true }).eq("user_id", currentUserId).is("read_at", null)
+    .then(function(res){ setBellBadge((res && res.count) || 0); });
+}
+function setBellBadge(n){
+  ["bellBtn","sbBell"].forEach(function(id){
+    var el = document.getElementById(id); if (!el) return;
+    var b = el.querySelector(".bell-badge");
+    if (n > 0){
+      if (!b){ b = document.createElement("span"); b.className = "bell-badge"; el.appendChild(b); }
+      b.textContent = n > 99 ? "99+" : String(n);
+    } else if (b){ b.remove(); }
+  });
+}
+// 自分宛のセキュリティ通知を入れる（メール/パスワード変更時）
+function notifySelf(type, title, body, link){
+  if (!sb || !currentUserId) return;
+  sb.rpc("notify_self", { _type: type, _title: title, _body: body, _link: link||null });
+}
+$("bellBtn").addEventListener("click", openNotifications);
 var sbBellEl = document.getElementById("sbBell");
-if (sbBellEl) sbBellEl.addEventListener("click", openBellStub);
+if (sbBellEl) sbBellEl.addEventListener("click", openNotifications);
 $("authClose").addEventListener("click", closeAuth);
 $("authOverlay").addEventListener("click", function(e){ if (e.target === $("authOverlay")) closeAuth(); });
 
@@ -979,7 +1050,7 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
   : null;
 
-var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false;
+var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false, _pendingNotifications = false;
 
 /* ===== 段7-3.6 イベント計測（プロダクト・アナリティクス） ===== */
 // 30分非活動でリセットする session_id。匿名でも同一訪問を1セッションに束ねる
@@ -1422,18 +1493,23 @@ function applySession(session){
         }
         if (!$("screen-records").hidden) renderRecords();   // 記録タブ表示中ならログイン反映
         if (_pendingProfile){ _pendingProfile = false; openProfile(); }   // リロード復元はセッション確定後に
+        if (_pendingNotifications){ _pendingNotifications = false; openNotifications(); }
+        refreshBellBadge();   // ログイン後に未読数を表示
       });
     // 管理者判定は is_admin 列を読まずサーバ関数で（誰が管理者かを一般に見せない）
     sb.rpc("is_admin").then(function(a){ currentIsAdmin = !!(a && a.data === true); renderDrawer(); });
   } else {
     setAuthUI(null, null);
     if (!$("screen-records").hidden) renderRecords();
-    _pendingProfile = false;   // 未ログインならプロフィール復元はしない（探すのまま）
+    _pendingProfile = false; _pendingNotifications = false;
+    setBellBadge(0);
   }
 }
 if (sb){
   sb.auth.getSession().then(function(res){ applySession(res.data.session); });
   sb.auth.onAuthStateChange(function(_e, session){ applySession(session); });
+  // 45秒ごとに未読数を再取得（軽いポーリング。realtime は段8）
+  setInterval(function(){ if (currentUserId) refreshBellBadge(); }, 45000);
 } else {
   setAuthUI(null, null);   // ライブラリ未読込（file:///オフライン）でもゲストUIは描く
 }
@@ -1833,6 +1909,7 @@ renderPaints();
   var um = h.match(/^u\/(.+)$/);   // #u/<user_id> = 他人のプロフィール（公開・ログイン不要）
   if (um){ showTab("discover", true); openProfile(decodeURIComponent(um[1])); return; }
   if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // 自分のプロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
+  if (h === "notifications"){ showTab("discover", true); _pendingNotifications = true; return; }   // 通知一覧もセッション確定後に
   showTab("discover", true);
 })();
 </script>

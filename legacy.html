@@ -2458,10 +2458,10 @@ document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => showPag
 // 「とは」ページ: ロゴ/アバター→メイン(index)、ベル→スタブ。確認ダイアログは出さない
 var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
-var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => alert("通知はまだ準備中です。");
+var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => location.href = "index.html#notifications";
 var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
 // 編集/閲覧の上バー：ベル→スタブ（❌はinline onclickでexitEditor）
-var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => alert("通知はまだ準備中です。");
+var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => location.href = "index.html#notifications";
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
