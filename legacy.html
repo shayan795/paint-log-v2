@@ -537,33 +537,62 @@ body{background-image:none}
 .publish-card .js-draft{border-radius:8px}
 
 /* ===================== ACCORDION:START =====================
-   閲覧ページの色グループ折りたたみ（スマホ専用）。戻すときはこのブロックと、
+   閲覧ページの色グループ折りたたみ（PC・スマホ共通）。戻すときはこのブロックと、
    下の <script> 内 "ACCORDION:START〜END" を削除すればOK。 */
-@media(max-width:640px){
-  /* 色グループ見出し：白背景＋左accentバー＋クリック可能インジケータ */
-  .vrecipe-table td.vr-part{
-    background:#FFFFFF !important;
-    border-left:4px solid var(--accent) !important;
-    padding-left:18px !important;
-    cursor:pointer;
-    position:relative;
-    user-select:none;
-  }
-  .vrecipe-table td.vr-part::after{
-    content:"▾"; position:absolute; right:18px; top:50%; transform:translateY(-50%);
-    font-size:.95rem; color:var(--sub); transition:transform .18s ease;
-  }
-  /* 折りたたみ状態：見出し以外の td を隠す＋シェブロンを横向きに */
-  .vrecipe-table tr.acc-closed td:not(.vr-part){display:none !important}
-  .vrecipe-table tr.acc-closed td.vr-part{border-bottom:none}
-  .vrecipe-table tr.acc-closed td.vr-part::after{transform:translateY(-50%) rotate(-90deg)}
-  /* 「すべて開く／閉じる」ボタン（vsection-labelの右に配置） */
-  .acc-toggle-all{
-    float:right; font:inherit; font-size:.74rem; font-weight:700;
-    color:var(--accent); background:none; border:1px solid var(--accent);
-    border-radius:14px; padding:3px 10px; cursor:pointer; margin-top:-2px;
-  }
-  .acc-toggle-all:hover{background:var(--accent); color:#fff}
+/* 色グループ見出し：白背景＋左accentバー＋クリック可能インジケータ */
+.vrecipe-table td.vr-part{
+  background:#FFFFFF !important;
+  border-left:4px solid var(--accent) !important;
+  padding-left:18px !important;
+  cursor:pointer;
+  position:relative;
+  user-select:none;
+}
+.vrecipe-table td.vr-part::after{
+  content:"▾"; position:absolute; right:18px; top:50%; transform:translateY(-50%);
+  font-size:.95rem; color:var(--sub); transition:transform .18s ease;
+}
+/* 折りたたみ状態：見出し以外の td を隠す＋シェブロンを横向きに */
+.vrecipe-table tr.acc-closed td:not(.vr-part){display:none !important}
+.vrecipe-table tr.acc-closed td.vr-part{border-bottom:none}
+.vrecipe-table tr.acc-closed td.vr-part::after{transform:translateY(-50%) rotate(-90deg)}
+/* 「すべて開く／閉じる」ボタン（vsection-labelの右に配置） */
+.acc-toggle-all{
+  float:right; font:inherit; font-size:.74rem; font-weight:700;
+  color:var(--accent); background:none; border:1px solid var(--accent);
+  border-radius:14px; padding:3px 10px; cursor:pointer; margin-top:-2px;
+}
+.acc-toggle-all:hover{background:var(--accent); color:#fff}
+
+/* PC（641px以上）でもカード型表示に統一（横長表は廃止） */
+@media(min-width:641px){
+  .vrecipe-table thead{display:none}
+  .vrecipe-table, .vrecipe-table tbody, .vrecipe-table tr, .vrecipe-table td{display:block;width:100%}
+  .vrecipe-table tr{border:1px solid var(--line);margin:0 auto 16px;background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;max-width:720px}
+  .vrecipe-table td.vr-part{order:1;font-size:1.06rem}
+  .vrecipe-table td.vr-photo-cell{order:2;display:block;padding:14px 18px;border-bottom:none}
+  .vrecipe-table td.vr-comment-cell{order:3;display:block;padding:0 18px 14px;border-bottom:none}
+  .vrecipe-table td.vr-comment-cell::before{content:none}
+  .vrecipe-table td.vr-cell, .vrecipe-table td.vrecipe-empty{order:4;display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);min-width:0;height:auto}
+  .vrecipe-table tr td:last-child{border-bottom:none}
+  /* PC：左ラベル幅をスマホより少し広く、字も少し大きく */
+  .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:10px;flex:0 0 110px;border-left:none}
+  .vrecipe-table td.vr-cell .vrecipe-chip{margin-right:0;border-radius:3px}
+  .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.84rem;font-weight:700;color:var(--ink)}
+  .vrecipe-table td.vr-cell .vrecipe-name{flex:1;text-align:left;min-width:0;display:block}
+  .vrecipe-table td.vr-cell .vrecipe-pname{display:block;font-size:.92rem;font-weight:700;line-height:1.4;color:var(--ink)}
+  .vrecipe-table td.vr-cell .vrecipe-pcode{display:block;font-size:.74rem;color:var(--sub);margin-top:3px}
+  /* 未入力工程も同じ列幅 */
+  .vrecipe-table td.vrecipe-empty{font-size:0;position:relative;padding-left:50px}
+  .vrecipe-table td.vrecipe-empty[data-label]::before{content:""; position:absolute; left:18px; top:50%; transform:translateY(-50%); width:20px; height:20px; border-radius:4px; border:1.5px dashed var(--line-d); background:transparent}
+  .vrecipe-table td.vrecipe-empty[data-label]::after{content:attr(data-label) " ・ 未設定"; flex:1; font-size:.84rem; font-weight:700; color:var(--line-d)}
+  /* 購入リンクは次行へ */
+  .vrecipe-table td.vr-cell{flex-wrap:wrap}
+  .vrecipe-table td.vr-cell .vr-buylinks{flex-basis:100%}
+  /* PC：画像を大きく（カード幅いっぱい・最大520px） */
+  .vr-photo img{max-width:520px;width:100%}
+  /* PC専用に追加していた scrollの外枠は不要（trごとに枠を持つ） */
+  #viewMode .scroll{border:none !important;border-radius:0 !important;overflow:visible !important}
 }
 /* ===================== ACCORDION:END ===================== */
 
@@ -2888,8 +2917,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 <!-- ACCORDION:START — 戻すときはこの<script>ブロックとCSSの "ACCORDION:START〜END" を削除するだけ -->
 <script>
 (function(){
-  // モバイル幅でだけ動作（PCは横スクロール表で全体が見えるので折りたたみ不要）
-  if (window.matchMedia && !window.matchMedia('(max-width:640px)').matches) return;
+  // PC/スマホ両方でアコーディオンを動作（PCも色グループ展開型に統一）
   function setupAcc(){
     var table = document.getElementById('viewTable'); if (!table) return;
     var trs = table.querySelectorAll('tbody tr'); if (!trs.length) return;
