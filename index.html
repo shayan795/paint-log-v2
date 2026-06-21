@@ -1101,8 +1101,6 @@ function renderAuth(mode){
       '<h2>新規登録</h2>'
       + '<button class="auth-g" id="aG">Googleで登録</button>'
       + '<div class="auth-or">または</div>'
-      + '<label class="auth-label">ユーザーID<span class="auth-hint">（半角英数_・後から変更不可）</span></label>'
-      + '<input id="aUid" class="auth-field" maxlength="20" autocapitalize="off" autocorrect="off">'
       + '<label class="auth-label">メールアドレス</label>'
       + '<input id="aEmail" class="auth-field" type="email" autocapitalize="off">'
       + '<label class="auth-label">パスワード<span class="auth-hint">（6文字以上）</span></label>'
@@ -1110,6 +1108,7 @@ function renderAuth(mode){
       + '<label class="auth-label">パスワード（確認）</label>'
       + '<input id="aPw2" class="auth-field" type="password">'
       + '<label class="auth-consent"><input type="checkbox" id="aAgree"><span><a href="terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意します</span></label>'
+      + '<p class="auth-hint" style="display:block;margin:4px 0 0;font-size:.72rem;color:var(--sub)">※ ユーザーID・ニックネームは、メール認証完了後に設定します。</p>'
       + '<div class="auth-err" id="aErr"></div>'
       + '<button class="auth-submit" id="aSubmit">登録する</button>'
       + '<div class="auth-foot">アカウントをお持ちの方は <button class="auth-link" id="aToLogin">ログイン</button></div>';
@@ -1147,27 +1146,23 @@ function renderAuth(mode){
   }
 }
 function doRegister(){
-  var id=$("aUid").value.trim(), email=$("aEmail").value.trim(), pw=$("aPw").value, pw2=$("aPw2").value,
+  // v2: 新規登録ではメール+PWのみ受け取り、ユーザーID/ニックネームはメール認証後の初回設定モーダル(showOnboarding)で決める。
+  var email=$("aEmail").value.trim(), pw=$("aPw").value, pw2=$("aPw2").value,
       agree=$("aAgree").checked, err=$("aErr"), btn=$("aSubmit");
-  if (!USERID_RE.test(id)){ err.textContent="ユーザーIDは半角英数と _ の3〜20文字"; return; }
   if (!EMAIL_RE.test(email)){ err.textContent="メールアドレスの形式が正しくありません"; return; }
   if (pw.length < 6){ err.textContent="パスワードは6文字以上にしてください"; return; }
   if (pw !== pw2){ err.textContent="パスワードが一致しません"; return; }
   if (!agree){ err.textContent="利用規約・プライバシーポリシーへの同意が必要です"; return; }
-  btn.disabled=true; err.textContent="確認中…";
-  sb.from("profiles").select("id").ilike("user_id", id).then(function(res){
-    if (res.data && res.data.length){ err.textContent="このユーザーIDは既に使われています"; btn.disabled=false; return; }
-    err.textContent="登録中…";
-    sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname, data:{ pending_user_id:id } } }).then(function(r){
-      if (r.error){ err.textContent="登録に失敗：" + r.error.message; btn.disabled=false; return; }
-      if (r.data && r.data.session){
-        currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF）→ user_id等を保存
-        _namePrompted = true;            // 既に user_id/ニックネームを決めたのでオンボーディングを抑制（2重入力防止）
-        saveProfile({ user_id:id, display_name:id, terms_agreed_at:new Date().toISOString(), has_password:true }, function(){ closeAuth(); });   // メール+PW新規登録は has_password=true
-      } else {
-        authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。完了後にログインしてください。");
-      }
-    });
+  btn.disabled=true; err.textContent="登録中…";
+  sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname } }).then(function(r){
+    if (r.error){ err.textContent="登録に失敗：" + r.error.message; btn.disabled=false; return; }
+    // 同意時刻と has_password だけ立てておく（user_id/display_nameはonboardingで本人が決める）
+    if (r.data && r.data.session){
+      currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF時）→ onboardingが自動で出る
+      saveProfile({ terms_agreed_at: new Date().toISOString(), has_password: true }, function(){ closeAuth(); });
+    } else {
+      authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。\nリンクを開いた後、ユーザーID・ニックネームを設定してください。");
+    }
   });
 }
 function doLogin(){
