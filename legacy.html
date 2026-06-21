@@ -210,11 +210,13 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   .vrecipe-table td.vr-part{font-size:1rem;font-weight:700;background:var(--bp-bg);border-bottom:1px solid var(--line);padding:11px 14px;display:block;
     border-left:none;min-width:0;width:auto;position:static;white-space:normal}  /* PC用残留スタイルを打ち消す(赤線の二重・部位名左の余白を解消。赤線はカードtrの1本だけ) */
   /* 案A：左ラベル(88px固定) + 右本文(可変・2行構造)。工程名が縦に揃ってスキャンしやすい */
-  .vrecipe-table td.vr-cell{flex-wrap:nowrap;align-items:flex-start;gap:12px;padding:12px 14px}
+  .vrecipe-table td.vr-cell{flex-wrap:wrap;align-items:flex-start;gap:12px;padding:12px 14px}
   .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:8px;flex:0 0 88px}
   .vrecipe-table td.vr-cell .vrecipe-chip{margin-right:0}
   .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.78rem;font-weight:700;color:var(--ink)}
-  .vrecipe-table td.vr-cell .vrecipe-name{flex:1;text-align:left;min-width:0;display:block}
+  .vrecipe-table td.vr-cell .vrecipe-name{flex:1 1 calc(100% - 100px);text-align:left;min-width:0;display:block}
+  /* 購入リンクは開いた時に全幅で次行へ降ろす（塗料名行を圧迫しない） */
+  .vrecipe-table td.vr-cell .vr-buylinks{flex-basis:100%}
   .vrecipe-table td.vr-cell .vrecipe-pname{display:block;font-size:.88rem;font-weight:700;line-height:1.35;color:var(--ink);word-break:break-word}
   .vrecipe-table td.vr-cell .vrecipe-pcode{display:block;font-size:.72rem;color:var(--sub);margin-top:2px;word-break:break-word}
   /* 未入力工程は表示し、左ラベルを vr-cell と揃える（▢ + 工程名 + 「未設定」） */
