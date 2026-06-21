@@ -200,6 +200,7 @@ alter table public.profiles add column if not exists link       text;  -- 任意
 alter table public.profiles add column if not exists avatar_url text;  -- アイコン画像URL(画像ステップで使用)
 alter table public.profiles add column if not exists header_url text;  -- ヘッダー画像URL(画像ステップで使用)
 alter table public.profiles add column if not exists terms_agreed_at timestamptz;  -- 利用規約・プライバシーへの同意時刻
+alter table public.profiles add column if not exists has_password boolean not null default false;  -- メール+パスワード認証を持つか（Google単独はfalse／設定変更時のみtrue化）
 
 -- ユーザーID（半角英数_・公開ID・一度決めたら変更不可）。display_name はニックネーム(変更可)
 alter table public.profiles add column if not exists user_id text;

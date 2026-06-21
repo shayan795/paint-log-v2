@@ -682,21 +682,25 @@ function openSettings(){
   $("fvTitle").textContent = "設定";
   fullviewBody.innerHTML = '<div class="stub" id="settingsBody"><p class="pf-empty">読み込み中…</p></div>';
   fullview.hidden = false;
-  Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name").eq("id", currentUserId).single() ])
+  Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name,has_password").eq("id", currentUserId).single() ])
     .then(function(r){
       var user = (r[0] && r[0].data && r[0].data.user) || {};
       var email = user.email || "";
       var prof = (r[1] && !r[1].error) ? (r[1].data || {}) : {};
-      // 認証プロバイダ判定（パスワードを持つか・Google認証か）
+      // 認証種別：has_password（自前フラグ）で判定。identitiesはメール変更で自動追加されるため信頼しない
+      var hasPassword = !!prof.has_password;
       var providers = ((user.identities || []).map(function(i){ return i.provider; }));
-      var hasPassword = providers.indexOf("email") >= 0;
       var hasGoogle = providers.indexOf("google") >= 0;
       var box = $("settingsBody"); if (!box) return;
-      // パスワード行：プロバイダで挙動が変わる
+      // パスワード行：has_password=trueでのみ変更可
       var pwRow = hasPassword
         ? '<div class="set-row"><span>パスワード</span><span><b>••••••••</b> <button class="set-link" id="setPw">変更する</button></span></div>'
-        : '<div class="set-row"><span>パスワード</span><span class="set-muted">Google認証中（パスワードはありません）</span></div>';
-      var emailRow = '<div class="set-row"><span>メールアドレス</span><span><b>'+esc(email||"未設定")+'</b> <button class="set-link" id="setEmail">変更する</button></span></div>';
+        : '<div class="set-row"><span>パスワード</span><span class="set-muted">Googleで認証中（パスワードは設定されていません）</span></div>';
+      // メール行：Google認証のみ（パスワード未設定）は変更不可。誤操作によるロックアウトを防ぐ
+      var canChangeEmail = hasPassword;   // パスワードがある＝メール+PWルートが確立している場合のみ変更可
+      var emailRow = canChangeEmail
+        ? '<div class="set-row"><span>メールアドレス</span><span><b>'+esc(email||"未設定")+'</b> <button class="set-link" id="setEmail">変更する</button></span></div>'
+        : '<div class="set-row"><span>メールアドレス</span><span><b>'+esc(email||"未設定")+'</b><br><span class="set-muted" style="font-size:.72rem">Googleアカウントの管理画面から変更してください</span></span></div>';
       // Google単独でメールを変更可能か：Supabaseのemailを変更してもGoogle紐付けは外れない。可能だが説明が必要
       box.innerHTML =
         '<h2>設定</h2>'
@@ -799,6 +803,8 @@ function openPasswordChange(currentEmail){
       if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
       sb.auth.updateUser({ password: newPw }).then(function(res){
         if (res.error){ btn.disabled = false; err.textContent = "変更に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_password_change_failed", { reason: res.error.message.slice(0,80) }); return; }
+        // パスワードを実際に設定したので has_password=true を立てる（次回設定画面で「変更する」が出る）
+        sb.from("profiles").update({ has_password: true }).eq("id", currentUserId).then(function(){});
         if (typeof track === "function") track("settings_password_changed", {});
         closeAuth();
         if (typeof toast === "function") toast("パスワードを変更しました");
@@ -1157,7 +1163,7 @@ function doRegister(){
       if (r.data && r.data.session){
         currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF）→ user_id等を保存
         _namePrompted = true;            // 既に user_id/ニックネームを決めたのでオンボーディングを抑制（2重入力防止）
-        saveProfile({ user_id:id, display_name:id, terms_agreed_at:new Date().toISOString() }, function(){ closeAuth(); });
+        saveProfile({ user_id:id, display_name:id, terms_agreed_at:new Date().toISOString(), has_password:true }, function(){ closeAuth(); });   // メール+PW新規登録は has_password=true
       } else {
         authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。完了後にログインしてください。");
       }
