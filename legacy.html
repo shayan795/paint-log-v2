@@ -128,6 +128,18 @@
 /* 閲覧のハッシュタグ */
 [data-theme="dark"] .vmethod{background:var(--surface);color:var(--ink);border-color:var(--line)}
 [data-theme="dark"] .vmethod:hover{border-color:var(--accent);color:var(--accent)}
+/* スマホの上部バー（.l-topbar）— 戻る・タイトル・ベル */
+[data-theme="dark"] .l-topbar{background:rgba(21,24,30,.96);border-bottom-color:var(--line)}
+[data-theme="dark"] .l-topbar .l-close,
+[data-theme="dark"] .l-topbar .lt-bell{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .l-topbar .l-title{color:var(--ink)}
+/* 「とは」ページ専用の上部バー（.about-topbar） */
+[data-theme="dark"] #aboutMode .about-topbar{background:rgba(21,24,30,.96);border-bottom-color:var(--line)}
+[data-theme="dark"] .about-topbar .ab-avatar{background:var(--bp-bg);color:#E6ECFA;border-color:var(--line)}
+[data-theme="dark"] .about-topbar .ab-bell{background:var(--surface);color:var(--sub);border-color:var(--line)}
+/* 「塗装レシピ録とは」 下部 CTA — ライト時の見た目（濃色×白文字）を維持 */
+[data-theme="dark"] .v-cta{background:#1E2430;color:#fff}
+[data-theme="dark"] .v-cta p{color:#D5DAE2}
 /* ============ DARKMODE:END ============ */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Zen Kaku Gothic New",sans-serif;background:var(--paper);color:var(--ink);line-height:1.65;padding:18px 12px 70px;
