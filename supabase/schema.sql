@@ -503,6 +503,10 @@ create table if not exists public.comments(
 create index if not exists idx_comments_recipe on public.comments(recipe_id, created_at);
 create index if not exists idx_comments_user   on public.comments(user_id);
 
+-- 返信機能：1階層フラット（Instagram式）。返信は parent_id にトップレベルコメントのIDを入れる
+alter table public.comments add column if not exists parent_id bigint references public.comments(id) on delete cascade;
+create index if not exists idx_comments_parent on public.comments(parent_id) where parent_id is not null;
+
 alter table public.comments enable row level security;
 drop policy if exists comments_select on public.comments;
 drop policy if exists comments_insert on public.comments;
@@ -569,26 +573,79 @@ drop trigger if exists trg_comment_updated on public.comments;
 create trigger trg_comment_updated before update on public.comments
   for each row execute function public.on_comment_updated();
 
--- insert→投稿者へ通知（自分宛/通知オフ なら除外）
+-- insert→投稿者へ通知＋（返信時のみ）親コメント投稿者にも通知
+-- 重複防止：同一人物には1通だけ
 create or replace function public.on_comment_inserted()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare ownerid uuid; recv_pref boolean; rtitle text;
+declare ownerid uuid; recv_pref boolean; rtitle text; parent_userid uuid;
 begin
   select owner_id, coalesce(title,'無題') into ownerid, rtitle
     from public.recipes where id = NEW.recipe_id;
-  if ownerid is null or ownerid = NEW.user_id then return NEW; end if;
-  select notify_comments into recv_pref from public.profiles where id = ownerid;
-  if not coalesce(recv_pref, true) then return NEW; end if;
-  insert into public.notifications(user_id, type, title, body, link)
-  values (ownerid, 'comment',
-          '投稿にコメントが届きました',
-          '「'||rtitle||'」: '||left(NEW.body, 80),
-          'legacy.html?id='||NEW.recipe_id::text||'#view');
+
+  -- 1) 投稿者への通知（自分宛/通知オフ なら除外）
+  if ownerid is not null and ownerid <> NEW.user_id then
+    select notify_comments into recv_pref from public.profiles where id = ownerid;
+    if coalesce(recv_pref, true) then
+      insert into public.notifications(user_id, type, title, body, link)
+      values (ownerid,
+              case when NEW.parent_id is null then 'comment' else 'reply' end,
+              case when NEW.parent_id is null then '投稿にコメントが届きました' else '投稿に返信が届きました' end,
+              '「'||rtitle||'」: '||left(NEW.body, 80),
+              'legacy.html?id='||NEW.recipe_id::text||'#view');
+    end if;
+  end if;
+
+  -- 2) 返信の場合、親コメント投稿者にも通知（投稿者と同一/自分自身/通知オフ ならスキップ）
+  if NEW.parent_id is not null then
+    select user_id into parent_userid from public.comments where id = NEW.parent_id;
+    if parent_userid is not null
+       and parent_userid <> NEW.user_id
+       and (ownerid is null or parent_userid <> ownerid) then
+      select notify_comments into recv_pref from public.profiles where id = parent_userid;
+      if coalesce(recv_pref, true) then
+        insert into public.notifications(user_id, type, title, body, link)
+        values (parent_userid, 'reply',
+                'あなたのコメントに返信が届きました',
+                '「'||rtitle||'」: '||left(NEW.body, 80),
+                'legacy.html?id='||NEW.recipe_id::text||'#view');
+      end if;
+    end if;
+  end if;
+
   return NEW;
 end; $$;
 drop trigger if exists trg_comment_inserted on public.comments;
 create trigger trg_comment_inserted after insert on public.comments
   for each row execute function public.on_comment_inserted();
+
+-- ----------------------------------------------------------------------------
+-- 13) comment_likes — コメントへのいいね（段7-3.10）
+-- ----------------------------------------------------------------------------
+create table if not exists public.comment_likes(
+  comment_id bigint not null references public.comments(id) on delete cascade,
+  user_id    uuid   not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id)
+);
+create index if not exists idx_comment_likes_user on public.comment_likes(user_id);
+
+alter table public.comment_likes enable row level security;
+drop policy if exists comment_likes_select on public.comment_likes;
+drop policy if exists comment_likes_insert on public.comment_likes;
+drop policy if exists comment_likes_delete on public.comment_likes;
+
+-- 読み：そのコメントが見える人は全員見える（コメントRLSと一致させる）
+create policy comment_likes_select on public.comment_likes
+  for select using (
+    exists (select 1 from public.comments c join public.recipes r on r.id = c.recipe_id
+            where c.id = comment_likes.comment_id and (r.is_public or r.owner_id = auth.uid()))
+  );
+-- 書き：本人のみ
+create policy comment_likes_insert on public.comment_likes
+  for insert with check (user_id = auth.uid());
+-- 削除：本人のみ
+create policy comment_likes_delete on public.comment_likes
+  for delete using (user_id = auth.uid());
 
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。

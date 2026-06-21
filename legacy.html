@@ -246,6 +246,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 }
 
 /* 購入セクション */
+.vp-more{display:block;width:100%;margin:12px 0 0;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:.86rem;color:var(--ink);cursor:pointer;font-weight:500}
+.vp-more:hover{background:#FFFCF4;border-color:var(--accent);color:var(--accent)}
 .vpaint-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .vpaint-row:last-child{border-bottom:none}
 .vpaint-chip{width:20px;height:20px;border:1px solid rgba(0,0,0,.2);flex:none;border-radius:3px}
@@ -671,6 +673,32 @@ body{background-image:none}
 .c-edit-area .c-edit-cancel{background:#fff;color:var(--sub);border:1px solid var(--line-d)}
 .c-mod{font-size:.78rem;color:var(--sub);margin:6px 0 12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FFFCF4;border:1px solid var(--line);border-radius:10px}
 .c-mod input{width:auto;margin:0}
+/* いいね */
+.c-row .c-actions .c-like{display:inline-flex;align-items:center;gap:4px;color:var(--sub)}
+.c-row .c-actions .c-like .c-like-icon{font-size:.95rem;line-height:1}
+.c-row .c-actions .c-like .c-like-n{font-variant-numeric:tabular-nums}
+.c-row .c-actions .c-like.on{color:var(--accent);font-weight:700}
+.c-row .c-actions .c-like.on .c-like-icon{color:var(--accent)}
+/* 返信フォーム */
+.c-reply-form{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px;padding:10px;background:#FBF8F4;border:1px solid var(--line);border-radius:10px}
+.c-reply-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:.9rem;resize:vertical;min-height:54px;background:#fff}
+.c-reply-form textarea:focus{outline:none;border-color:var(--accent)}
+.c-reply-form .c-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:.74rem;color:var(--sub)}
+.c-reply-form .c-foot .c-count-input{margin-right:auto}
+.c-reply-form .c-foot .c-count-input.over{color:var(--warn);font-weight:700}
+.c-reply-form .c-cancel{font:inherit;font-size:.78rem;padding:5px 14px;border-radius:14px;cursor:pointer;background:#fff;color:var(--sub);border:1px solid var(--line-d)}
+.c-reply-form .c-submit{font:inherit;font-size:.82rem;font-weight:700;color:#fff;background:var(--accent);border:none;border-radius:14px;padding:6px 16px;cursor:pointer}
+.c-reply-form .c-submit:disabled{opacity:.4;cursor:not-allowed}
+/* 返信トグル＆一覧 */
+.c-replies-wrap{margin-top:8px}
+.c-reply-toggle{font:inherit;font-size:.78rem;font-weight:600;background:none;border:none;color:var(--sub);cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px}
+.c-reply-toggle:hover{color:var(--ink)}
+.c-reply-toggle::before{content:"";display:inline-block;width:18px;height:1px;background:var(--line-d)}
+.c-replies{display:flex;flex-direction:column;gap:0;margin-top:4px;padding-left:14px;border-left:2px solid var(--line)}
+.c-replies .c-row{padding:10px 0}
+.c-replies .c-row:last-child{border-bottom:none}
+.c-replies .c-av{width:30px;height:30px;font-size:.85rem}
+.c-replies .c-body{font-size:.88rem}
 /* ===================== COMMENTS:END ===================== */
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
@@ -1889,8 +1917,7 @@ function renderUsed(targetId){
     wrap.innerHTML = isView ? "" : '<span class="note">塗料を選ぶと、ここに自動でリストアップされます。</span>';
     return;
   }
-  wrap.innerHTML = "";
-  list.forEach(c => {
+  function makeRow(c){
     const p = c.i !== undefined ? PAINTS[c.i] : null;
     const name = p ? (p[0]+" "+p[1]+" "+p[2]).replace(/\s+/g," ").trim() : c.c;
     const div = document.createElement("div");
@@ -1913,8 +1940,25 @@ function renderUsed(targetId){
           <a class="buy yodobashi" target="_blank" rel="nofollow noopener" href="${yodobashiUrl(name)}">ヨドバシ</a>
         </span>`;
     }
-    wrap.appendChild(div);
-  });
+    return div;
+  }
+  // viewMode のみ 5件で畳む。編集中は全部表示（チェックしやすさを優先）
+  const LIMIT = 5;
+  const overflow = isView && list.length > LIMIT;
+  function renderRows(showAll){
+    wrap.innerHTML = "";
+    const slice = (overflow && !showAll) ? list.slice(0, LIMIT) : list;
+    slice.forEach(c => wrap.appendChild(makeRow(c)));
+    if (overflow){
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vp-more";
+      btn.textContent = showAll ? "閉じる" : `もっと見る（残り ${list.length - LIMIT} 件）`;
+      btn.onclick = function(){ renderRows(!showAll); };
+      wrap.appendChild(btn);
+    }
+  }
+  renderRows(false);
 }
 function amazonUrl(name){
   return "https://www.amazon.co.jp/s?k=" + encodeURIComponent(name) + (AMAZON_TAG ? "&tag=" + encodeURIComponent(AMAZON_TAG) : "");
@@ -3224,8 +3268,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   var cfg = window.PAINTLOG_CONFIG || {};
   if (!window.supabase || !cfg.SUPABASE_URL) return;
   var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-  var meId = null, meIsAdmin = false, meAvatar = null, meName = null;
-  var currentRec = null;     // {id, owner_id, comments_disabled}
+  var meId = null, meIsAdmin = false;
+  var currentRec = null;
+  var openReplyForms = {};   // 親id -> 展開中フラグ
 
   function escHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function relTimeJP(iso){
@@ -3243,68 +3288,90 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   function render(){
     var sec = document.getElementById('cSection'); if (!sec) return;
     sec.innerHTML = '<p class="c-empty">読み込み中…</p>';
-    sb.from('comments').select('id,recipe_id,user_id,body,created_at,edited_at,profiles!comments_user_id_fkey(user_id,display_name,avatar_url)')
-      .eq('recipe_id', currentRec.id).order('created_at',{ascending:false})
+    sb.from('comments').select('id,recipe_id,user_id,parent_id,body,created_at,edited_at,profiles!comments_user_id_fkey(user_id,display_name,avatar_url)')
+      .eq('recipe_id', currentRec.id).order('created_at',{ascending:true})
       .then(function(res){
         var rows = (res && !res.error && res.data) ? res.data : [];
-        document.getElementById('cCount').textContent = rows.length ? '('+rows.length+')' : '';
-        sec.innerHTML = '';
-        // フォーム or 状態メッセージ
-        var formArea = document.createElement('div');
-        if (currentRec.comments_disabled){
-          formArea.className = 'c-disabled';
-          formArea.textContent = '投稿者がコメントを停止しています。';
-        } else if (!meId){
-          formArea.className = 'c-loginprompt';
-          formArea.innerHTML = '<span>コメントするにはログインが必要です。</span><button type="button" id="cLogin">ログイン</button>';
-        } else {
-          formArea.className = 'c-form';
-          formArea.innerHTML =
-            '<textarea id="cInput" maxlength="500" placeholder="コメントを書く（500文字以内・節度を持って）"></textarea>'
-            + '<div class="c-foot"><span class="c-count-input" id="cInputCount">0 / 500</span>'
-            + '<button type="button" class="c-submit" id="cSubmit" disabled>送信</button></div>';
-        }
-        sec.appendChild(formArea);
-        if (formArea.querySelector('#cLogin')){
-          formArea.querySelector('#cLogin').onclick = function(){ location.href='index.html#login'; };
-        }
-        if (formArea.querySelector('#cSubmit')){
-          var input = formArea.querySelector('#cInput');
-          var counter = formArea.querySelector('#cInputCount');
-          var submit = formArea.querySelector('#cSubmit');
-          input.addEventListener('input', function(){
-            var len = input.value.length;
-            counter.textContent = len+' / 500';
-            counter.classList.toggle('over', len > 500);
-            submit.disabled = len === 0 || len > 500;
+        var ids = rows.map(function(r){ return r.id; });
+        if (!ids.length) return paint(rows, {}, {});
+        sb.from('comment_likes').select('comment_id,user_id').in('comment_id', ids).then(function(lr){
+          var lrows = (lr && !lr.error && lr.data) ? lr.data : [];
+          var counts = {}, mine = {};
+          lrows.forEach(function(x){
+            counts[x.comment_id] = (counts[x.comment_id]||0) + 1;
+            if (meId && x.user_id === meId) mine[x.comment_id] = true;
           });
-          submit.onclick = function(){
-            var body = input.value.trim(); if (!body) return;
-            submit.disabled = true;
-            sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: body }).then(function(r){
-              if (r.error){
-                alert('コメント送信に失敗：' + r.error.message);
-                submit.disabled = false; return;
-              }
-              input.value = ''; counter.textContent = '0 / 500'; submit.disabled = true;
-              if (typeof window.track === 'function') window.track('comment_posted', { recipe_id: currentRec.id });
-              render();   // 再読み込み
-            });
-          };
-        }
-        // 一覧
-        var list = document.createElement('div'); list.className = 'c-list';
-        if (!rows.length){
-          var em = document.createElement('p'); em.className = 'c-empty'; em.textContent = '最初のコメントを残してみよう。';
-          list.appendChild(em);
-        } else {
-          rows.forEach(function(c){ list.appendChild(makeRow(c)); });
-        }
-        sec.appendChild(list);
+          paint(rows, counts, mine);
+        });
       });
   }
 
-  function makeRow(c){
+  function paint(rows, counts, mine){
+    var sec = document.getElementById('cSection');
+    document.getElementById('cCount').textContent = rows.length ? '('+rows.length+')' : '';
+    sec.innerHTML = '';
+
+    // フォーム or 状態メッセージ（トップレベル投稿用）
+    var formArea = document.createElement('div');
+    if (currentRec.comments_disabled){
+      formArea.className = 'c-disabled';
+      formArea.textContent = '投稿者がコメントを停止しています。';
+    } else if (!meId){
+      formArea.className = 'c-loginprompt';
+      formArea.innerHTML = '<span>コメントするにはログインが必要です。</span><button type="button" id="cLogin">ログイン</button>';
+    } else {
+      formArea.className = 'c-form';
+      formArea.innerHTML =
+        '<textarea id="cInput" maxlength="500" placeholder="コメントを書く（500文字以内・節度を持って）"></textarea>'
+        + '<div class="c-foot"><span class="c-count-input" id="cInputCount">0 / 500</span>'
+        + '<button type="button" class="c-submit" id="cSubmit" disabled>送信</button></div>';
+    }
+    sec.appendChild(formArea);
+    var loginBtn = formArea.querySelector('#cLogin');
+    if (loginBtn) loginBtn.onclick = function(){ location.href='index.html#login'; };
+    var submit = formArea.querySelector('#cSubmit');
+    if (submit){
+      var input = formArea.querySelector('#cInput');
+      var counter = formArea.querySelector('#cInputCount');
+      input.addEventListener('input', function(){
+        var len = input.value.length;
+        counter.textContent = len+' / 500';
+        counter.classList.toggle('over', len > 500);
+        submit.disabled = len === 0 || len > 500;
+      });
+      submit.onclick = function(){
+        var body = input.value.trim(); if (!body) return;
+        submit.disabled = true;
+        sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: body, parent_id: null }).then(function(r){
+          if (r.error){ alert('コメント送信に失敗：' + r.error.message); submit.disabled = false; return; }
+          input.value = ''; counter.textContent = '0 / 500'; submit.disabled = true;
+          if (typeof window.track === 'function') window.track('comment_posted', { recipe_id: currentRec.id });
+          render();
+        });
+      };
+    }
+
+    // グルーピング：トップレベル（新着順）と 親id→返信配列（古い順）
+    var tops = [], byParent = {};
+    rows.forEach(function(r){
+      if (r.parent_id){ (byParent[r.parent_id] = byParent[r.parent_id] || []).push(r); }
+      else { tops.push(r); }
+    });
+    tops.reverse();   // 新着→古い
+
+    var list = document.createElement('div'); list.className = 'c-list';
+    if (!tops.length){
+      var em = document.createElement('p'); em.className = 'c-empty'; em.textContent = '最初のコメントを残してみよう。';
+      list.appendChild(em);
+    } else {
+      tops.forEach(function(t){
+        list.appendChild(makeRow(t, counts, mine, byParent[t.id] || []));
+      });
+    }
+    sec.appendChild(list);
+  }
+
+  function makeRow(c, counts, mine, replies){
     var row = document.createElement('div'); row.className = 'c-row';
     var prof = c.profiles || {};
     var name = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
@@ -3318,33 +3385,132 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       + (c.edited_at?'<span class="c-edited">（編集済み）</span>':'')
       + '</div>';
     var body = '<div class="c-body" data-cid="'+c.id+'">'+escHtml(c.body)+'</div>';
+    var likeN = counts[c.id] || 0;
+    var liked = !!mine[c.id];
     var acts = '<div class="c-actions">';
-    if (meId && c.user_id === meId){ acts += '<button data-act="edit" data-cid="'+c.id+'">編集</button><button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除</button>'; }
-    else if (meId){ acts += '<button data-act="report" data-cid="'+c.id+'">通報</button>'; }
-    if (meId && meIsAdmin && c.user_id !== meId){ acts += '<button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除（管理者）</button>'; }
+    acts += '<button data-act="like" data-cid="'+c.id+'" class="c-like'+(liked?' on':'')+'" aria-label="いいね">'
+         +    '<span class="c-like-icon">'+(liked?'♥':'♡')+'</span>'
+         +    (likeN ? '<span class="c-like-n">'+likeN+'</span>' : '')
+         + '</button>';
+    if (meId && !currentRec.comments_disabled){
+      acts += '<button data-act="reply" data-cid="'+c.id+'">返信</button>';
+    }
+    if (meId && c.user_id === meId){
+      acts += '<button data-act="edit" data-cid="'+c.id+'">編集</button><button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除</button>';
+    } else if (meId){
+      acts += '<button data-act="report" data-cid="'+c.id+'">通報</button>';
+    }
+    if (meId && meIsAdmin && c.user_id !== meId){
+      acts += '<button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除（管理者）</button>';
+    }
     acts += '</div>';
     main.innerHTML = head + body + acts;
+
+    // 返信フォーム差し込み用プレースホルダ
+    var replyHolder = document.createElement('div'); replyHolder.className = 'c-reply-holder';
+    main.appendChild(replyHolder);
+
+    // 返信一覧（toggle）
+    if (replies.length){
+      var wrap = document.createElement('div'); wrap.className = 'c-replies-wrap';
+      var toggle = document.createElement('button');
+      toggle.className = 'c-reply-toggle'; toggle.type = 'button';
+      toggle.textContent = '返信 '+replies.length+' 件を表示';
+      var rList = document.createElement('div'); rList.className = 'c-replies';
+      rList.style.display = 'none';
+      replies.forEach(function(rep){ rList.appendChild(makeReplyRow(rep, counts, mine, c.id)); });
+      toggle.onclick = function(){
+        var shown = rList.style.display !== 'none';
+        rList.style.display = shown ? 'none' : '';
+        toggle.textContent = shown ? ('返信 '+replies.length+' 件を表示') : '返信を隠す';
+      };
+      wrap.appendChild(toggle); wrap.appendChild(rList);
+      main.appendChild(wrap);
+    }
+
     row.appendChild(av); row.appendChild(main);
-    // 名前タップで他人プロフィールへ
+
     var nameEl = main.querySelector('.c-name');
     if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = 'index.html#u/'+encodeURIComponent(prof.user_id); };
-    // アクション
-    main.querySelectorAll('button[data-act]').forEach(function(b){
-      b.onclick = function(){ handleAction(b.dataset.act, c, row); };
+    main.querySelectorAll(':scope > .c-actions button[data-act]').forEach(function(b){
+      b.onclick = function(){ handleAction(b.dataset.act, c, row, c.id); };
     });
     return row;
   }
 
-  function handleAction(act, c, row){
-    if (act === 'delete'){
+  function makeReplyRow(c, counts, mine, topId){
+    var row = document.createElement('div'); row.className = 'c-row';
+    var prof = c.profiles || {};
+    var name = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
+    var av = document.createElement('span'); av.className = 'c-av';
+    if (prof.avatar_url){ av.innerHTML = '<img src="'+escHtml(prof.avatar_url)+'" alt="">'; }
+    else { av.textContent = initial(name); }
+    var main = document.createElement('div'); main.className = 'c-main';
+    var head = '<div class="c-head"><span class="c-name" data-uid="'+escHtml(prof.user_id||'')+'">'+escHtml(name)+'</span>'
+      + (prof.user_id?'<span class="c-handle">@'+escHtml(prof.user_id)+'</span>':'')
+      + '<span class="c-time">'+escHtml(relTimeJP(c.created_at))+'</span>'
+      + (c.edited_at?'<span class="c-edited">（編集済み）</span>':'')
+      + '</div>';
+    var body = '<div class="c-body" data-cid="'+c.id+'">'+escHtml(c.body)+'</div>';
+    var likeN = counts[c.id] || 0;
+    var liked = !!mine[c.id];
+    var acts = '<div class="c-actions">';
+    acts += '<button data-act="like" data-cid="'+c.id+'" class="c-like'+(liked?' on':'')+'" aria-label="いいね">'
+         +    '<span class="c-like-icon">'+(liked?'♥':'♡')+'</span>'
+         +    (likeN ? '<span class="c-like-n">'+likeN+'</span>' : '')
+         + '</button>';
+    if (meId && !currentRec.comments_disabled){
+      acts += '<button data-act="reply" data-cid="'+c.id+'">返信</button>';
+    }
+    if (meId && c.user_id === meId){
+      acts += '<button data-act="edit" data-cid="'+c.id+'">編集</button><button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除</button>';
+    } else if (meId){
+      acts += '<button data-act="report" data-cid="'+c.id+'">通報</button>';
+    }
+    if (meId && meIsAdmin && c.user_id !== meId){
+      acts += '<button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除（管理者）</button>';
+    }
+    acts += '</div>';
+    main.innerHTML = head + body + acts;
+    var replyHolder = document.createElement('div'); replyHolder.className = 'c-reply-holder';
+    main.appendChild(replyHolder);
+    row.appendChild(av); row.appendChild(main);
+    var nameEl = main.querySelector('.c-name');
+    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = 'index.html#u/'+encodeURIComponent(prof.user_id); };
+    main.querySelectorAll(':scope > .c-actions button[data-act]').forEach(function(b){
+      b.onclick = function(){
+        // 返信先表示用にこのreplyのprofileを渡しつつ、parent_idはトップレベルに付ける（Instagram式）
+        handleAction(b.dataset.act, c, row, topId);
+      };
+    });
+    return row;
+  }
+
+  function handleAction(act, c, row, topId){
+    if (act === 'like'){
+      if (!meId){ alert('いいねするにはログインが必要です'); return; }
+      var btn = row.querySelector(':scope > .c-main > .c-actions .c-like');
+      var liked = btn && btn.classList.contains('on');
+      var q = liked
+        ? sb.from('comment_likes').delete().eq('comment_id', c.id).eq('user_id', meId)
+        : sb.from('comment_likes').insert({ comment_id: c.id, user_id: meId });
+      if (btn) btn.disabled = true;
+      q.then(function(r){
+        if (r && r.error){ alert('操作に失敗：'+r.error.message); if (btn) btn.disabled = false; return; }
+        if (typeof window.track === 'function') window.track(liked ? 'comment_unliked' : 'comment_liked', { comment_id: c.id });
+        render();
+      });
+    } else if (act === 'reply'){
+      showReplyForm(row, topId, c);
+    } else if (act === 'delete'){
       if (!confirm('このコメントを削除します。よろしいですか？')) return;
       sb.from('comments').delete().eq('id', c.id).then(function(r){
         if (r.error){ alert('削除に失敗：'+r.error.message); return; }
         render();
       });
     } else if (act === 'edit'){
-      var bodyEl = row.querySelector('.c-body');
-      var actionsEl = row.querySelector('.c-actions');
+      var bodyEl = row.querySelector(':scope > .c-main > .c-body');
+      var actionsEl = row.querySelector(':scope > .c-main > .c-actions');
       var original = c.body;
       var area = document.createElement('div'); area.className = 'c-edit-area';
       area.innerHTML = '<textarea maxlength="500">'+escHtml(original)+'</textarea>'
@@ -3364,7 +3530,6 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     } else if (act === 'report'){
       var reason = prompt('通報の理由を選んでください（例: スパム / 不適切 / 権利侵害）', '不適切');
       if (!reason) return;
-      // 既存reportsを流用。detailに comment:<id> を埋めて元コメントが特定できるように
       sb.from('reports').insert({
         recipe_id: c.recipe_id, reporter_id: meId,
         reason: 'コメント: '+reason,
@@ -3374,6 +3539,42 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         alert('通報を受け付けました。運営が確認します。');
       });
     }
+  }
+
+  function showReplyForm(row, parentId, replyToComment){
+    if (!meId){ alert('返信するにはログインが必要です'); return; }
+    // ページ上の既存返信フォームを閉じる（同時に1つだけ）
+    document.querySelectorAll('.c-reply-form').forEach(function(f){ f.remove(); });
+    var holder = row.querySelector(':scope > .c-main > .c-reply-holder');
+    if (!holder) return;
+    var p = (replyToComment && replyToComment.profiles) || {};
+    var atName = (p.display_name||p.user_id||'').trim();
+    var form = document.createElement('div'); form.className = 'c-reply-form';
+    form.innerHTML = '<textarea maxlength="500" placeholder="'+(atName?('@'+escHtml(atName)+' に返信'):'返信を書く')+'"></textarea>'
+      + '<div class="c-foot"><span class="c-count-input">0 / 500</span>'
+      + '<button type="button" class="c-cancel">キャンセル</button>'
+      + '<button type="button" class="c-submit" disabled>返信を送る</button></div>';
+    holder.appendChild(form);
+    var ta = form.querySelector('textarea'); ta.focus();
+    var cnt = form.querySelector('.c-count-input');
+    var sub = form.querySelector('.c-submit');
+    ta.addEventListener('input', function(){
+      var len = ta.value.length;
+      cnt.textContent = len+' / 500';
+      cnt.classList.toggle('over', len > 500);
+      sub.disabled = len === 0 || len > 500;
+    });
+    form.querySelector('.c-cancel').onclick = function(){ form.remove(); };
+    sub.onclick = function(){
+      var body = ta.value.trim(); if (!body) return;
+      sub.disabled = true;
+      var text = (atName && body.indexOf('@'+atName) !== 0) ? ('@'+atName+' '+body) : body;
+      sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: text, parent_id: parentId }).then(function(r){
+        if (r.error){ alert('返信送信に失敗：'+r.error.message); sub.disabled = false; return; }
+        if (typeof window.track === 'function') window.track('comment_reply_posted', { recipe_id: currentRec.id, parent_id: parentId });
+        render();
+      });
+    };
   }
 
   // 公開API
