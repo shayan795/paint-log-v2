@@ -182,7 +182,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .vrecipe-table td:first-child{font-weight:700;font-size:.8rem;padding-left:12px;border-left:3px solid var(--accent);white-space:nowrap;width:1%}
 .vrecipe-procs{display:flex;flex-direction:column;gap:5px}
 .vrecipe-proc-label{font-size:.66rem;color:var(--sub);font-weight:500;margin-bottom:1px}
-.vrecipe-chip{width:12px;height:12px;border:1px solid rgba(0,0,0,.18);flex:none;border-radius:2px;display:inline-block;vertical-align:middle;margin-right:7px}
+.vrecipe-chip{width:14px;height:14px;border:1px solid rgba(0,0,0,.18);flex:none;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:7px}
 .vr-left{display:inline}              /* PCではチップのみ表示(工程名は表ヘッダにある) */
 .vr-proc{display:none}
 .vrecipe-name{display:inline-block;vertical-align:middle}
@@ -207,22 +207,32 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   .vrecipe-table tr{border:1px solid var(--line);margin-bottom:14px;background:#fff;border-radius:12px;overflow:hidden}
   .vrecipe-table td{border:none;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
   .vrecipe-table td:last-child{border-bottom:none}
-  .vrecipe-table td.vr-part{font-size:1rem;font-weight:700;background:var(--bp-bg);border-bottom:1px solid var(--line);padding:11px 14px;display:block;
-    border-left:none;min-width:0;width:auto;position:static;white-space:normal}  /* PC用残留スタイルを打ち消す(赤線の二重・部位名左の余白を解消。赤線はカードtrの1本だけ) */
+  .vrecipe-table td.vr-part{font-size:1.06rem;font-weight:700;background:#FAFAF7;border-bottom:1px solid var(--line);padding:14px 14px 12px 18px;display:block;
+    border-left:4px solid var(--accent);min-width:0;width:auto;position:static;white-space:normal;letter-spacing:.03em;color:var(--ink)}  /* 章タイトル風：白に近い背景＋左accentバー＋少し大きめのフォント */
   /* 案A：左ラベル(88px固定) + 右本文(可変・2行構造)。工程名が縦に揃ってスキャンしやすい */
-  .vrecipe-table td.vr-cell{flex-wrap:wrap;align-items:flex-start;gap:12px;padding:12px 14px}
-  .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:8px;flex:0 0 88px}
-  .vrecipe-table td.vr-cell .vrecipe-chip{margin-right:0}
-  .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.78rem;font-weight:700;color:var(--ink)}
-  .vrecipe-table td.vr-cell .vrecipe-name{flex:1 1 calc(100% - 100px);text-align:left;min-width:0;display:block}
+  .vrecipe-table td.vr-cell{flex-wrap:wrap;align-items:flex-start;gap:12px;padding:14px}
+  .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:10px;flex:0 0 100px}
+  .vrecipe-table td.vr-cell .vrecipe-chip{margin-right:0;width:20px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.08)}
+  .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.78rem;font-weight:700;color:var(--ink);letter-spacing:.02em}
+  .vrecipe-table td.vr-cell .vrecipe-name{flex:1 1 calc(100% - 112px);text-align:left;min-width:0;display:block}
   /* 購入リンクは開いた時に全幅で次行へ降ろす（塗料名行を圧迫しない） */
   .vrecipe-table td.vr-cell .vr-buylinks{flex-basis:100%}
-  .vrecipe-table td.vr-cell .vrecipe-pname{display:block;font-size:.88rem;font-weight:700;line-height:1.35;color:var(--ink);word-break:break-word}
-  .vrecipe-table td.vr-cell .vrecipe-pcode{display:block;font-size:.72rem;color:var(--sub);margin-top:2px;word-break:break-word}
-  /* 未入力工程は表示し、左ラベルを vr-cell と揃える（▢ + 工程名 + 「未設定」） */
-  .vrecipe-table td.vrecipe-empty{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);color:var(--line-d);font-size:.78rem}
-  .vrecipe-table td.vrecipe-empty[data-label]::before{content:attr(data-label);flex:0 0 88px;font-size:.78rem;font-weight:700;color:var(--line-d)}
-  .vrecipe-table td.vrecipe-empty::after{content:"未設定";flex:1;color:var(--line-d);font-size:.78rem}
+  .vrecipe-table td.vr-cell .vrecipe-pname{display:block;font-size:.92rem;font-weight:700;line-height:1.4;color:var(--ink);word-break:break-word}
+  .vrecipe-table td.vr-cell .vrecipe-pcode{display:block;font-size:.72rem;color:var(--sub);margin-top:3px;word-break:break-word}
+  /* 未入力工程：vr-cellと縦位置を揃える（薄破線の空チップ＋工程名＋「未設定」） */
+  .vrecipe-table td.vrecipe-empty{display:flex;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--line);color:var(--line-d);position:relative;padding-left:44px;font-size:0}  /* font-size:0 で元の「—」テキストを隠す。擬似要素で再描画 */
+  /* 空チップ（左端の20pxスロット）：vr-cellの色チップと同じ位置・同サイズで破線枠 */
+  .vrecipe-table td.vrecipe-empty[data-label]::before{
+    content:""; position:absolute; left:14px; top:50%; transform:translateY(-50%);
+    width:20px; height:20px; border-radius:4px;
+    border:1.5px dashed var(--line-d); background:transparent;
+  }
+  /* 工程名（vr-cellの左列幅と揃える） */
+  .vrecipe-table td.vrecipe-empty[data-label]{}
+  .vrecipe-table td.vrecipe-empty[data-label]::after{
+    content:attr(data-label) " ・ 未設定"; flex:1;
+    font-size:.78rem; font-weight:700; color:var(--line-d); letter-spacing:.02em;
+  }
   .vrecipe-table tr.vr-comment-row{display:none}            /* PC用の独立行はスマホでは隠す */
   .vrecipe-table td.vr-comment-cell{display:block;padding:10px 14px;border-bottom:none}  /* カード内に表示 */
   .vrecipe-table td.vr-comment-cell::before{content:none}
