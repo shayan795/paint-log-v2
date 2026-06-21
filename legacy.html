@@ -629,6 +629,49 @@ body{background-image:none}
 .vr-photo{position:relative}
 .vr-photo .vr-mark{position:absolute;border:4px solid var(--mc,#E01E28);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 0 8px rgba(0,0,0,.45);transform:translate(-50%,-50%);pointer-events:none}
 /* ===================== CROPPER:END ===================== */
+
+/* ===================== COMMENTS:START =====================
+   コメントセクション。戻すときはこのブロックと、
+   下の <script id="commentsScript"> を削除すればOK。 */
+.c-section{margin-top:6px}
+.c-count{font-size:.7rem;color:var(--sub);font-weight:500;margin-left:6px;vertical-align:middle}
+.c-disabled{font-size:.85rem;color:var(--sub);padding:14px;background:#FBF8F4;border:1px solid var(--line);border-radius:10px}
+.c-loginprompt{font-size:.85rem;color:var(--sub);padding:14px;background:#FBF8F4;border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.c-loginprompt button{font:inherit;font-size:.82rem;font-weight:700;color:var(--accent);background:#fff;border:1px solid var(--accent);border-radius:18px;padding:6px 14px;cursor:pointer}
+.c-form{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.c-form textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:.92rem;resize:vertical;min-height:60px;background:#fff}
+.c-form textarea:focus{outline:none;border-color:var(--accent)}
+.c-form .c-foot{display:flex;align-items:center;justify-content:space-between;font-size:.74rem;color:var(--sub)}
+.c-form .c-foot .c-count-input{font-variant-numeric:tabular-nums}
+.c-form .c-foot .c-count-input.over{color:var(--warn);font-weight:700}
+.c-form button.c-submit{font:inherit;font-size:.86rem;font-weight:700;color:#fff;background:var(--accent);border:none;border-radius:18px;padding:7px 18px;cursor:pointer}
+.c-form button.c-submit:disabled{opacity:.4;cursor:not-allowed}
+.c-list{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+.c-row{display:flex;gap:10px;padding:14px 0;border-bottom:1px solid var(--line)}
+.c-row .c-av{flex:none;width:36px;height:36px;border-radius:50%;background:var(--bp-bg);color:var(--bp);font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--line)}
+.c-row .c-av img{width:100%;height:100%;object-fit:cover;display:block}
+.c-main{flex:1;min-width:0}
+.c-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:.78rem}
+.c-head .c-name{font-weight:700;color:var(--ink);font-size:.86rem;cursor:pointer}
+.c-head .c-name:hover{text-decoration:underline}
+.c-head .c-handle{color:var(--sub)}
+.c-head .c-time{color:var(--line-d);font-size:.72rem}
+.c-head .c-edited{color:var(--line-d);font-size:.72rem;font-style:italic}
+.c-body{font-size:.92rem;color:var(--ink);line-height:1.55;margin-top:3px;white-space:pre-wrap;word-break:break-word}
+.c-row .c-actions{display:flex;gap:8px;margin-top:6px;font-size:.74rem}
+.c-row .c-actions button{font:inherit;font-size:.74rem;background:none;border:none;color:var(--sub);cursor:pointer;padding:2px 0}
+.c-row .c-actions button:hover{color:var(--ink)}
+.c-row .c-actions .c-danger{color:var(--warn)}
+.c-empty{padding:14px 0;color:var(--sub);font-size:.84rem;text-align:center}
+.c-edit-area{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.c-edit-area textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:.88rem;resize:vertical;min-height:50px;background:#fff}
+.c-edit-area .c-edit-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:.74rem}
+.c-edit-area button{font:inherit;font-size:.78rem;padding:5px 14px;border-radius:14px;cursor:pointer}
+.c-edit-area .c-edit-save{background:var(--accent);color:#fff;border:none}
+.c-edit-area .c-edit-cancel{background:#fff;color:var(--sub);border:1px solid var(--line-d)}
+.c-mod{font-size:.78rem;color:var(--sub);margin:6px 0 12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FFFCF4;border:1px solid var(--line);border-radius:10px}
+.c-mod input{width:auto;margin:0}
+/* ===================== COMMENTS:END ===================== */
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -749,6 +792,9 @@ body{background-image:none}
     <div class="scroll" style="overflow-x:auto"><table class="vrecipe-table" id="viewTable"></table></div>
     <div class="vsection-label" style="margin-top:24px">使用塗料</div>
     <div id="viewPaintList"></div>
+    <!-- コメント -->
+    <div class="vsection-label" style="margin-top:24px">コメント <span id="cCount" class="c-count"></span></div>
+    <div id="cSection" class="c-section"></div>
     <!-- v2: 公開フロー（押すまで投稿されない。プレビューの最後に配置） -->
     <div class="publish-card" id="publishCard">
       <h2>公開設定</h2>
@@ -756,6 +802,7 @@ body{background-image:none}
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="vis-view" value="public" checked>公開</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="vis-view" value="private">非公開</label>
       </div>
+      <label class="c-mod"><input type="checkbox" class="js-allow-comments" checked><span>この投稿にコメントを許可する</span></label>
       <p class="note" style="margin:0 0 12px">プレビューで確認してから投稿できます。非公開で投稿すると自分だけの記録として残すことができます。</p>
       <div class="toolbar" style="margin:0">
         <button class="primary js-publish">投稿する</button>
@@ -845,6 +892,7 @@ body{background-image:none}
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="vis-edit" value="public" checked>公開</label>
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="vis-edit" value="private">非公開</label>
   </div>
+  <label class="c-mod"><input type="checkbox" class="js-allow-comments" checked><span>この投稿にコメントを許可する</span></label>
   <p class="note" style="margin:0 0 12px">プレビューで確認してから投稿できます。非公開で投稿すると自分だけの記録として残すことができます。</p>
   <div class="toolbar" style="margin:0">
     <button class="primary js-publish">投稿する</button>
@@ -2629,7 +2677,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     if (!sb) return;
     var id = new URLSearchParams(location.search).get("id");
     if (!id) return;
-    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods").eq("id", id).single().then(function(res){
+    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods,comments_disabled").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
         var vb = document.getElementById("viewBody");
         if (vb) vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
@@ -2645,6 +2693,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       var drafts = document.querySelectorAll(".js-draft");
       for (var d=0;d<drafts.length;d++) drafts[d].style.display = "none";
       setVis(rec.is_public);
+      // コメント許可トグルを既存値で初期化
+      document.querySelectorAll(".js-allow-comments").forEach(function(c){ c.checked = !rec.comments_disabled; });
       var notes = document.querySelectorAll(".publish-card .note");
       for (var j=0;j<notes.length;j++) notes[j].textContent = "編集内容を保存します（投稿一覧の順番は変わりません）。";
       renderAll();
@@ -2652,6 +2702,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       setPublishCard(false);            // 既存投稿の閲覧では公開設定/投稿ボタン・プレビューバナーを出さない
       ensureBackBtn();                  // 「← 戻る」を表示
       ensureAuthorChip(rec.owner_id);   // 投稿者チップ（タップでその人のプロフィールへ）
+      // コメントセクション
+      if (window.renderComments) window.renderComments(rec);
       // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）
       if (rec.is_public){
         try {
@@ -2849,12 +2901,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             var g = JSON.parse(JSON.stringify(state));
             g.photos = photoUrls.filter(Boolean);
             if (g.rows) g.rows.forEach(function(r, ri){ if (rowUrls[ri]) r.photo = rowUrls[ri]; else delete r.photo; });
+            var allowCommentsEl = document.querySelector(".js-allow-comments");
+            var commentsDisabled = allowCommentsEl ? !allowCommentsEl.checked : false;
             var payload = {
               title: (state.kit || "").trim() || null,
               author_label: (state.author || "").trim() || null,
               memo: (state.memo || "").trim() || null,
               grid: g, is_public: isPublic, cover_url: cover,
-              methods: Array.isArray(state.methods) ? state.methods : []
+              methods: Array.isArray(state.methods) ? state.methods : [],
+              comments_disabled: commentsDisabled
             };
             var q;
             if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
@@ -3162,6 +3217,180 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 })();
 </script>
 <!-- CROPPER:END -->
+
+<!-- COMMENTS:START — 戻すときはこの<script>と、CSSの "COMMENTS:START〜END"、viewBodyの "<div id=cSection>"、loadByの "renderComments(rec)" を削除 -->
+<script id="commentsScript">
+(function(){
+  var cfg = window.PAINTLOG_CONFIG || {};
+  if (!window.supabase || !cfg.SUPABASE_URL) return;
+  var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  var meId = null, meIsAdmin = false, meAvatar = null, meName = null;
+  var currentRec = null;     // {id, owner_id, comments_disabled}
+
+  function escHtml(s){ return String(s||'').replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function relTimeJP(iso){
+    if (!iso) return '';
+    var d=new Date(iso), now=new Date(), sec=Math.floor((now-d)/1000);
+    if (sec<60) return 'たった今';
+    if (sec<3600) return Math.floor(sec/60)+'分前';
+    if (sec<86400) return Math.floor(sec/3600)+'時間前';
+    if (sec<86400*2) return '昨日';
+    if (sec<86400*7) return Math.floor(sec/86400)+'日前';
+    return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();
+  }
+  function initial(name){ return (name||'?').charAt(0); }
+
+  function render(){
+    var sec = document.getElementById('cSection'); if (!sec) return;
+    sec.innerHTML = '<p class="c-empty">読み込み中…</p>';
+    sb.from('comments').select('id,recipe_id,user_id,body,created_at,edited_at,profiles!comments_user_id_fkey(user_id,display_name,avatar_url)')
+      .eq('recipe_id', currentRec.id).order('created_at',{ascending:false})
+      .then(function(res){
+        var rows = (res && !res.error && res.data) ? res.data : [];
+        document.getElementById('cCount').textContent = rows.length ? '('+rows.length+')' : '';
+        sec.innerHTML = '';
+        // フォーム or 状態メッセージ
+        var formArea = document.createElement('div');
+        if (currentRec.comments_disabled){
+          formArea.className = 'c-disabled';
+          formArea.textContent = '投稿者がコメントを停止しています。';
+        } else if (!meId){
+          formArea.className = 'c-loginprompt';
+          formArea.innerHTML = '<span>コメントするにはログインが必要です。</span><button type="button" id="cLogin">ログイン</button>';
+        } else {
+          formArea.className = 'c-form';
+          formArea.innerHTML =
+            '<textarea id="cInput" maxlength="500" placeholder="コメントを書く（500文字以内・節度を持って）"></textarea>'
+            + '<div class="c-foot"><span class="c-count-input" id="cInputCount">0 / 500</span>'
+            + '<button type="button" class="c-submit" id="cSubmit" disabled>送信</button></div>';
+        }
+        sec.appendChild(formArea);
+        if (formArea.querySelector('#cLogin')){
+          formArea.querySelector('#cLogin').onclick = function(){ location.href='index.html#login'; };
+        }
+        if (formArea.querySelector('#cSubmit')){
+          var input = formArea.querySelector('#cInput');
+          var counter = formArea.querySelector('#cInputCount');
+          var submit = formArea.querySelector('#cSubmit');
+          input.addEventListener('input', function(){
+            var len = input.value.length;
+            counter.textContent = len+' / 500';
+            counter.classList.toggle('over', len > 500);
+            submit.disabled = len === 0 || len > 500;
+          });
+          submit.onclick = function(){
+            var body = input.value.trim(); if (!body) return;
+            submit.disabled = true;
+            sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: body }).then(function(r){
+              if (r.error){
+                alert('コメント送信に失敗：' + r.error.message);
+                submit.disabled = false; return;
+              }
+              input.value = ''; counter.textContent = '0 / 500'; submit.disabled = true;
+              if (typeof window.track === 'function') window.track('comment_posted', { recipe_id: currentRec.id });
+              render();   // 再読み込み
+            });
+          };
+        }
+        // 一覧
+        var list = document.createElement('div'); list.className = 'c-list';
+        if (!rows.length){
+          var em = document.createElement('p'); em.className = 'c-empty'; em.textContent = '最初のコメントを残してみよう。';
+          list.appendChild(em);
+        } else {
+          rows.forEach(function(c){ list.appendChild(makeRow(c)); });
+        }
+        sec.appendChild(list);
+      });
+  }
+
+  function makeRow(c){
+    var row = document.createElement('div'); row.className = 'c-row';
+    var prof = c.profiles || {};
+    var name = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
+    var av = document.createElement('span'); av.className = 'c-av';
+    if (prof.avatar_url){ av.innerHTML = '<img src="'+escHtml(prof.avatar_url)+'" alt="">'; }
+    else { av.textContent = initial(name); }
+    var main = document.createElement('div'); main.className = 'c-main';
+    var head = '<div class="c-head"><span class="c-name" data-uid="'+escHtml(prof.user_id||'')+'">'+escHtml(name)+'</span>'
+      + (prof.user_id?'<span class="c-handle">@'+escHtml(prof.user_id)+'</span>':'')
+      + '<span class="c-time">'+escHtml(relTimeJP(c.created_at))+'</span>'
+      + (c.edited_at?'<span class="c-edited">（編集済み）</span>':'')
+      + '</div>';
+    var body = '<div class="c-body" data-cid="'+c.id+'">'+escHtml(c.body)+'</div>';
+    var acts = '<div class="c-actions">';
+    if (meId && c.user_id === meId){ acts += '<button data-act="edit" data-cid="'+c.id+'">編集</button><button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除</button>'; }
+    else if (meId){ acts += '<button data-act="report" data-cid="'+c.id+'">通報</button>'; }
+    if (meId && meIsAdmin && c.user_id !== meId){ acts += '<button data-act="delete" data-cid="'+c.id+'" class="c-danger">削除（管理者）</button>'; }
+    acts += '</div>';
+    main.innerHTML = head + body + acts;
+    row.appendChild(av); row.appendChild(main);
+    // 名前タップで他人プロフィールへ
+    var nameEl = main.querySelector('.c-name');
+    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = 'index.html#u/'+encodeURIComponent(prof.user_id); };
+    // アクション
+    main.querySelectorAll('button[data-act]').forEach(function(b){
+      b.onclick = function(){ handleAction(b.dataset.act, c, row); };
+    });
+    return row;
+  }
+
+  function handleAction(act, c, row){
+    if (act === 'delete'){
+      if (!confirm('このコメントを削除します。よろしいですか？')) return;
+      sb.from('comments').delete().eq('id', c.id).then(function(r){
+        if (r.error){ alert('削除に失敗：'+r.error.message); return; }
+        render();
+      });
+    } else if (act === 'edit'){
+      var bodyEl = row.querySelector('.c-body');
+      var actionsEl = row.querySelector('.c-actions');
+      var original = c.body;
+      var area = document.createElement('div'); area.className = 'c-edit-area';
+      area.innerHTML = '<textarea maxlength="500">'+escHtml(original)+'</textarea>'
+        + '<div class="c-edit-foot"><button class="c-edit-cancel">キャンセル</button><button class="c-edit-save">保存</button></div>';
+      bodyEl.style.display = 'none'; actionsEl.style.display = 'none';
+      bodyEl.parentNode.insertBefore(area, bodyEl);
+      area.querySelector('.c-edit-cancel').onclick = function(){ area.remove(); bodyEl.style.display=''; actionsEl.style.display=''; };
+      area.querySelector('.c-edit-save').onclick = function(){
+        var nv = area.querySelector('textarea').value.trim();
+        if (!nv){ alert('内容を入力してください'); return; }
+        if (nv.length > 500){ alert('500文字以内にしてください'); return; }
+        sb.from('comments').update({ body: nv }).eq('id', c.id).then(function(r){
+          if (r.error){ alert('保存に失敗：'+r.error.message); return; }
+          render();
+        });
+      };
+    } else if (act === 'report'){
+      var reason = prompt('通報の理由を選んでください（例: スパム / 不適切 / 権利侵害）', '不適切');
+      if (!reason) return;
+      // 既存reportsを流用。detailに comment:<id> を埋めて元コメントが特定できるように
+      sb.from('reports').insert({
+        recipe_id: c.recipe_id, reporter_id: meId,
+        reason: 'コメント: '+reason,
+        detail: 'comment:'+c.id+' / body: '+c.body.slice(0,200)
+      }).then(function(r){
+        if (r.error){ alert('通報に失敗：'+r.error.message); return; }
+        alert('通報を受け付けました。運営が確認します。');
+      });
+    }
+  }
+
+  // 公開API
+  window.renderComments = function(rec){
+    currentRec = { id: rec.id, owner_id: rec.owner_id, comments_disabled: !!rec.comments_disabled };
+    sb.auth.getSession().then(function(r){
+      var s = r && r.data && r.data.session;
+      meId = s ? s.user.id : null;
+      meIsAdmin = false;
+      if (meId){
+        sb.rpc('is_admin').then(function(a){ meIsAdmin = !!(a && a.data === true); render(); });
+      } else { render(); }
+    });
+  };
+})();
+</script>
+<!-- COMMENTS:END -->
 
 </body>
 </html>

@@ -695,7 +695,7 @@ function openSettings(){
   $("fvTitle").textContent = "設定";
   fullviewBody.innerHTML = '<div class="stub" id="settingsBody"><p class="pf-empty">読み込み中…</p></div>';
   fullview.hidden = false;
-  Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name,has_password").eq("id", currentUserId).single() ])
+  Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name,has_password,notify_comments").eq("id", currentUserId).single() ])
     .then(function(r){
       var user = (r[0] && r[0].data && r[0].data.user) || {};
       var email = user.email || "";
@@ -726,6 +726,10 @@ function openSettings(){
         +   pwRow
         +   '<p class="set-help">'+ (hasGoogle && hasPassword ? "Google認証とメール認証の両方で利用できます。" : hasGoogle ? "Googleアカウントで認証しています。" : "メールアドレスとパスワードで認証しています。") +'</p>'
         + '</div>'
+        + '<div class="set-sec"><div class="set-k">通知の設定</div>'
+        +   '<label class="set-row" style="cursor:pointer"><span>コメント通知を受け取る</span><input type="checkbox" id="setNotifComments"'+(prof.notify_comments === false ? '' : ' checked')+'></label>'
+        +   '<p class="set-help">あなたの投稿に新しいコメントが付いた時に、アプリ内のベル🔔に通知が届きます。</p>'
+        + '</div>'
         + '<button class="set-item" id="setProfile">プロフィールを編集</button>'
         + '<a class="set-item" href="terms.html">利用規約</a>'
         + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
@@ -736,6 +740,17 @@ function openSettings(){
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
       $("setDelete").onclick = deleteAccount;
+      var ncEl = $("setNotifComments");
+      if (ncEl) ncEl.onchange = function(){
+        var v = !!ncEl.checked;
+        ncEl.disabled = true;
+        sb.from("profiles").update({ notify_comments: v }).eq("id", currentUserId).then(function(r){
+          ncEl.disabled = false;
+          if (r.error){ alert("保存に失敗：" + r.error.message); ncEl.checked = !v; return; }
+          if (typeof track === "function") track("settings_notify_comments_toggled", { value: v });
+          toast(v ? "コメント通知をオンにしました" : "コメント通知をオフにしました");
+        });
+      };
       var seBtn = $("setEmail"); if (seBtn) seBtn.onclick = function(){ openEmailChange(email, hasPassword); };
       var spBtn = $("setPw"); if (spBtn) spBtn.onclick = function(){ openPasswordChange(email); };
     });

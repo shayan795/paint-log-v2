@@ -486,6 +486,110 @@ drop trigger if exists trg_inquiry_status on public.inquiries;
 create trigger trg_inquiry_status after update on public.inquiries
   for each row execute function public.on_inquiry_status_changed();
 
+-- ----------------------------------------------------------------------------
+-- 12) comments — 投稿へのコメント（段7-3.9）
+-- ----------------------------------------------------------------------------
+alter table public.profiles add column if not exists notify_comments boolean not null default true;  -- 自分の投稿にコメントが付いた時の通知ON/OFF
+alter table public.recipes  add column if not exists comments_disabled boolean not null default false; -- 投稿者がコメントを停止できる
+
+create table if not exists public.comments(
+  id          bigint generated always as identity primary key,
+  recipe_id   uuid not null references public.recipes(id) on delete cascade,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  body        text not null check (char_length(body) between 1 and 500),
+  created_at  timestamptz not null default now(),
+  edited_at   timestamptz
+);
+create index if not exists idx_comments_recipe on public.comments(recipe_id, created_at);
+create index if not exists idx_comments_user   on public.comments(user_id);
+
+alter table public.comments enable row level security;
+drop policy if exists comments_select on public.comments;
+drop policy if exists comments_insert on public.comments;
+drop policy if exists comments_update on public.comments;
+drop policy if exists comments_delete on public.comments;
+-- 読み：公開投稿のコメントは誰でも／非公開は投稿者のみ
+create policy comments_select on public.comments
+  for select using (
+    exists (select 1 from public.recipes r
+            where r.id = recipe_id and (r.is_public or r.owner_id = auth.uid()))
+  );
+-- 書き込み：本人のみ。投稿が公開かつコメント許可中であること（RLSで強制）
+create policy comments_insert on public.comments
+  for insert with check (
+    user_id = auth.uid()
+    and exists (select 1 from public.recipes r
+                where r.id = recipe_id and r.is_public = true and r.comments_disabled = false)
+  );
+-- 編集：本人のみ
+create policy comments_update on public.comments
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+-- 削除：本人 or 管理者
+create policy comments_delete on public.comments
+  for delete using (user_id = auth.uid() or public.is_admin());
+
+-- 節度確保(1) 連投制限：同一ユーザーは30秒間隔
+create or replace function public.check_comment_rate()
+returns trigger language plpgsql as $$
+declare last_at timestamptz;
+begin
+  select max(created_at) into last_at from public.comments where user_id = NEW.user_id;
+  if last_at is not null and now() - last_at < interval '30 seconds' then
+    raise exception '連続投稿を制限しています。30秒お待ちください。';
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_check_comment_rate on public.comments;
+create trigger trg_check_comment_rate before insert on public.comments
+  for each row execute function public.check_comment_rate();
+
+-- 節度確保(2) NGワード：露骨な攻撃・差別語の最小セットを弾く（リストは schema 内でのみ管理）
+create or replace function public.check_comment_ngword()
+returns trigger language plpgsql as $$
+declare ng text;
+begin
+  for ng in select unnest(array[
+    '死ね','殺す','クズ','ゴミ','うざい','馬鹿野郎','カス','消えろ','ブス','キモい'
+  ]) loop
+    if NEW.body ilike '%' || ng || '%' then
+      raise exception 'このコメントには使用できない語句が含まれています。';
+    end if;
+  end loop;
+  return NEW;
+end; $$;
+drop trigger if exists trg_check_comment_ngword on public.comments;
+create trigger trg_check_comment_ngword before insert or update on public.comments
+  for each row execute function public.check_comment_ngword();
+
+-- 編集時に edited_at を自動セット
+create or replace function public.on_comment_updated()
+returns trigger language plpgsql as $$
+begin NEW.edited_at = now(); return NEW; end; $$;
+drop trigger if exists trg_comment_updated on public.comments;
+create trigger trg_comment_updated before update on public.comments
+  for each row execute function public.on_comment_updated();
+
+-- insert→投稿者へ通知（自分宛/通知オフ なら除外）
+create or replace function public.on_comment_inserted()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ownerid uuid; recv_pref boolean; rtitle text;
+begin
+  select owner_id, coalesce(title,'無題') into ownerid, rtitle
+    from public.recipes where id = NEW.recipe_id;
+  if ownerid is null or ownerid = NEW.user_id then return NEW; end if;
+  select notify_comments into recv_pref from public.profiles where id = ownerid;
+  if not coalesce(recv_pref, true) then return NEW; end if;
+  insert into public.notifications(user_id, type, title, body, link)
+  values (ownerid, 'comment',
+          '投稿にコメントが届きました',
+          '「'||rtitle||'」: '||left(NEW.body, 80),
+          'legacy.html?id='||NEW.recipe_id::text||'#view');
+  return NEW;
+end; $$;
+drop trigger if exists trg_comment_inserted on public.comments;
+create trigger trg_comment_inserted after insert on public.comments
+  for each row execute function public.on_comment_inserted();
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
