@@ -6,7 +6,7 @@
 <title>塗装レシピ録 — ガンプラ・模型の塗料記録ツール</title>
 <!-- DARKMODE:START — 戻すときはこの<script>とCSSの"DARKMODE:START〜END"を削除 -->
 <script>(function(){try{
-  var v=localStorage.getItem('paintlog_theme')||'auto';
+  var v=localStorage.getItem('paintlog_theme')||'light';
   var d=(v==='dark')||(v==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme=d?'dark':'light';
 }catch(e){}})();</script>
@@ -118,6 +118,16 @@
 [data-theme="dark"] .rowphoto-add{color:var(--bp);border-style:dashed}
 [data-theme="dark"] .rowphoto-del,[data-theme="dark"] .thumb-del,[data-theme="dark"] .pp-del{color:var(--warn)}
 [data-theme="dark"] .proc-panel .pp-add{border-style:dashed;color:var(--sub)}
+/* 色グループ見出し（既存に !important があるので !important で打ち消し） */
+[data-theme="dark"] .vrecipe-table td.vr-part{background:var(--surface)!important;border-left-color:var(--accent)!important;color:var(--ink)}
+[data-theme="dark"] .vrecipe-table td.vr-part::after{color:var(--sub)}
+/* 編集の塗装方法チップ */
+[data-theme="dark"] .mchip{background:var(--surface);color:var(--sub);border-color:var(--line)}
+[data-theme="dark"] .mchip.on{background:#3A1E1A;border-color:var(--accent);color:var(--accent)}
+[data-theme="dark"] .mchip-input{background:var(--surface);color:var(--ink);border-color:var(--line)}
+/* 閲覧のハッシュタグ */
+[data-theme="dark"] .vmethod{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .vmethod:hover{border-color:var(--accent);color:var(--accent)}
 /* ============ DARKMODE:END ============ */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Zen Kaku Gothic New",sans-serif;background:var(--paper);color:var(--ink);line-height:1.65;padding:18px 12px 70px;
