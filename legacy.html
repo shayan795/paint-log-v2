@@ -585,18 +585,21 @@ body{background-image:none}
 /* 写真コントロールの「変更」ボタン（写真が既にある時のみ表示） */
 .rowphoto-change{font-size:.7rem;padding:3px 8px;border:1px solid var(--line);background:#fff;color:var(--sub);border-radius:6px;cursor:pointer;margin-left:6px}
 .rowphoto-change:hover{border-color:var(--ink);color:var(--ink)}
-/* クロッパーの赤丸マーカー（編集用） */
-.crop-marker{position:absolute;left:0;top:0;width:0;height:0;border:3px solid var(--warn);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.6),0 1px 3px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;background:transparent}
+/* クロッパーのマーカー（編集用）：色は --mc 変数（既定は赤）、線は太く＋影で主張 */
+.crop-marker{position:absolute;left:0;top:0;width:0;height:0;border:4px solid var(--mc,#E01E28);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 0 8px rgba(0,0,0,.45);transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;background:transparent;touch-action:none}
 .crop-marker.dragging{cursor:grabbing}
 .crop-marker-toggle{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--ink);cursor:pointer;user-select:none}
 .crop-marker-toggle input{width:auto}
-.crop-marker-controls{display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--sub)}
-.crop-marker-controls input[type=range]{flex:1;min-width:0}
-.crop-marker-controls .crop-mc-label{flex:none;font-weight:700;color:var(--ink)}
-.crop-marker-controls .crop-mc-hint{flex-basis:100%;font-size:.7rem;color:var(--sub);text-align:center;margin-top:2px}
-/* 閲覧側：色グループ写真の上に重なる赤丸マーカー（表示専用） */
+.crop-marker-controls{display:flex;flex-direction:column;gap:8px}
+.crop-mc-row{display:flex;align-items:center;gap:10px;font-size:.78rem;color:var(--sub)}
+.crop-mc-row .crop-mc-label{flex:none;font-weight:700;color:var(--ink);min-width:44px}
+.crop-mc-row input[type=range]{flex:1;min-width:0;height:24px;accent-color:var(--mc,#E01E28);touch-action:none}
+.crop-mc-colors{display:flex;gap:8px}
+.crop-mc-colors button{width:28px;height:28px;border-radius:50%;border:2px solid var(--line);background:#fff;cursor:pointer;padding:0;transition:transform .12s,border-color .12s}
+.crop-mc-colors button[data-on="1"]{border-color:var(--ink);transform:scale(1.1)}
+/* 閲覧側：色グループ写真の上に重なるマーカー（表示専用） */
 .vr-photo{position:relative}
-.vr-photo .vr-mark{position:absolute;border:3px solid var(--warn);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.6),0 1px 3px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none}
+.vr-photo .vr-mark{position:absolute;border:4px solid var(--mc,#E01E28);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 0 8px rgba(0,0,0,.45);transform:translate(-50%,-50%);pointer-events:none}
 /* ===================== CROPPER:END ===================== */
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
@@ -2288,7 +2291,7 @@ function renderViewMode(){
     if (!row.part.trim() && !Object.keys(row.cells).length && !row.photo) return;
     const vrPhotoStyle = row.photo_pos ? ` style="--pp:${esc(row.photo_pos)}"` : "";
     const vrMark = (row.photo_mark && typeof row.photo_mark.x==='number')
-      ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1"></div>`
+      ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${esc(row.photo_mark.c||'#E01E28')}"></div>`
       : "";
     const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
@@ -2955,9 +2958,20 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       <span>目印（赤丸）を付ける</span>
     </label>
     <div class="crop-marker-controls" id="cropMarkerControls" hidden>
-      <span class="crop-mc-label">大きさ</span>
-      <input type="range" id="cropMarkerSize" min="6" max="30" step="1" value="12">
-      <span class="crop-mc-hint">赤丸をドラッグで位置を決められます</span>
+      <div class="crop-mc-row">
+        <span class="crop-mc-label">大きさ</span>
+        <input type="range" id="cropMarkerSize" min="5" max="45" step="1" value="14">
+      </div>
+      <div class="crop-mc-row">
+        <span class="crop-mc-label">色</span>
+        <div class="crop-mc-colors" id="cropMarkerColors">
+          <button type="button" data-color="#E01E28" style="background:#E01E28" title="赤"></button>
+          <button type="button" data-color="#FFC400" style="background:#FFC400" title="黄"></button>
+          <button type="button" data-color="#00B0FF" style="background:#00B0FF" title="水色"></button>
+          <button type="button" data-color="#1E2430" style="background:#1E2430" title="黒"></button>
+          <button type="button" data-color="#FFFFFF" style="background:#FFFFFF;border-color:#aaa" title="白"></button>
+        </div>
+      </div>
     </div>
     <div class="crop-actions">
       <button type="button" id="cropCancel">キャンセル</button>
@@ -2968,9 +2982,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 <script id="cropperScript">
 (function(){
   // 開く: window.openPhotoCropper(src, initialPos, initialMark, onDone)
-  //   initialPos: "X% Y%" or null
-  //   initialMark: {x,y,r} (%) or null
-  //   onDone(pos, mark): pos="X% Y%", mark={x,y,r} or null
+  //   initialMark: {x,y,r,c} (%, 色は#RRGGBB) or null
+  //   onDone(pos, mark)
   var ov = document.getElementById('cropOverlay');
   var frame = document.getElementById('cropFrame');
   var img = document.getElementById('cropImg');
@@ -2978,32 +2991,41 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   var markerOn = document.getElementById('cropMarkerOn');
   var markerCtrl = document.getElementById('cropMarkerControls');
   var markerSize = document.getElementById('cropMarkerSize');
+  var markerColors = document.getElementById('cropMarkerColors');
   var okBtn = document.getElementById('cropOk');
   var cancelBtn = document.getElementById('cropCancel');
   var hint = document.getElementById('cropHint');
+  var card = ov.querySelector('.crop-card');
 
-  var posX = 50, posY = 50;     // 画像中心位置 0-100 (%)
-  var mX = 50, mY = 50, mR = 12; // マーカー位置(%) と半径(% of frame width)
+  var posX = 50, posY = 50;
+  var mX = 50, mY = 50, mR = 14, mC = '#E01E28';
   var imgRatio = 1;
-  var dragMode = null;          // 'image' or 'marker' or null
-  var startX = 0, startY = 0, startA = 0, startB = 0;
+  var dragMode = null;   // 'image' | 'marker' | null
+  var startCX = 0, startCY = 0, startA = 0, startB = 0;
+  var activePointerId = null;
   var onDoneCb = null;
 
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
   function applyImage(){ frame.style.setProperty('--pp', posX+'% '+posY+'%'); }
   function applyMarker(){
-    var size = mR * 2;           // 直径 (%)
+    var size = mR * 2;
     marker.style.left = mX + '%';
     marker.style.top  = mY + '%';
     marker.style.width  = size + '%';
     marker.style.height = size + '%';
+  }
+  function applyColor(){
+    card.style.setProperty('--mc', mC);
+    Array.prototype.forEach.call(markerColors.querySelectorAll('button'), function(b){
+      b.setAttribute('data-on', b.getAttribute('data-color') === mC ? '1' : '0');
+    });
   }
   function updateMarkerUI(){
     var on = markerOn.checked;
     marker.hidden = !on;
     markerCtrl.hidden = !on;
     hint.textContent = on
-      ? '画像をドラッグで位置、赤丸をドラッグで目印の位置を決められます'
+      ? '画像と目印（◯）をそれぞれドラッグで位置を決められます'
       : '画像をドラッグして中心に来る位置を決めてください';
   }
 
@@ -3014,51 +3036,61 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       posX = parseFloat(m[1]); posY = parseFloat(m[2]);
     } else { posX = 50; posY = 50; }
     if (initialMark && typeof initialMark.x === 'number'){
-      mX = initialMark.x; mY = initialMark.y; mR = initialMark.r || 12;
+      mX = initialMark.x; mY = initialMark.y; mR = initialMark.r || 14; mC = initialMark.c || '#E01E28';
       markerOn.checked = true;
-    } else { mX = 50; mY = 50; mR = 12; markerOn.checked = false; }
+    } else { mX = 50; mY = 50; mR = 14; mC = '#E01E28'; markerOn.checked = false; }
     markerSize.value = mR;
-    applyImage(); applyMarker(); updateMarkerUI();
+    applyImage(); applyMarker(); applyColor(); updateMarkerUI();
     img.onload = function(){ imgRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1); };
     img.src = src;
     ov.hidden = false;
   };
-  function close(){ ov.hidden = true; img.src = ''; onDoneCb = null; }
+  function closeAndReset(){ ov.hidden = true; img.src = ''; onDoneCb = null; dragMode = null; activePointerId = null; }
 
-  cancelBtn.addEventListener('click', close);
-  ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+  cancelBtn.addEventListener('click', closeAndReset);
+  ov.addEventListener('click', function(e){ if (e.target === ov) closeAndReset(); });
   okBtn.addEventListener('click', function(){
     var cb = onDoneCb;
     var pos = Math.round(posX)+'% '+Math.round(posY)+'%';
-    var mark = markerOn.checked ? { x: Math.round(mX), y: Math.round(mY), r: Math.round(mR) } : null;
-    close(); if (cb) cb(pos, mark);
+    var mark = markerOn.checked ? { x: Math.round(mX), y: Math.round(mY), r: Math.round(mR), c: mC } : null;
+    closeAndReset(); if (cb) cb(pos, mark);
   });
 
   markerOn.addEventListener('change', function(){ applyMarker(); updateMarkerUI(); });
-  markerSize.addEventListener('input', function(){ mR = parseFloat(markerSize.value); applyMarker(); });
+  // input/change両方で連続更新（環境差を吸収）
+  function onSize(){ mR = parseFloat(markerSize.value); applyMarker(); }
+  markerSize.addEventListener('input', onSize);
+  markerSize.addEventListener('change', onSize);
+  // 色ボタン
+  markerColors.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-color]'); if (!b) return;
+    mC = b.getAttribute('data-color'); applyColor();
+  });
 
-  // ドラッグ：マーカーが優先（前面）、それ以外はフレーム=画像の移動
-  function getXY(e){ return e.touches ? {x:e.touches[0].clientX,y:e.touches[0].clientY} : {x:e.clientX,y:e.clientY}; }
+  // pointer events に統一（mouse/touch二重登録を廃止し、スライダーと干渉しないよう要素単位に bind）
   function startMarker(e){
     if (!markerOn.checked) return;
     dragMode = 'marker'; marker.classList.add('dragging');
-    var p = getXY(e); startX = p.x; startY = p.y; startA = mX; startB = mY;
+    activePointerId = e.pointerId;
+    try{ marker.setPointerCapture(e.pointerId); }catch(_){}
+    startCX = e.clientX; startCY = e.clientY; startA = mX; startB = mY;
     e.preventDefault(); e.stopPropagation();
   }
   function startImage(e){
+    // マーカー上でのpointerdownは startMarker が捕まえる（stopPropagation済）
     dragMode = 'image'; frame.classList.add('dragging');
-    var p = getXY(e); startX = p.x; startY = p.y; startA = posX; startB = posY;
+    activePointerId = e.pointerId;
+    try{ frame.setPointerCapture(e.pointerId); }catch(_){}
+    startCX = e.clientX; startCY = e.clientY; startA = posX; startB = posY;
     e.preventDefault();
   }
   function move(e){
-    if (!dragMode) return;
-    var p = getXY(e);
+    if (!dragMode || e.pointerId !== activePointerId) return;
     var r = frame.getBoundingClientRect();
     var fw = r.width, fh = r.height;
     if (dragMode === 'marker'){
-      // フレーム幅基準の % 移動
-      var dx = ((p.x - startX) / fw) * 100;
-      var dy = ((p.y - startY) / fh) * 100;
+      var dx = ((e.clientX - startCX) / fw) * 100;
+      var dy = ((e.clientY - startCY) / fh) * 100;
       mX = clamp(startA + dx, 0, 100);
       mY = clamp(startB + dy, 0, 100);
       applyMarker();
@@ -3068,23 +3100,29 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       else { dispW = fw; dispH = fw / imgRatio; }
       var overX = Math.max(0, dispW - fw);
       var overY = Math.max(0, dispH - fh);
-      var dxPct = overX > 0 ? ((p.x - startX) / overX) * 100 : 0;
-      var dyPct = overY > 0 ? ((p.y - startY) / overY) * 100 : 0;
+      var dxPct = overX > 0 ? ((e.clientX - startCX) / overX) * 100 : 0;
+      var dyPct = overY > 0 ? ((e.clientY - startCY) / overY) * 100 : 0;
       posX = clamp(startA - dxPct, 0, 100);
       posY = clamp(startB - dyPct, 0, 100);
       applyImage();
     }
     e.preventDefault();
   }
-  function end(){ dragMode = null; frame.classList.remove('dragging'); marker.classList.remove('dragging'); }
-  marker.addEventListener('mousedown', startMarker);
-  marker.addEventListener('touchstart', startMarker, {passive:false});
-  frame.addEventListener('mousedown', startImage);
-  frame.addEventListener('touchstart', startImage, {passive:false});
-  window.addEventListener('mousemove', move);
-  window.addEventListener('mouseup', end);
-  window.addEventListener('touchmove', move, {passive:false});
-  window.addEventListener('touchend', end);
+  function end(e){
+    if (e && e.pointerId !== activePointerId && activePointerId !== null) return;
+    dragMode = null; activePointerId = null;
+    frame.classList.remove('dragging');
+    marker.classList.remove('dragging');
+  }
+  // 要素単位にbind（スライダー等への干渉なし。pointercapture でフレーム外まで追従）
+  marker.addEventListener('pointerdown', startMarker);
+  marker.addEventListener('pointermove', move);
+  marker.addEventListener('pointerup', end);
+  marker.addEventListener('pointercancel', end);
+  frame.addEventListener('pointerdown', startImage);
+  frame.addEventListener('pointermove', move);
+  frame.addEventListener('pointerup', end);
+  frame.addEventListener('pointercancel', end);
 })();
 </script>
 <!-- CROPPER:END -->
