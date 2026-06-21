@@ -209,13 +209,18 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   .vrecipe-table td:last-child{border-bottom:none}
   .vrecipe-table td.vr-part{font-size:1rem;font-weight:700;background:var(--bp-bg);border-bottom:1px solid var(--line);padding:11px 14px;display:block;
     border-left:none;min-width:0;width:auto;position:static;white-space:normal}  /* PC用残留スタイルを打ち消す(赤線の二重・部位名左の余白を解消。赤線はカードtrの1本だけ) */
-  .vrecipe-table td.vrecipe-empty[data-label]::before{content:attr(data-label);font-size:.68rem;color:var(--sub);font-weight:600;flex:none;text-align:left}
-  /* チップ＋工程名を左に固定、塗料名を右へ */
-  .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:8px;flex:none}
+  /* 案A：左ラベル(88px固定) + 右本文(可変・2行構造)。工程名が縦に揃ってスキャンしやすい */
+  .vrecipe-table td.vr-cell{flex-wrap:nowrap;align-items:flex-start;gap:12px;padding:12px 14px}
+  .vrecipe-table td.vr-cell .vr-left{display:flex;align-items:center;gap:8px;flex:0 0 88px}
   .vrecipe-table td.vr-cell .vrecipe-chip{margin-right:0}
-  .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.68rem;color:var(--sub);font-weight:600}
-  .vrecipe-table td.vr-cell .vrecipe-name{text-align:right}
-  .vrecipe-table td.vrecipe-empty{display:none}
+  .vrecipe-table td.vr-cell .vr-proc{display:inline;font-size:.78rem;font-weight:700;color:var(--ink)}
+  .vrecipe-table td.vr-cell .vrecipe-name{flex:1;text-align:left;min-width:0;display:block}
+  .vrecipe-table td.vr-cell .vrecipe-pname{display:block;font-size:.88rem;font-weight:700;line-height:1.35;color:var(--ink);word-break:break-word}
+  .vrecipe-table td.vr-cell .vrecipe-pcode{display:block;font-size:.72rem;color:var(--sub);margin-top:2px;word-break:break-word}
+  /* 未入力工程は表示し、左ラベルを vr-cell と揃える（▢ + 工程名 + 「未設定」） */
+  .vrecipe-table td.vrecipe-empty{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);color:var(--line-d);font-size:.78rem}
+  .vrecipe-table td.vrecipe-empty[data-label]::before{content:attr(data-label);flex:0 0 88px;font-size:.78rem;font-weight:700;color:var(--line-d)}
+  .vrecipe-table td.vrecipe-empty::after{content:"未設定";flex:1;color:var(--line-d);font-size:.78rem}
   .vrecipe-table tr.vr-comment-row{display:none}            /* PC用の独立行はスマホでは隠す */
   .vrecipe-table td.vr-comment-cell{display:block;padding:10px 14px;border-bottom:none}  /* カード内に表示 */
   .vrecipe-table td.vr-comment-cell::before{content:none}
