@@ -361,12 +361,12 @@ td.rowphoto{text-align:center;vertical-align:middle}
 
 /* 色グループ写真(閲覧ビュー) */
 .vr-photo{margin-top:8px}
-.vr-photo img{max-width:120px;border:1px solid var(--line);border-radius:6px;display:block;height:auto}  /* トリミング・引き伸ばしなし */
+.vr-photo img{width:100%;max-width:120px;aspect-ratio:1/1;object-fit:cover;object-position:var(--pp,50% 50%);border:1px solid var(--line);border-radius:6px;display:block}  /* 正方形にクロップ。投稿者が決めた中心位置(--pp)を反映 */
 .vr-photo-cell{display:none}  /* PCでは専用セルを隠す(写真は部位名の下に表示) */
 @media(max-width:640px){
   .vrecipe-table td.vr-part .vr-photo{display:none}        /* 見出しの写真は隠す */
   .vrecipe-table td.vr-photo-cell{display:block;padding:10px 14px;border-bottom:none}
-  .vr-photo img{max-width:100%}                            /* 幅に収める。サイズはそのまま(縦横比維持) */
+  .vr-photo img{max-width:100%}                            /* スマホは max-width:120px のキャップを解除して全幅。aspect-ratio/object-fit/object-position はベース定義を継承 */
 }
 
 /* ============ v2シェル連携：三本線廃止・❌バー・PC左サイドバー ============ */
@@ -566,6 +566,26 @@ body{background-image:none}
   .acc-toggle-all:hover{background:var(--accent); color:#fff}
 }
 /* ===================== ACCORDION:END ===================== */
+
+/* ===================== CROPPER:START =====================
+   色グループ写真の位置調整モーダル。戻すときはこのCSSブロックと
+   下の <script id="cropperScript"> ブロックを削除すればOK。 */
+.crop-overlay{position:fixed;inset:0;background:rgba(20,26,40,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:120}
+.crop-overlay[hidden]{display:none}
+.crop-card{background:#fff;border-radius:14px;padding:16px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+.crop-card h3{margin:0;font-size:1rem;text-align:center}
+.crop-hint{margin:0;font-size:.78rem;color:var(--sub);text-align:center;line-height:1.5}
+.crop-frame{width:100%;aspect-ratio:1/1;background:#000;border-radius:10px;overflow:hidden;position:relative;touch-action:none;user-select:none;cursor:grab}
+.crop-frame.dragging{cursor:grabbing}
+.crop-frame img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:var(--pp,50% 50%);pointer-events:none}
+.crop-actions{display:flex;gap:8px}
+.crop-actions button{flex:1;font:inherit;font-size:.9rem;font-weight:700;padding:11px;border-radius:8px;border:1px solid var(--line-d);background:#fff;cursor:pointer}
+.crop-actions .crop-ok{background:var(--accent);border-color:var(--accent);color:#fff}
+.crop-actions .crop-ok:hover{background:#c2391f}
+/* 写真コントロールの「変更」ボタン（写真が既にある時のみ表示） */
+.rowphoto-change{font-size:.7rem;padding:3px 8px;border:1px solid var(--line);background:#fff;color:var(--sub);border-radius:6px;cursor:pointer;margin-left:6px}
+.rowphoto-change:hover{border-color:var(--ink);color:var(--ink)}
+/* ===================== CROPPER:END ===================== */
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1632,17 +1652,39 @@ function makeRowPhotoControl(row){
   fileInput.onchange = async e => {
     const file = e.target.files && e.target.files[0];
     if (file){
-      try{ row.photo = await processImage(file); renderGrid(); }
+      try{
+        const dataUrl = await processImage(file);
+        row.photo = dataUrl;
+        // 新規選択直後にクロップモーダルを開いて中心位置を決めてもらう
+        if (typeof window.openPhotoCropper === 'function'){
+          window.openPhotoCropper(dataUrl, row.photo_pos || null, function(pos){
+            row.photo_pos = pos; renderGrid();
+          });
+        }
+        renderGrid();
+      }
       catch(_){ alert("この画像は読み込めませんでした"); }
     }
     e.target.value = "";
   };
   if (row.photo){
-    const img = document.createElement("img"); img.className = "rowphoto-img"; img.src = row.photo; img.title = "クリックで変更";
-    img.onclick = () => fileInput.click();
+    const img = document.createElement("img"); img.className = "rowphoto-img"; img.src = row.photo; img.title = "タップで位置調整";
+    // 既存写真タップ → クロップ位置の再調整
+    img.onclick = () => {
+      if (typeof window.openPhotoCropper === 'function'){
+        window.openPhotoCropper(row.photo, row.photo_pos || null, function(pos){
+          row.photo_pos = pos; renderGrid();
+        });
+      } else {
+        fileInput.click();  // フォールバック：差し替え
+      }
+    };
+    // 画像変更ボタン（小さく別ボタン化）
+    const change = document.createElement("button"); change.className = "rowphoto-change"; change.textContent = "変更"; change.title = "別の写真に差し替え";
+    change.onclick = () => fileInput.click();
     const del = document.createElement("button"); del.className = "rowphoto-del"; del.textContent = "×"; del.title = "写真を削除";
-    del.onclick = () => { delete row.photo; renderGrid(); };
-    wrap.append(img, del, fileInput);
+    del.onclick = () => { delete row.photo; delete row.photo_pos; renderGrid(); };
+    wrap.append(img, change, del, fileInput);
   } else {
     const btn = document.createElement("button"); btn.className = "rowphoto-add"; btn.innerHTML = '<svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg>'; btn.title = "この色グループに写真を添付";
     btn.onclick = () => fileInput.click();
@@ -2228,7 +2270,8 @@ function renderViewMode(){
   html += "</tr></thead><tbody>";
   state.rows.forEach(row => {
     if (!row.part.trim() && !Object.keys(row.cells).length && !row.photo) return;
-    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"></div>` : "";
+    const vrPhotoStyle = row.photo_pos ? ` style="--pp:${esc(row.photo_pos)}"` : "";
+    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}></div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
     state.procs.forEach(proc => {
       const c = row.cells[proc.id];
@@ -2249,7 +2292,7 @@ function renderViewMode(){
       } else html += `<td class="vrecipe-empty" data-label="${esc(proc.name)}">—</td>`;
     });
     // スマホ用: カード末尾(塗料の下)に色グループ写真。PCではCSSで非表示
-    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"></div></td>`;
+    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}></div></td>`;
     // 色グループのコメント(入力があるときだけ表示・スマホはカード内に取り込む)
     if (row.comment && row.comment.trim()){
       html += `<td class="vr-comment-cell"><div class="vr-comment">${esc(row.comment.trim())}</div></td>`;
@@ -2878,6 +2921,93 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 })();
 </script>
 <!-- ACCORDION:END -->
+
+<!-- CROPPER:START — 戻すときはこの<div>と<script id="cropperScript">、CSSの "CROPPER:START〜END" を削除 -->
+<div class="crop-overlay" id="cropOverlay" hidden>
+  <div class="crop-card">
+    <h3>画像の位置を調整</h3>
+    <p class="crop-hint">ドラッグして中心に来る位置を決めてください</p>
+    <div class="crop-frame" id="cropFrame"><img id="cropImg" alt=""></div>
+    <div class="crop-actions">
+      <button type="button" id="cropCancel">キャンセル</button>
+      <button type="button" id="cropOk" class="crop-ok">この位置で決定</button>
+    </div>
+  </div>
+</div>
+<script id="cropperScript">
+(function(){
+  // 開く: window.openPhotoCropper(dataUrlOrUrl, initialPos, onDone)
+  //   initialPos: "X% Y%" or null  /  onDone(pos): "X% Y%" を返す
+  var ov = document.getElementById('cropOverlay');
+  var frame = document.getElementById('cropFrame');
+  var img = document.getElementById('cropImg');
+  var okBtn = document.getElementById('cropOk');
+  var cancelBtn = document.getElementById('cropCancel');
+  var posX = 50, posY = 50;     // 0-100 (%)
+  var imgRatio = 1;             // 画像のアスペクト比 (w/h)
+  var dragging = false, startX = 0, startY = 0, startPosX = 50, startPosY = 50;
+  var onDoneCb = null;
+
+  function clamp(v){ return Math.max(0, Math.min(100, v)); }
+  function apply(){ frame.style.setProperty('--pp', posX+'% '+posY+'%'); }
+
+  window.openPhotoCropper = function(src, initialPos, done){
+    onDoneCb = done || function(){};
+    if (initialPos && /\d+%\s+\d+%/.test(initialPos)){
+      var m = initialPos.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
+      posX = parseFloat(m[1]); posY = parseFloat(m[2]);
+    } else { posX = 50; posY = 50; }
+    apply();
+    img.onload = function(){ imgRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1); };
+    img.src = src;
+    ov.hidden = false;
+  };
+  function close(){ ov.hidden = true; img.src = ''; onDoneCb = null; }
+
+  cancelBtn.addEventListener('click', close);
+  ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+  okBtn.addEventListener('click', function(){
+    var cb = onDoneCb; var pos = Math.round(posX)+'% '+Math.round(posY)+'%';
+    close(); if (cb) cb(pos);
+  });
+
+  // ドラッグ操作（pointer events で touch/mouse 統一）
+  function getXY(e){ return e.touches ? {x:e.touches[0].clientX,y:e.touches[0].clientY} : {x:e.clientX,y:e.clientY}; }
+  function start(e){
+    dragging = true; frame.classList.add('dragging');
+    var p = getXY(e); startX = p.x; startY = p.y; startPosX = posX; startPosY = posY;
+    e.preventDefault();
+  }
+  function move(e){
+    if (!dragging) return;
+    var p = getXY(e);
+    var r = frame.getBoundingClientRect();
+    var frameW = r.width, frameH = r.height;
+    // 画像の表示サイズ(cover)を計算
+    var dispW, dispH;
+    if (imgRatio >= 1){ dispH = frameH; dispW = frameH * imgRatio; }
+    else { dispW = frameW; dispH = frameW / imgRatio; }
+    // はみ出し量(px)
+    var overX = Math.max(0, dispW - frameW);
+    var overY = Math.max(0, dispH - frameH);
+    // ピクセル移動量 → %換算（はみ出し量を100%として換算）
+    var dxPct = overX > 0 ? ((p.x - startX) / overX) * 100 : 0;
+    var dyPct = overY > 0 ? ((p.y - startY) / overY) * 100 : 0;
+    posX = clamp(startPosX - dxPct);
+    posY = clamp(startPosY - dyPct);
+    apply();
+    e.preventDefault();
+  }
+  function end(){ dragging = false; frame.classList.remove('dragging'); }
+  frame.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  frame.addEventListener('touchstart', start, {passive:false});
+  window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('touchend', end);
+})();
+</script>
+<!-- CROPPER:END -->
 
 </body>
 </html>
