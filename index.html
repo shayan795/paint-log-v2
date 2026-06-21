@@ -24,7 +24,7 @@
   --bp:#2B4C9B; --bp-bg:#EDF1F9; --accent:#E01E28; --warn:#C8322A;
   --card:#fff;
   --surface:#FFFFFF; --surface-2:#FFFCF7; --bg-app:#E7E7E2;
-  --topbar-h:52px; --bottomnav-h:60px; --maxw:480px;
+  --topbar-h:52px; --bottomnav-h:52px; --maxw:480px;
 }
 /* ============ DARKMODE:START ============ */
 [data-theme="dark"]{
@@ -236,14 +236,14 @@ button{font-family:inherit}
 }
 .bottomnav.scrolled{box-shadow:0 -1px 10px rgba(20,24,32,.07)}
 .nav-item{flex:1; border:none; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:3px; color:var(--sub); font-size:.62rem; cursor:pointer; padding:7px 0}
-.nav-item svg{width:23px; height:23px; stroke:var(--sub); fill:none; stroke-width:1.7}   /* 探す/記録アイコンは保存マークと同じグレーで統一 */
+  gap:3px; color:var(--sub); font-size:.62rem; cursor:pointer; padding:5px 0}
+.nav-item svg{width:20px; height:20px; stroke:var(--sub); fill:none; stroke-width:1.7}   /* 探す/記録アイコンは保存マークと同じグレーで統一 */
 .nav-item.active{color:var(--ink)}
 .nav-item.active svg{stroke:var(--sub)}
 .bottomnav .nav-item > span:not(.plus-circle){display:none}   /* 下タブの文字（探す/作る/記録）は非表示・アイコンのみ */
-.nav-plus{justify-content:flex-start; padding-top:5px}
-.plus-circle{width:46px; height:46px; border-radius:50%; background:var(--sub); display:flex; align-items:center; justify-content:center; box-shadow:0 3px 9px rgba(20,24,32,.16)}
-.plus-circle svg{width:26px; height:26px; stroke:#fff; fill:none; stroke-width:2.3}
+.nav-plus{justify-content:flex-start; padding-top:4px}
+.plus-circle{width:42px; height:42px; border-radius:50%; background:var(--sub); display:flex; align-items:center; justify-content:center; box-shadow:0 3px 9px rgba(20,24,32,.16)}
+.plus-circle svg{width:23px; height:23px; stroke:#fff; fill:none; stroke-width:2.3}
 .nav-plus .lbl{margin-top:2px}
 
 /* ドロワー */
