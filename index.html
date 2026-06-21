@@ -304,8 +304,13 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 /* 設定ページ */
 .set-sec{border:1px solid var(--line); border-radius:12px; padding:6px 14px; margin:14px 0}
 .set-k{font-size:.72rem; font-weight:700; color:var(--sub); padding:8px 0 4px}
-.set-row{display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--line); font-size:.86rem}
-.set-row span{color:var(--sub)}
+.set-row{display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--line); font-size:.86rem; align-items:center; flex-wrap:wrap}
+.set-row > span:first-child{color:var(--sub); flex:none}
+.set-row > span:last-child{text-align:right; display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+.set-link{background:none; border:none; color:var(--accent); font:inherit; font-size:.82rem; font-weight:700; cursor:pointer; padding:0; text-decoration:underline}
+.set-link:hover{color:#b83322}
+.set-muted{color:var(--sub); font-size:.78rem}
+.set-help{font-size:.74rem; color:var(--sub); margin:8px 0 6px}
 .set-item{display:block; width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:10px; padding:13px 15px; margin-top:8px; font:inherit; font-size:.9rem; font-weight:700; color:var(--ink); cursor:pointer; text-decoration:none}
 .set-item:hover{border-color:var(--ink)}
 .set-item.danger{color:var(--warn); border-color:var(--warn)}
@@ -679,15 +684,30 @@ function openSettings(){
   fullview.hidden = false;
   Promise.all([ sb.auth.getUser(), sb.from("profiles").select("user_id,display_name").eq("id", currentUserId).single() ])
     .then(function(r){
-      var email = (r[0] && r[0].data && r[0].data.user) ? r[0].data.user.email : "";
+      var user = (r[0] && r[0].data && r[0].data.user) || {};
+      var email = user.email || "";
       var prof = (r[1] && !r[1].error) ? (r[1].data || {}) : {};
+      // 認証プロバイダ判定（パスワードを持つか・Google認証か）
+      var providers = ((user.identities || []).map(function(i){ return i.provider; }));
+      var hasPassword = providers.indexOf("email") >= 0;
+      var hasGoogle = providers.indexOf("google") >= 0;
       var box = $("settingsBody"); if (!box) return;
+      // パスワード行：プロバイダで挙動が変わる
+      var pwRow = hasPassword
+        ? '<div class="set-row"><span>パスワード</span><span><b>••••••••</b> <button class="set-link" id="setPw">変更する</button></span></div>'
+        : '<div class="set-row"><span>パスワード</span><span class="set-muted">Google認証中（パスワードはありません）</span></div>';
+      var emailRow = '<div class="set-row"><span>メールアドレス</span><span><b>'+esc(email||"未設定")+'</b> <button class="set-link" id="setEmail">変更する</button></span></div>';
+      // Google単独でメールを変更可能か：Supabaseのemailを変更してもGoogle紐付けは外れない。可能だが説明が必要
       box.innerHTML =
         '<h2>設定</h2>'
         + '<div class="set-sec"><div class="set-k">アカウント</div>'
         +   '<div class="set-row"><span>表示名</span><b>'+esc(prof.display_name||"未設定")+'</b></div>'
         +   '<div class="set-row"><span>ユーザーID</span><b>'+(prof.user_id?"@"+esc(prof.user_id):"未設定")+'</b></div>'
-        +   (email ? '<div class="set-row"><span>メール</span><b>'+esc(email)+'</b></div>' : '')
+        + '</div>'
+        + '<div class="set-sec"><div class="set-k">ログイン情報</div>'
+        +   emailRow
+        +   pwRow
+        +   '<p class="set-help">'+ (hasGoogle && hasPassword ? "Google認証とメール認証の両方で利用できます。" : hasGoogle ? "Googleアカウントで認証しています。" : "メールアドレスとパスワードで認証しています。") +'</p>'
         + '</div>'
         + '<button class="set-item" id="setProfile">プロフィールを編集</button>'
         + '<a class="set-item" href="terms.html">利用規約</a>'
@@ -699,7 +719,92 @@ function openSettings(){
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
       $("setDelete").onclick = deleteAccount;
+      var seBtn = $("setEmail"); if (seBtn) seBtn.onclick = function(){ openEmailChange(email, hasPassword); };
+      var spBtn = $("setPw"); if (spBtn) spBtn.onclick = function(){ openPasswordChange(email); };
     });
+}
+
+// メールアドレス変更ダイアログ（既存auth-overlayを再利用）
+function openEmailChange(currentEmail, hasPassword){
+  if (!sb) return;
+  closeDrawer();
+  $("authOverlay").hidden = false;
+  $("authBody").innerHTML =
+    '<h2>メールアドレスを変更</h2>'
+    + '<p class="auth-hint" style="display:block;margin:0 0 6px;font-size:.78rem;color:var(--sub)">新しいメールアドレスを入力してください。変更には<b>新旧両方のメール</b>に送られる確認リンクの操作が必要です。</p>'
+    + '<label class="auth-label">現在のメール</label>'
+    + '<input class="auth-field" type="email" value="'+esc(currentEmail||"")+'" disabled>'
+    + '<label class="auth-label">新しいメールアドレス</label>'
+    + '<input id="emNew" class="auth-field" type="email" autocapitalize="off" autocomplete="off">'
+    + (hasPassword
+        ? '<label class="auth-label">現在のパスワード<span class="auth-hint">（本人確認のため）</span></label><input id="emPw" class="auth-field" type="password" autocomplete="current-password">'
+        : '')
+    + '<div class="auth-err" id="emErr"></div>'
+    + '<button class="auth-submit" id="emSubmit">変更を送信</button>'
+    + '<div class="auth-foot"><button class="auth-link" id="emCancel">キャンセル</button></div>';
+  $("emCancel").onclick = closeAuth;
+  $("emSubmit").onclick = function(){
+    var newEm = $("emNew").value.trim();
+    var pw = hasPassword ? $("emPw").value : "";
+    var err = $("emErr"), btn = $("emSubmit");
+    if (!EMAIL_RE.test(newEm)){ err.textContent = "メールアドレスの形式が正しくありません"; return; }
+    if (newEm === currentEmail){ err.textContent = "現在と同じメールアドレスです"; return; }
+    if (hasPassword && !pw){ err.textContent = "現在のパスワードを入力してください"; return; }
+    btn.disabled = true; err.textContent = "送信中…";
+    // パスワードがある場合は再認証して本人確認
+    var preAuth = hasPassword
+      ? sb.auth.signInWithPassword({ email: currentEmail, password: pw })
+      : Promise.resolve({ data:{}, error:null });
+    preAuth.then(function(pre){
+      if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
+      sb.auth.updateUser({ email: newEm }).then(function(res){
+        if (res.error){ btn.disabled = false; err.textContent = "送信に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_email_change_failed", { reason: res.error.message.slice(0,80) }); return; }
+        if (typeof track === "function") track("settings_email_change_requested", {});
+        $("authBody").innerHTML = '<h2>確認メールを送信しました</h2>'
+          + '<p style="font-size:.92rem;line-height:1.7;color:var(--sub);margin:0 0 14px">新しいメールアドレス <b>'+esc(newEm)+'</b> 宛にリンクを送りました。<br>リンクをクリックすると変更が完了します。</p>'
+          + '<p style="font-size:.78rem;color:var(--sub);margin:0 0 14px">※ セキュリティのため、旧メールアドレスにも通知が届きます。</p>'
+          + '<button class="auth-submit" id="emOk">閉じる</button>';
+        $("emOk").onclick = closeAuth;
+      });
+    });
+  };
+}
+
+// パスワード変更ダイアログ
+function openPasswordChange(currentEmail){
+  if (!sb) return;
+  closeDrawer();
+  $("authOverlay").hidden = false;
+  $("authBody").innerHTML =
+    '<h2>パスワードを変更</h2>'
+    + '<label class="auth-label">現在のパスワード</label>'
+    + '<input id="pwOld" class="auth-field" type="password" autocomplete="current-password">'
+    + '<label class="auth-label">新しいパスワード<span class="auth-hint">（6文字以上）</span></label>'
+    + '<input id="pwNew" class="auth-field" type="password" autocomplete="new-password">'
+    + '<label class="auth-label">新しいパスワード（確認）</label>'
+    + '<input id="pwNew2" class="auth-field" type="password" autocomplete="new-password">'
+    + '<div class="auth-err" id="pwErr"></div>'
+    + '<button class="auth-submit" id="pwSubmit">変更する</button>'
+    + '<div class="auth-foot"><button class="auth-link" id="pwCancel">キャンセル</button></div>';
+  $("pwCancel").onclick = closeAuth;
+  $("pwSubmit").onclick = function(){
+    var oldPw = $("pwOld").value, newPw = $("pwNew").value, newPw2 = $("pwNew2").value;
+    var err = $("pwErr"), btn = $("pwSubmit");
+    if (!oldPw){ err.textContent = "現在のパスワードを入力してください"; return; }
+    if (newPw.length < 6){ err.textContent = "新しいパスワードは6文字以上にしてください"; return; }
+    if (newPw !== newPw2){ err.textContent = "新しいパスワードが一致しません"; return; }
+    if (newPw === oldPw){ err.textContent = "新しいパスワードが現在と同じです"; return; }
+    btn.disabled = true; err.textContent = "変更中…";
+    sb.auth.signInWithPassword({ email: currentEmail, password: oldPw }).then(function(pre){
+      if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
+      sb.auth.updateUser({ password: newPw }).then(function(res){
+        if (res.error){ btn.disabled = false; err.textContent = "変更に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_password_change_failed", { reason: res.error.message.slice(0,80) }); return; }
+        if (typeof track === "function") track("settings_password_changed", {});
+        closeAuth();
+        if (typeof toast === "function") toast("パスワードを変更しました");
+      });
+    });
+  };
 }
 
 // お問い合わせ（ログイン必須・inquiriesに保存）
