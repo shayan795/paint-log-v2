@@ -4,10 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ヘルプ — 塗装レシピ録</title>
+<!-- DARKMODE:START — 戻すときはこの<script>とCSSの"DARKMODE:START〜END"を削除 -->
+<script>(function(){try{
+  var v=localStorage.getItem('paintlog_theme')||'auto';
+  var d=(v==='dark')||(v==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=d?'dark':'light';
+}catch(e){}})();</script>
+<!-- DARKMODE:END -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{ --paper:#FAFAF7; --ink:#1E2430; --sub:#67707F; --accent:#D8442E; --line:#C9CFD9 }
+  /* DARKMODE:START */
+  [data-theme="dark"]{ --paper:#15181E; --ink:#E8EAEE; --sub:#9CA9B6; --line:#2C313B }
+  [data-theme="dark"] p,[data-theme="dark"] li{color:#CFD4DC}
+  [data-theme="dark"] .foot{border-top-color:var(--line)}
+  /* DARKMODE:END */
   *{box-sizing:border-box}
   body{margin:0; background:var(--paper); color:var(--ink);
     font-family:"Zen Kaku Gothic New",-apple-system,"Hiragino Sans",sans-serif; line-height:1.85}

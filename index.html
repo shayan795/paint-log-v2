@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>塗装レシピ録 — Paint Log</title>
+<!-- DARKMODE:START — 戻すときはこの<script>、CSSの"DARKMODE:START〜END"、設定UIの"DARKMODE:UI"を削除 -->
+<script>(function(){try{
+  var v=localStorage.getItem('paintlog_theme')||'auto';
+  var d=(v==='dark')||(v==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=d?'dark':'light';
+}catch(e){}})();</script>
+<!-- DARKMODE:END -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -16,8 +23,62 @@
   --paper:#FAFAF7; --ink:#1E2430; --sub:#67707F; --line:#C9CFD9; --line-d:#9AA3B2;
   --bp:#2B4C9B; --bp-bg:#EDF1F9; --accent:#E01E28; --warn:#C8322A;
   --card:#fff;
+  --surface:#FFFFFF; --surface-2:#FFFCF7; --bg-app:#E7E7E2;
   --topbar-h:52px; --bottomnav-h:60px; --maxw:480px;
 }
+/* ============ DARKMODE:START ============ */
+[data-theme="dark"]{
+  --paper:#15181E;
+  --ink:#E8EAEE;
+  --sub:#9CA9B6;
+  --line:#2C313B;
+  --line-d:#3E4654;
+  --bp:#7B95CC;
+  --bp-bg:#1F2738;
+  --warn:#FF6B5F;
+  --card:#1E2128;
+  --surface:#1E2128;
+  --surface-2:#232730;
+  --bg-app:#0E1014;
+}
+[data-theme="dark"] body{background:var(--bg-app)}
+[data-theme="dark"] .app{box-shadow:0 0 0 1px var(--line)}
+[data-theme="dark"] .topbar{background:rgba(21,24,30,.93)}
+[data-theme="dark"] .searchbox,
+[data-theme="dark"] .note-box,
+[data-theme="dark"] .drawer-btn,
+[data-theme="dark"] .onb-card,
+[data-theme="dark"] .auth-card,
+[data-theme="dark"] .auth-g,
+[data-theme="dark"] .pf-uploadbtn,
+[data-theme="dark"] .pf-edit,
+[data-theme="dark"] .pf-tab,
+[data-theme="dark"] .tag-back,
+[data-theme="dark"] .rep-btn,
+[data-theme="dark"] .pf-field,
+[data-theme="dark"] .set-item,
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder{color:#5E6A78}
+[data-theme="dark"] .notif-row:hover{background:var(--surface-2)}
+[data-theme="dark"] .fullview-body iframe{background:var(--surface)}
+[data-theme="dark"] .pf-tab.on{background:var(--surface);border-color:var(--ink);color:var(--ink)}
+/* テーマトグル */
+.set-theme{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--surface)}
+.set-theme-btn{padding:6px 12px;font:inherit;font-size:.8rem;background:transparent;border:none;color:var(--sub);cursor:pointer;border-left:1px solid var(--line)}
+.set-theme-btn:first-child{border-left:none}
+.set-theme-btn.on{background:var(--accent);color:#fff;font-weight:700}
+[data-theme="dark"] .set-theme{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .set-theme-btn{color:var(--sub);border-left-color:var(--line)}
+[data-theme="dark"] .set-theme-btn.on{background:var(--accent);color:#fff}
+/* PCサイドバー（大画面時） */
+@media(min-width:961px){
+  [data-theme="dark"] body{background:var(--bg-app)}
+  [data-theme="dark"] .app{background:var(--paper)}
+}
+/* ============ DARKMODE:END ============ */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
@@ -730,6 +791,17 @@ function openSettings(){
         +   '<label class="set-row" style="cursor:pointer"><span>コメント通知を受け取る</span><input type="checkbox" id="setNotifComments"'+(prof.notify_comments === false ? '' : ' checked')+'></label>'
         +   '<p class="set-help">あなたの投稿に新しいコメントが付いた時に、アプリ内のベル🔔に通知が届きます。</p>'
         + '</div>'
+        // DARKMODE:UI
+        + '<div class="set-sec"><div class="set-k">外観（テーマ）</div>'
+        +   '<div class="set-row"><span>表示モード</span>'
+        +     '<span class="set-theme" role="radiogroup" aria-label="表示モード">'
+        +       '<button type="button" class="set-theme-btn" data-theme-set="auto">自動</button>'
+        +       '<button type="button" class="set-theme-btn" data-theme-set="light">ライト</button>'
+        +       '<button type="button" class="set-theme-btn" data-theme-set="dark">ダーク</button>'
+        +     '</span>'
+        +   '</div>'
+        +   '<p class="set-help">「自動」は端末（OS）の設定に合わせます。夜は端末が暗ければ自動で暗くなります。</p>'
+        + '</div>'
         + '<button class="set-item" id="setProfile">プロフィールを編集</button>'
         + '<a class="set-item" href="terms.html">利用規約</a>'
         + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
@@ -740,6 +812,22 @@ function openSettings(){
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
       $("setDelete").onclick = deleteAccount;
+      // DARKMODE:UI — テーマトグルの初期状態反映とクリック処理
+      try {
+        var curTheme = localStorage.getItem('paintlog_theme') || 'auto';
+        document.querySelectorAll('.set-theme-btn').forEach(function(b){
+          b.classList.toggle('on', b.dataset.themeSet === curTheme);
+          b.onclick = function(){
+            var t = b.dataset.themeSet;
+            try { localStorage.setItem('paintlog_theme', t); } catch(_){}
+            // 即時反映
+            var isDark = (t === 'dark') || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+            document.querySelectorAll('.set-theme-btn').forEach(function(x){ x.classList.toggle('on', x.dataset.themeSet === t); });
+            if (typeof track === "function") track("settings_theme_changed", { value: t });
+          };
+        });
+      } catch(_){}
       var ncEl = $("setNotifComments");
       if (ncEl) ncEl.onchange = function(){
         var v = !!ncEl.checked;
