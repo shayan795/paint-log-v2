@@ -360,8 +360,8 @@ td.rowphoto{text-align:center;vertical-align:middle}
 }
 
 /* 色グループ写真(閲覧ビュー) */
-.vr-photo{margin-top:8px}
-.vr-photo img{width:100%;max-width:120px;aspect-ratio:1/1;object-fit:cover;object-position:var(--pp,50% 50%);border:1px solid var(--line);border-radius:6px;display:block}  /* 正方形にクロップ。投稿者が決めた中心位置(--pp)を反映 */
+.vr-photo{margin-top:8px;display:block;max-width:520px}  /* 親divの幅を画像と一致させる(赤丸の%位置がPC/スマホで統一されるよう) */
+.vr-photo img{width:100%;height:auto;aspect-ratio:1/1;object-fit:cover;object-position:var(--pp,50% 50%);border:1px solid var(--line);border-radius:6px;display:block}  /* 正方形にクロップ。投稿者が決めた中心位置(--pp)を反映 */
 .vr-photo-cell{display:none}  /* PCでは専用セルを隠す(写真は部位名の下に表示) */
 @media(max-width:640px){
   .vrecipe-table td.vr-part .vr-photo{display:none}        /* 見出しの写真は隠す */
@@ -589,8 +589,7 @@ body{background-image:none}
   /* 購入リンクは次行へ */
   .vrecipe-table td.vr-cell{flex-wrap:wrap}
   .vrecipe-table td.vr-cell .vr-buylinks{flex-basis:100%}
-  /* PC：画像を大きく（カード幅いっぱい・最大520px） */
-  .vr-photo img{max-width:520px;width:100%}
+  /* PC：画像サイズはベース定義(.vr-photo max-width:520px) と完全一致＝赤丸の%位置がスマホと統一 */
   /* PC専用に追加していた scrollの外枠は不要（trごとに枠を持つ） */
   #viewMode .scroll{border:none !important;border-radius:0 !important;overflow:visible !important}
 }
@@ -2927,6 +2926,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       td.addEventListener('click', function(){
         td.closest('tr').classList.toggle('acc-closed');
         refreshBtnLabel();
+      });
+    });
+    // PC限定：tr 全体（見出し以外の余白）クリックでも閉じてれば開ける
+    table.querySelectorAll('tbody tr:not([data-acc-tr-bound])').forEach(function(tr){
+      tr.setAttribute('data-acc-tr-bound','1');
+      tr.addEventListener('click', function(e){
+        if (window.matchMedia('(max-width:640px)').matches) return;       // モバイルは見出しタップのみ
+        if (e.target.closest('.vr-part, a, button, input, textarea, select, .vr-buylinks, .vr-comment')) return;
+        if (tr.classList.contains('acc-closed')){ tr.classList.remove('acc-closed'); refreshBtnLabel(); }
       });
     });
     // 初期：全て閉じる（描画後1回だけ）
