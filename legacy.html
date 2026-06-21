@@ -204,7 +204,12 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 @media(max-width:640px){
   .vrecipe-table thead{display:none}
   .vrecipe-table, .vrecipe-table tbody, .vrecipe-table tr, .vrecipe-table td{display:block;width:100%}
-  .vrecipe-table tr{border:1px solid var(--line);margin-bottom:14px;background:#fff;border-radius:12px;overflow:hidden}
+  .vrecipe-table tr{border:1px solid var(--line);margin-bottom:14px;background:#fff;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  /* カード内の並び順：見出し → 画像 → コメント → 塗料セル群 */
+  .vrecipe-table td.vr-part{order:1}
+  .vrecipe-table td.vr-photo-cell{order:2}
+  .vrecipe-table td.vr-comment-cell{order:3}
+  .vrecipe-table td.vr-cell, .vrecipe-table td.vrecipe-empty{order:4}
   .vrecipe-table td{border:none;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
   .vrecipe-table td:last-child{border-bottom:none}
   .vrecipe-table td.vr-part{font-size:1rem;font-weight:700;background:var(--bp-bg);border-bottom:1px solid var(--line);padding:11px 14px;display:block;
