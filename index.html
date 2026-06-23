@@ -136,10 +136,15 @@ button{font-family:inherit}
 .brand-mark{height:40px; width:auto}
 .brand-word{height:62px; width:auto; margin-top:6px}
 /* テキスト版のワードマーク（モバイル） */
+/* BRANDPOLISH:START — 戻すときはこのブロック内の追記分を削除 */
 .brand-textword{display:flex;flex-direction:column;align-items:center;line-height:1.05;color:#BE2A33;text-align:center}
-.brand-textword .b-title{font-size:1.35rem;font-weight:700;letter-spacing:.08em}
-.brand-textword .b-sub{font-size:.72rem;letter-spacing:.18em;margin-top:4px;font-weight:600}
+.brand-textword .b-title{font-size:1.4rem;font-weight:800;letter-spacing:.1em;text-shadow:0 1px 0 rgba(0,0,0,.04)}
+.brand-textword .b-sub{font-size:.7rem;letter-spacing:.22em;margin-top:6px;font-weight:700;display:flex;align-items:center;gap:8px;opacity:.85}
+.brand-textword .b-sub::before,
+.brand-textword .b-sub::after{content:"";width:16px;height:1px;background:currentColor;opacity:.55;flex:none}
 [data-theme="dark"] .brand-textword{color:#E8606A}
+[data-theme="dark"] .brand-textword .b-title{text-shadow:0 1px 0 rgba(0,0,0,.4)}
+/* BRANDPOLISH:END */
 [data-theme="dark"] .brand-logo{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
 /* スマホ：上部「塗装レシピ録」を中央に（アバター左・ベル右はそのまま） */
 @media(max-width:899px){
