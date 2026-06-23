@@ -281,6 +281,11 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 /* 作品タイトルバンド */
 .vband{padding:20px 0 16px;border-bottom:1px solid var(--line)}
 .vband-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.vband .v-share{flex:none;align-self:flex-start;padding:6px 9px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-d);background:#fff;color:var(--sub);border-radius:8px;cursor:pointer;font:inherit;font-size:.72rem;line-height:1}
+.vband .v-share:hover{border-color:var(--ink);color:var(--ink)}
+.vband .v-share svg{width:18px;height:18px;display:block}
+[data-theme="dark"] .vband .v-share{background:var(--surface);border-color:var(--line);color:var(--sub)}
+[data-theme="dark"] .vband .v-share:hover{color:var(--ink);border-color:var(--ink)}
 .vband .vtitle{font-size:1.45rem;font-weight:700;line-height:1.2;letter-spacing:.01em}
 .vband .vtitle::after{content:"";display:block;width:32px;height:3px;background:var(--accent);margin-top:8px}
 .vband .vauthor{font-size:.8rem;color:var(--sub);margin-top:4px;font-family:"IBM Plex Mono",monospace}
@@ -2526,10 +2531,22 @@ function renderViewMode(){
         <div class="vtitle">${esc(state.kit || "無題のレシピ")}</div>
         ${authorHtml}
       </div>
+      <button type="button" class="v-share" id="vShare" aria-label="この投稿を共有" title="共有">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
+          <polyline points="16 6 12 2 8 6"/>
+          <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+      </button>
     </div>
     ${methodsHtml}
     ${state.memo ? `<div class="vmeta-memo"><span class="vmeta-memo-label">制作コメント</span>${esc(state.memo)}</div>` : ""}`;
   thumb.after(band);
+  // 共有ボタン：Web Share API → fallback で X 投稿インテント
+  var shareBtn = document.getElementById("vShare");
+  if (shareBtn) shareBtn.onclick = function(){ shareRecipe(); };
+  // タブタイトルを投稿タイトルに合わせる（共有時のリンクプレビュー向上）
+  document.title = (state.kit ? String(state.kit).trim() + " — " : "") + "塗装レシピ録 / Paint Log";
 
   // --- レシピ表(閲覧用・PCは表/スマホはカード型に切替) ---
   const vt = document.getElementById("viewTable");
@@ -2618,6 +2635,28 @@ function renderViewMode(){
     if (!confirm("新しいレシピを最初から作りますか?(今表示中のレシピは消えません。URLは残ります)")) return;
     location.hash = ""; location.reload();
   };
+}
+
+/* ===================== 共有（Web Share API → X投稿インテント） ===================== */
+function shareRecipe(){
+  var title = (state && state.kit ? String(state.kit).trim() : "") || "塗装レシピ";
+  var author = state && state.author ? String(state.author).trim() : "";
+  // URLは #編集モード等のハッシュを除いた本体
+  var url = location.href.split("#")[0];
+  var text = "🎨 " + title + " の塗装レシピ" + (author ? " by " + author : "") + "\n\n#塗装レシピ録 #ガンプラ #プラモデル";
+  if (typeof window.track === "function") window.track("recipe_shared", { recipe_id: typeof currentRecipeId !== "undefined" ? currentRecipeId : null });
+  if (navigator.share){
+    navigator.share({ title: title + " — 塗装レシピ録", text: text, url: url }).catch(function(e){
+      if (e && e.name === "AbortError") return;
+      openTweetIntent(text, url);
+    });
+    return;
+  }
+  openTweetIntent(text, url);
+}
+function openTweetIntent(text, url){
+  var tweetUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text) + "&url=" + encodeURIComponent(url);
+  window.open(tweetUrl, "_blank", "noopener,noreferrer");
 }
 
 /* 制作者欄がX(Twitter)のID/URLなら本人のXプロフィールURLを返す。それ以外はnull */
