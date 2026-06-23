@@ -128,12 +128,14 @@ button{font-family:inherit}
 /* アバター画像（url優先）を円に収める共通ルール */
 .avatar-btn img, .drawer-head .av img, .sb-av img{width:100%; height:100%; object-fit:cover; display:block}
 .drawer-head .av, .sb-av{overflow:hidden}
-.brand{display:flex; flex-direction:column; line-height:1.05}
+.brand{display:flex; align-items:center; gap:6px; line-height:1}
 .brand .name{font-size:1rem; font-weight:700; letter-spacing:.05em; display:flex; align-items:center; gap:7px}
 .brand .name::before{content:""; width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
 .brand .tag{font-size:.55rem; letter-spacing:.3em; color:var(--sub); text-transform:uppercase; margin-left:17px}
-.brand-logo{height:38px; width:auto; display:block; object-fit:contain}
-[data-theme="dark"] .brand-logo{filter:brightness(1.15)}
+.brand-logo{display:block; object-fit:contain}
+.brand-mark{height:34px; width:auto}
+.brand-word{height:22px; width:auto}
+[data-theme="dark"] .brand-logo{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
 /* スマホ：上部「塗装レシピ録」を中央に（アバター左・ベル右はそのまま） */
 @media(max-width:899px){
   .topbar .brand{position:absolute; left:50%; transform:translateX(-50%); align-items:center; text-align:center}
@@ -433,8 +435,10 @@ textarea.pf-field{resize:vertical; line-height:1.6}
     position:fixed; top:0; left:0; bottom:0; width:232px; padding:18px 14px;
     background:#fff; border-right:1px solid var(--line); z-index:40;
   }
-  .sb-logo{display:flex; align-items:center; gap:8px; font-weight:700; font-size:1.12rem; padding:6px 8px 14px}
-  .sb-logo .dot{width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
+  .sb-logo{display:flex; align-items:center; justify-content:flex-start; padding:4px 8px 14px}
+  .sb-logo .dot{display:none}
+  .sb-logo-img{height:96px; width:auto; max-width:100%; display:block; object-fit:contain}
+  [data-theme="dark"] .sb-logo-img{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
   .sb-search{display:flex; align-items:center; gap:8px; background:#F1F1ED; border:1px solid var(--line); border-radius:22px; padding:9px 14px; margin-bottom:10px}
   .sb-search svg{width:17px; height:17px; stroke:var(--sub); fill:none; stroke-width:1.8; flex:none}
   .sb-search input{border:none; outline:none; background:transparent; font:inherit; width:100%; color:var(--ink)}
@@ -472,7 +476,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 
   <!-- 左サイドバー（PCのみ表示。クックパッドPC風） -->
   <aside class="sidebar">
-    <div class="sb-logo"><span class="dot"></span>塗装レシピ録</div>
+    <div class="sb-logo"><img class="sb-logo-img" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></div>
     <div class="sb-search">
       <svg id="searchIconSidebar" viewBox="0 0 24 24" style="cursor:pointer"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="search" id="searchInputSidebar" placeholder="探す" enterkeyhint="search">
@@ -498,7 +502,8 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <header class="topbar">
     <button class="avatar-btn" id="avatarBtn" aria-label="メニュー">K</button>
     <div class="brand">
-      <img class="brand-logo" src="assets/logo-mark.png" alt="塗装レシピ録 / Plamo-Paint">
+      <img class="brand-logo brand-mark" src="assets/logo-mark.png" alt="">
+      <img class="brand-logo brand-word" src="assets/logo-word.png" alt="塗装レシピ録 / Plamo-Paint">
     </div>
     <button class="bell-btn" id="bellBtn" aria-label="通知">
       <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>

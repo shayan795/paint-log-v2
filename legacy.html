@@ -147,12 +147,13 @@ body{font-family:"Zen Kaku Gothic New",sans-serif;background:var(--paper);color:
   background-size:28px 28px}
 .wrap{max-width:1100px;margin:0 auto}
 header{padding:34px 0 24px;margin:0 0 16px;border-bottom:2px solid var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
-header h1{font-size:2.1rem;font-weight:700;letter-spacing:.12em;display:flex;align-items:center;gap:12px;line-height:1.1}
-header h1::before{content:"";width:18px;height:18px;background:var(--accent);border-radius:50%;flex:none}
+header h1{font-size:2.1rem;font-weight:700;letter-spacing:.12em;display:flex;align-items:center;gap:12px;line-height:1.1;margin:0}
 header h1 small{display:none}
 header .ver{display:none}
 header .htag{font-family:"IBM Plex Mono",monospace;font-size:.66rem;font-weight:600;letter-spacing:.34em;text-transform:uppercase;color:var(--sub);margin-top:9px}
-@media(max-width:560px){header h1{font-size:1.6rem}}
+header h1 .hd-logo{height:96px;width:auto;display:block;object-fit:contain}
+[data-theme="dark"] header h1 .hd-logo{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
+@media(max-width:560px){header h1 .hd-logo{height:72px}}
 .js-goview{cursor:pointer}
 header .ver{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--sub)}
 .card{background:#fff;border:1px solid var(--line-d);margin-bottom:14px;padding:16px}
@@ -386,8 +387,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .nav-drawer{position:fixed;top:0;left:0;height:100%;width:min(320px,82vw);background:var(--paper);z-index:80;transform:translateX(-100%);transition:transform .24s ease;display:flex;flex-direction:column;border-right:2px solid var(--ink)}
 .nav-drawer.show{transform:translateX(0)}
 .nav-head{padding:22px 20px 18px;border-bottom:2px solid var(--ink);display:flex;align-items:center;justify-content:space-between}
-.nav-head .nav-logo{font-weight:700;font-size:1.05rem;letter-spacing:.1em;display:flex;align-items:center;gap:9px}
-.nav-head .nav-logo::before{content:"";width:12px;height:12px;background:var(--accent);border-radius:50%}
+.nav-head .nav-logo{display:flex;align-items:center}
+.nav-head .nav-logo .nav-logo-img{height:48px;width:auto;display:block;object-fit:contain}
+[data-theme="dark"] .nav-head .nav-logo-img{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
 .nav-close{border:none;background:none;font-size:1.4rem;line-height:1;color:var(--sub);cursor:pointer;padding:0 4px}
 .nav-list{padding:14px;display:flex;flex-direction:column;gap:8px}
 .nav-item{display:block;width:100%;text-align:left;border:1px solid var(--line-d);background:#fff;padding:14px 16px;cursor:pointer;font-family:inherit}
@@ -408,7 +410,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .about-hero .ah-logo::before{content:"";width:18px;height:18px;background:var(--accent);border-radius:50%}
 .about-hero .ah-tag{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.34em;text-transform:uppercase;color:var(--sub);margin-top:10px}
 .about-hero .ah-logo-img{display:inline-block;max-width:280px;width:62%;height:auto;cursor:pointer}
-[data-theme="dark"] .about-hero .ah-logo-img{filter:brightness(1.15)}
+[data-theme="dark"] .about-hero .ah-logo-img{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
 .about-lead{font-size:1.12rem;line-height:1.95;margin:28px auto;font-weight:500;text-align:center;max-width:30em}
 .share-tweet-btn{display:inline-block;font-family:inherit;font-size:.95rem;font-weight:700;padding:11px 22px;background:#000;color:#fff;border-radius:10px;text-decoration:none;cursor:pointer}
 .share-tweet-btn:hover{background:#222}
@@ -505,8 +507,10 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
   .l-topbar{display:none}
   body{padding-top:24px;padding-left:262px}
   .sidebar{display:flex;flex-direction:column;gap:5px;position:fixed;top:0;left:0;bottom:0;width:232px;padding:18px 14px;background:#fff;border-right:1px solid var(--line);z-index:70}
-  .sidebar .sb-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.12rem;padding:6px 8px 14px;color:inherit;text-decoration:none}
-  .sidebar .sb-logo .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
+  .sidebar .sb-logo{display:flex;align-items:center;justify-content:flex-start;padding:4px 8px 14px;color:inherit;text-decoration:none}
+  .sidebar .sb-logo .dot{display:none}
+  .sidebar .sb-logo .sb-logo-img{height:96px;width:auto;max-width:100%;display:block;object-fit:contain}
+  [data-theme="dark"] .sidebar .sb-logo-img{filter:brightness(1.5) saturate(1.35) contrast(1.05)}
   .sidebar .sb-search{display:flex;align-items:center;gap:8px;background:#F1F1ED;border:1px solid var(--line);border-radius:22px;padding:9px 14px;margin-bottom:10px}
   .sidebar .sb-search svg{width:17px;height:17px;stroke:var(--sub);fill:none;stroke-width:1.8;flex:none}
   .sidebar .sb-search input{border:none;outline:none;background:transparent;font:inherit;width:100%;color:var(--ink)}
@@ -843,7 +847,7 @@ body{background-image:none}
 
 <!-- v2: PC左サイドバー（index.html と同じ。どの画面からもメインへ戻れる） -->
 <aside class="sidebar">
-  <a class="sb-logo" href="index.html"><span class="dot"></span>塗装レシピ録</a>
+  <a class="sb-logo" href="index.html"><img class="sb-logo-img" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></a>
   <div class="sb-search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     <input type="search" placeholder="探す">
@@ -867,7 +871,7 @@ body{background-image:none}
 <div class="nav-overlay" id="navOverlay"></div>
 <nav class="nav-drawer" id="navDrawer">
   <div class="nav-head">
-    <div class="nav-logo js-goview" title="閲覧ページ">塗装レシピ録</div>
+    <div class="nav-logo js-goview" title="閲覧ページ"><img class="nav-logo-img" src="assets/logo-word.png" alt="塗装レシピ録 / Plamo-Paint"></div>
     <button class="nav-close" id="navClose" aria-label="閉じる">×</button>
   </div>
   <div class="nav-list" id="navList"></div>
@@ -959,8 +963,7 @@ body{background-image:none}
 <!-- ============ 作成モード(本人が編集する画面) ============ -->
 <div id="editMode">
 <header>
-  <h1 class="js-goview" title="閲覧ページを見る">塗装レシピ録</h1>
-  <div class="htag">Paint Log</div>
+  <h1 class="js-goview" title="閲覧ページを見る"><img class="hd-logo" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></h1>
 </header>
 <div class="modetabs">
   <button class="modetab" id="tabViewFromEdit">閲覧プレビュー</button>
