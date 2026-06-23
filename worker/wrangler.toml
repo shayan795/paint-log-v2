@@ -3,12 +3,10 @@ main = "src/worker.js"
 compatibility_date = "2026-06-01"
 workers_dev = true
 
-# 動作確認中は routes を無効化（V1 paintlog がまだ本番ドメインを保持）
-# 確認後にコメント解除して再デプロイ → V1 を削除する流れにする
-# routes = [
-#   { pattern = "plamo-paint.com/*",     zone_name = "plamo-paint.com" },
-#   { pattern = "www.plamo-paint.com/*", zone_name = "plamo-paint.com" },
-# ]
+routes = [
+  { pattern = "plamo-paint.com/*",     zone_name = "plamo-paint.com" },
+  { pattern = "www.plamo-paint.com/*", zone_name = "plamo-paint.com" },
+]
 
 # 公開して問題ない値（anon publishable key も含む）
 [vars]
