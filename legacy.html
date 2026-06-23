@@ -2824,18 +2824,11 @@ document.getElementById("tabEditActive").onclick = () => { /* 既に編集中 */
 /* ===================== 起動(モード振り分け) ===================== */
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 (function boot(){
-  // 短縮URL /r/:id — サーバーからレシピを読み込んで閲覧表示
-  const pm = location.pathname.match(/^\/r\/([A-Za-z0-9]+)/);
-  if (pm){
+  // 短縮URL /r/:id は V2 の loadById (Supabase経由) に任せるので、ここではスキップ
+  if (/^\/r\/[A-Za-z0-9\-]+/.test(location.pathname)){
+    // editMode を隠し、viewMode を表示。loadById が後段で本物の内容を入れる
     document.getElementById("editMode").style.display = "none";
-    fetch(API_BASE + "/api/recipe/" + pm[1])
-      .then(r => { if(!r.ok) throw 0; return r.json(); })
-      .then(rec => {
-        if (rec && rec.state){ state = migrate(rec.state); currentPage = "view"; renderViewMode();
-          document.getElementById("editMode").style.display = "none"; }
-        else showPage("about");
-      })
-      .catch(() => showPage("about"));
+    var vm = document.getElementById("viewMode"); if (vm) vm.style.display = "block";
     return;
   }
   const hash = location.hash;
@@ -2852,6 +2845,12 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   if (hash === "#edit"){ showPage("edit"); return; }
   if (hash === "#view"){ showPage("view"); return; }
   if (hash === "#about"){ showPage("about"); return; }
+  // ?id=xxx で来た場合は loadById が view へ切り替える。それ以外は about
+  if (new URLSearchParams(location.search).get("id")){
+    document.getElementById("editMode").style.display = "none";
+    var vm2 = document.getElementById("viewMode"); if (vm2) vm2.style.display = "block";
+    return;
+  }
   showPage("about");
 })();
 </script>
