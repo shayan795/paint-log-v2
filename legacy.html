@@ -954,7 +954,7 @@ body{background-image:none}
 
 <!-- ============ 閲覧モード(共有URLを開いた人が見る画面) ============ -->
 <div id="viewMode" style="display:none">
-  <div class="pv-banner" id="pvBanner">表示確認（プレビュー）です。まだ投稿されていません。下の「公開設定」から投稿できます。</div>
+  <div class="pv-banner" id="pvBanner" style="display:none">表示確認（プレビュー）です。まだ投稿されていません。下の「公開設定」から投稿できます。</div>
   <!-- 編集ボタンは vBar() が操作バーに移動するため、ここでは非表示で保持 -->
   <button class="v-edit-inline" id="tabEdit" style="display:none">編集する</button>
   <div id="viewHero"></div>
@@ -968,7 +968,7 @@ body{background-image:none}
     <div class="vsection-label" style="margin-top:24px">コメント <span id="cCount" class="c-count"></span></div>
     <div id="cSection" class="c-section"></div>
     <!-- v2: 公開フロー（押すまで投稿されない。プレビューの最後に配置） -->
-    <div class="publish-card" id="publishCard">
+    <div class="publish-card" id="publishCard" style="display:none">
       <h2>公開設定</h2>
       <div style="display:flex;gap:20px;margin-bottom:10px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="vis-view" value="public" checked>公開</label>
