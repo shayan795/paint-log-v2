@@ -1,0 +1,16 @@
+name = "paintlog-v2"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+routes = [
+  { pattern = "plamo-paint.com/*",     zone_name = "plamo-paint.com" },
+  { pattern = "www.plamo-paint.com/*", zone_name = "plamo-paint.com" },
+]
+
+# 公開して問題ない値（anon publishable key も含む）
+[vars]
+ORIGIN            = "https://raw.githubusercontent.com/shayan795/paint-log-v2/main"
+SITE              = "https://plamo-paint.com"
+SUPABASE_URL      = "https://zlkbaojclitlxshpxwpr.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_ZMaz3JjPfU0q_pq7Y9QwSQ_QimbhfgX"

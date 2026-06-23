@@ -2641,10 +2641,11 @@ function renderViewMode(){
 function shareRecipe(){
   var title = (state && state.kit ? String(state.kit).trim() : "") || "塗装レシピ";
   var author = state && state.author ? String(state.author).trim() : "";
-  // URLは #編集モード等のハッシュを除いた本体
-  var url = location.href.split("#")[0];
+  // 投稿済みなら短縮URL（動的OGPが効くドメイン）、未投稿（プレビュー）は現URLを使う
+  var rid = (typeof currentRecipeId !== "undefined" && currentRecipeId) ? currentRecipeId : null;
+  var url = rid ? ("https://plamo-paint.com/r/" + rid) : location.href.split("#")[0];
   var text = "🎨 " + title + " の塗装レシピ" + (author ? " by " + author : "") + "\n\n#塗装レシピ録 #ガンプラ #プラモデル";
-  if (typeof window.track === "function") window.track("recipe_shared", { recipe_id: typeof currentRecipeId !== "undefined" ? currentRecipeId : null });
+  if (typeof window.track === "function") window.track("recipe_shared", { recipe_id: rid });
   if (navigator.share){
     navigator.share({ title: title + " — 塗装レシピ録", text: text, url: url }).catch(function(e){
       if (e && e.name === "AbortError") return;
@@ -2884,10 +2885,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     for (var i=0;i<rs.length;i++) rs[i].checked = (rs[i].value === (isPublic ? "public" : "private"));
   }
 
-  // ?id=UUID があれば既存レシピを読み込む（RLSで0件＝非公開の他人/削除済み）
+  // ?id=UUID または /r/:id があれば既存レシピを読み込む（RLSで0件＝非公開の他人/削除済み）
   (function loadById(){
     if (!sb) return;
     var id = new URLSearchParams(location.search).get("id");
+    if (!id){
+      // 短縮URL /r/:id にも対応（Cloudflare Worker 経由でアクセスされた場合）
+      var m = location.pathname.match(/\/r\/([^\/?#]+)/);
+      if (m) id = m[1];
+    }
     if (!id) return;
     sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods,comments_disabled").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
