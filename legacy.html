@@ -286,6 +286,15 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .vband .v-share svg{width:18px;height:18px;display:block}
 [data-theme="dark"] .vband .v-share{background:var(--surface);border-color:var(--line);color:var(--sub)}
 [data-theme="dark"] .vband .v-share:hover{color:var(--ink);border-color:var(--ink)}
+/* 共有ポップオーバー（Xに直接飛ぶオプションを含む） */
+.share-pop{position:fixed;z-index:90;background:#fff;border:1px solid var(--line-d);border-radius:12px;box-shadow:0 8px 24px rgba(20,24,32,.18);padding:6px;min-width:200px;font-size:.9rem}
+.share-pop-backdrop{position:fixed;inset:0;z-index:89;background:transparent}
+.share-pop a,.share-pop button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font:inherit;color:var(--ink);text-decoration:none;text-align:left}
+.share-pop a:hover,.share-pop button:hover{background:#F4F0EB}
+.share-pop .si{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem}
+.share-pop .si-x{background:#000;color:#fff;border-radius:5px;font-family:"Helvetica Neue",Arial,sans-serif}
+[data-theme="dark"] .share-pop{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .share-pop a:hover,[data-theme="dark"] .share-pop button:hover{background:var(--surface-2)}
 .vband .vtitle{font-size:1.45rem;font-weight:700;line-height:1.2;letter-spacing:.01em}
 .vband .vtitle::after{content:"";display:block;width:32px;height:3px;background:var(--accent);margin-top:8px}
 .vband .vauthor{font-size:.8rem;color:var(--sub);margin-top:4px;font-family:"IBM Plex Mono",monospace}
@@ -2544,7 +2553,7 @@ function renderViewMode(){
   thumb.after(band);
   // 共有ボタン：Web Share API → fallback で X 投稿インテント
   var shareBtn = document.getElementById("vShare");
-  if (shareBtn) shareBtn.onclick = function(){ shareRecipe(); };
+  if (shareBtn) shareBtn.onclick = function(){ shareRecipe(this); };
   // タブタイトルを投稿タイトルに合わせる（共有時のリンクプレビュー向上）
   document.title = (state.kit ? String(state.kit).trim() + " — " : "") + "塗装レシピ録 / Paint Log";
 
@@ -2638,26 +2647,59 @@ function renderViewMode(){
 }
 
 /* ===================== 共有（Web Share API → X投稿インテント） ===================== */
-function shareRecipe(){
+function shareRecipe(anchorEl){
   var title = (state && state.kit ? String(state.kit).trim() : "") || "塗装レシピ";
   var author = state && state.author ? String(state.author).trim() : "";
-  // 投稿済みなら短縮URL（動的OGPが効くドメイン）、未投稿（プレビュー）は現URLを使う
   var rid = (typeof currentRecipeId !== "undefined" && currentRecipeId) ? currentRecipeId : null;
   var url = rid ? ("https://plamo-paint.com/r/" + rid) : location.href.split("#")[0];
   var text = "🎨 " + title + " の塗装レシピ" + (author ? " by " + author : "") + "\n\n#塗装レシピ録 #ガンプラ #プラモデル";
   if (typeof window.track === "function") window.track("recipe_shared", { recipe_id: rid });
-  if (navigator.share){
-    navigator.share({ title: title + " — 塗装レシピ録", text: text, url: url }).catch(function(e){
-      if (e && e.name === "AbortError") return;
-      openTweetIntent(text, url);
-    });
-    return;
-  }
-  openTweetIntent(text, url);
+  openSharePopover(anchorEl, text, url);
 }
-function openTweetIntent(text, url){
+
+function openSharePopover(anchorEl, text, url){
+  closeSharePopover();
   var tweetUrl = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text) + "&url=" + encodeURIComponent(url);
-  window.open(tweetUrl, "_blank", "noopener,noreferrer");
+  var bd = document.createElement("div"); bd.className = "share-pop-backdrop"; bd.onclick = closeSharePopover;
+  var pop = document.createElement("div"); pop.className = "share-pop"; pop.id = "sharePop";
+  pop.innerHTML =
+    '<a href="'+tweetUrl+'" target="_blank" rel="noopener noreferrer" data-act="x"><span class="si si-x">𝕏</span><span>Xで投稿</span></a>'
+    + '<button type="button" data-act="copy"><span class="si">📋</span><span class="copy-label">リンクをコピー</span></button>'
+    + (navigator.share ? '<button type="button" data-act="more"><span class="si">📤</span><span>その他で共有…</span></button>' : '');
+  document.body.appendChild(bd);
+  document.body.appendChild(pop);
+  // 位置：アンカーボタンの右下
+  var r = anchorEl && anchorEl.getBoundingClientRect ? anchorEl.getBoundingClientRect() : { right: window.innerWidth - 20, bottom: 60 };
+  var w = pop.offsetWidth, h = pop.offsetHeight;
+  var top = Math.min(r.bottom + 6, window.innerHeight - h - 8);
+  var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+  pop.style.top = top + "px";
+  pop.style.left = left + "px";
+  // X クリック直後にポップを閉じる
+  pop.querySelector('[data-act="x"]').addEventListener("click", function(){ setTimeout(closeSharePopover, 60); });
+  pop.querySelector('[data-act="copy"]').onclick = function(){
+    var label = pop.querySelector(".copy-label");
+    var done = function(ok){ if (label) label.textContent = ok ? "コピーしました ✓" : "コピーに失敗"; setTimeout(closeSharePopover, 900); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(function(){ done(true); }, function(){ done(false); });
+    } else {
+      var ta = document.createElement("textarea"); ta.value = url; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(true); } catch(_){ done(false); } finally { ta.remove(); }
+    }
+  };
+  var more = pop.querySelector('[data-act="more"]');
+  if (more) more.onclick = function(){
+    closeSharePopover();
+    if (navigator.share){
+      navigator.share({ text: text, url: url }).catch(function(e){
+        if (e && e.name === "AbortError") return;
+      });
+    }
+  };
+}
+function closeSharePopover(){
+  var ex = document.getElementById("sharePop"); if (ex) ex.remove();
+  var bd = document.querySelector(".share-pop-backdrop"); if (bd) bd.remove();
 }
 
 /* 制作者欄がX(Twitter)のID/URLなら本人のXプロフィールURLを返す。それ以外はnull */
