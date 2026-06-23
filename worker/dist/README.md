@@ -1,1 +1,0 @@
-This folder contains the built output assets for the worker "paintlog-v2" generated at 2026-06-23T18:16:30.506Z.
