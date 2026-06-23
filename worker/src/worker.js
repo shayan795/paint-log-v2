@@ -37,16 +37,19 @@ async function getRecipeFromSupabase(env, id) {
   }
 }
 
-// レシピから OGP の説明文を作る（V1と同じ式）
+// レシピから OGP の説明文を作る
+// 既存塗料(c.i) と 自由入力(c.c) の両方をユニークに数える
 function buildDescription(rec, authorLabel) {
   const grid = rec && rec.grid || {};
   const rows = Array.isArray(grid.rows) ? grid.rows : [];
-  const paintNames = new Set();
+  const paintKeys = new Set();
   for (const row of rows) {
     if (row && row.cells) {
       for (const k of Object.keys(row.cells)) {
         const c = row.cells[k];
-        if (c && c.c) paintNames.add(c.c);
+        if (!c) continue;
+        if (typeof c.i === "number") paintKeys.add("i:" + c.i);
+        else if (c.c) paintKeys.add("c:" + c.c);
       }
     }
   }
@@ -54,7 +57,7 @@ function buildDescription(rec, authorLabel) {
   const bits = [];
   if (authorLabel) bits.push(`制作者 ${authorLabel}`);
   if (groups) bits.push(`${groups}色グループ`);
-  if (paintNames.size) bits.push(`使用塗料 ${paintNames.size}種`);
+  if (paintKeys.size) bits.push(`使用塗料 ${paintKeys.size}種`);
   if (!bits.length) bits.push("ガンプラ・模型の塗装レシピ");
   return bits.join(" / ") + " — 塗装レシピ録で記録・共有";
 }
