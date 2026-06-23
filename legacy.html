@@ -928,11 +928,8 @@ body{background-image:none}
 <!-- ============ 閲覧モード(共有URLを開いた人が見る画面) ============ -->
 <div id="viewMode" style="display:none">
   <div class="pv-banner" id="pvBanner">表示確認（プレビュー）です。まだ投稿されていません。下の「公開設定」から投稿できます。</div>
-  <div class="v-site-header">
-    <div class="v-site-logo js-goview" title="閲覧ページ">塗装レシピ録</div>
-    <div class="v-site-tag">Paint Log</div>
-    <button class="v-edit-inline" id="tabEdit">編集する</button>
-  </div>
+  <!-- 編集ボタンは vBar() が操作バーに移動するため、ここでは非表示で保持 -->
+  <button class="v-edit-inline" id="tabEdit" style="display:none">編集する</button>
   <div id="viewHero"></div>
   <div id="viewThumb"></div>
   <div id="viewBody">
