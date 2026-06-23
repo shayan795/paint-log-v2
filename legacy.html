@@ -407,6 +407,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .about-hero .ah-logo{font-size:2.1rem;font-weight:700;letter-spacing:.12em;display:inline-flex;align-items:center;gap:12px}
 .about-hero .ah-logo::before{content:"";width:18px;height:18px;background:var(--accent);border-radius:50%}
 .about-hero .ah-tag{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.34em;text-transform:uppercase;color:var(--sub);margin-top:10px}
+.about-hero .ah-logo-img{display:inline-block;max-width:280px;width:62%;height:auto;cursor:pointer}
+[data-theme="dark"] .about-hero .ah-logo-img{filter:brightness(1.15)}
 .about-lead{font-size:1.12rem;line-height:1.95;margin:28px auto;font-weight:500;text-align:center;max-width:30em}
 .share-tweet-btn{display:inline-block;font-family:inherit;font-size:.95rem;font-weight:700;padding:11px 22px;background:#000;color:#fff;border-radius:10px;text-decoration:none;cursor:pointer}
 .share-tweet-btn:hover{background:#222}
@@ -882,8 +884,7 @@ body{background-image:none}
     <button class="ab-bell" id="aboutBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
   </header>
   <div class="about-hero">
-    <div class="ah-logo" id="aboutLogo" title="メインへ戻る">塗装レシピ録</div>
-    <div class="ah-tag">Paint Log</div>
+    <img class="ah-logo-img" id="aboutLogo" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint" title="メインへ戻る">
   </div>
   <p class="about-lead">使った塗料を、もう一度たどれる。<br>プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。</p>
   <div class="about-sec">

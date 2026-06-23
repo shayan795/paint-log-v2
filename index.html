@@ -132,6 +132,8 @@ button{font-family:inherit}
 .brand .name{font-size:1rem; font-weight:700; letter-spacing:.05em; display:flex; align-items:center; gap:7px}
 .brand .name::before{content:""; width:10px; height:10px; border-radius:50%; background:var(--accent); flex:none}
 .brand .tag{font-size:.55rem; letter-spacing:.3em; color:var(--sub); text-transform:uppercase; margin-left:17px}
+.brand-logo{height:38px; width:auto; display:block; object-fit:contain}
+[data-theme="dark"] .brand-logo{filter:brightness(1.15)}
 /* スマホ：上部「塗装レシピ録」を中央に（アバター左・ベル右はそのまま） */
 @media(max-width:899px){
   .topbar .brand{position:absolute; left:50%; transform:translateX(-50%); align-items:center; text-align:center}
@@ -496,8 +498,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
   <header class="topbar">
     <button class="avatar-btn" id="avatarBtn" aria-label="メニュー">K</button>
     <div class="brand">
-      <span class="name">塗装レシピ録</span>
-      <span class="tag">Paint Log</span>
+      <img class="brand-logo" src="assets/logo-mark.png" alt="塗装レシピ録 / Plamo-Paint">
     </div>
     <button class="bell-btn" id="bellBtn" aria-label="通知">
       <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg>
