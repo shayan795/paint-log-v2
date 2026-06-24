@@ -274,6 +274,9 @@ button{font-family:inherit}
 /* 塗料の色チップ表示（塗料は写真が無いので色そのものを見せる） */
 .pp-thumb.pp-color{background:var(--ppc,#cccccc)}
 .pp-thumb.pp-color .ph-ico{display:none}
+.pp-thumb{position:relative}
+/* 作例写真の上に塗料の色を小さく重ねる（どの塗料の作例か一目で分かる） */
+.pp-swatch{position:absolute; left:8px; bottom:8px; width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .pp-uses{font-size:.66rem; color:var(--accent); font-weight:700; margin-top:2px}
 
 /* 下タブ */
@@ -2076,20 +2079,27 @@ function renderTrending(){
 function renderPaints(){
   var grid = $("paintGrid"); if (!grid) return;
   function paintCard(opts){
-    // opts: { label, brand, hex, uses, img }
+    // opts: { label, brand, hex, uses, img, sampleId }
     var card = document.createElement("button");
     card.className = "paint-post";
     var thumb;
     if (opts.img){
-      thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt=""></span>';
+      // その塗料を使った作例の写真を引用（色チップより魅力的）。色は左下に小さく重ねる
+      thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">'
+        + (opts.hex ? '<span class="pp-swatch" style="background:'+esc(opts.hex)+'"></span>' : '')
+        + '</span>';
     } else {
+      // 作例がまだ無い塗料は色そのものを大きく見せる
       thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'"></span>';
     }
     card.innerHTML = thumb
       + '<div class="pp-cap">'+esc(opts.label)+'</div>'
       + '<div class="pp-sub">'+esc(opts.brand)+'</div>'
       + (opts.uses ? '<div class="pp-uses">'+opts.uses+'件の作例</div>' : '');
-    card.addEventListener("click", function(){ openStub(opts.brand+" "+opts.label); });
+    card.addEventListener("click", function(){
+      if (opts.sampleId) location.href = "legacy.html?id=" + opts.sampleId + "#view";  // 作例があればその投稿へ
+      else openStub(opts.brand + " " + opts.label);
+    });
     grid.appendChild(card);
   }
   function showMock(){
@@ -2103,7 +2113,7 @@ function renderPaints(){
     var rows = (res && !res.error && res.data) ? res.data : [];
     if (rows.length < 4){ showMock(); return; }   // データが薄い間はMOCK
     grid.innerHTML = "";
-    rows.forEach(function(r){ paintCard({ label:r.label, brand:r.brand, hex:r.hex, uses:r.uses }); });
+    rows.forEach(function(r){ paintCard({ label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id }); });
   }, showMock);
 }
 

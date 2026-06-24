@@ -740,14 +740,17 @@ end $$;
 -- ----------------------------------------------------------------------------
 -- 定番塗料：本塗装系の工程で使われた塗料を使用投稿数の多い順。サフ/下地/トップ/スミは除外。
 create or replace function public.popular_paints(limit_n int default 12)
-returns table(pid text, label text, brand text, hex text, uses bigint)
+returns table(pid text, label text, brand text, hex text, uses bigint, sample_cover text, sample_id uuid)
 language sql stable security definer set search_path = public as $$
   select
     coalesce(rp.paint_id, 'free:'||rp.free_name) as pid,
     coalesce(pt.name, rp.free_name) as label,
     coalesce(pt.brand, '自由入力') as brand,
     pt.hex as hex,
-    count(distinct rp.recipe_id) as uses
+    count(distinct rp.recipe_id) as uses,
+    -- その塗料を使った投稿のうち、閲覧数が高いものの cover を代表作例として1枚
+    (array_agg(r.cover_url order by r.view_count desc) filter (where r.cover_url is not null))[1] as sample_cover,
+    (array_agg(r.id order by r.view_count desc) filter (where r.cover_url is not null))[1] as sample_id
   from public.recipe_paints rp
   join public.recipes r on r.id = rp.recipe_id and r.is_public = true
   left join public.paints pt on pt.id = rp.paint_id
