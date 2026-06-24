@@ -8,6 +8,14 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<!-- PWA:START -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#FAFAF7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15181E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="塗装レシピ録">
+<!-- PWA:END -->
 <!-- DARKMODE:START — 戻すときはこの<script>とCSSの"DARKMODE:START〜END"を削除 -->
 <script>(function(){try{
   var v=localStorage.getItem('paintlog_theme')||'light';
@@ -3861,5 +3869,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 </script>
 <!-- COMMENTS:END -->
 
+<!-- PWA:SW — 共有リンク(/r/:id)から入った人にもホーム画面追加を可能にする -->
+<script>
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("/sw.js").catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

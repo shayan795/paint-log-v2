@@ -24,6 +24,14 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<!-- PWA:START — 戻すときはこの<link rel=manifest>＋apple/theme meta＋末尾のSW登録scriptを削除 -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#FAFAF7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15181E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="塗装レシピ録">
+<!-- PWA:END -->
 <!-- DARKMODE:START — 戻すときはこの<script>、CSSの"DARKMODE:START〜END"、設定UIの"DARKMODE:UI"を削除 -->
 <script>(function(){try{
   var v=localStorage.getItem('paintlog_theme')||'light';
@@ -2111,6 +2119,14 @@ renderPaints();
   if (h === "reports" || h === "inquiries" || h === "analytics"){ showTab("discover", true); _pendingAdminView = h; return; }   // 運営画面は管理者確定後に
   showTab("discover", true);
 })();
+</script>
+<!-- PWA:SW — サービスワーカー登録（ホーム画面追加を可能にする。常に最新方針） -->
+<script>
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("/sw.js").catch(function(){ /* 失敗しても通常閲覧は継続 */ });
+  });
+}
 </script>
 </body>
 </html>

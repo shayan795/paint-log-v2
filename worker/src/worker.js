@@ -68,6 +68,8 @@ const CT_BY_EXT = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
   webp: "image/webp", svg: "image/svg+xml", ico: "image/x-icon",
   txt: "text/plain; charset=utf-8", woff: "font/woff", woff2: "font/woff2",
+  webmanifest: "application/manifest+json; charset=utf-8",
+  xml: "application/xml; charset=utf-8",
 };
 function ctForPath(p) {
   const m = p.match(/\.([a-z0-9]+)$/i);
