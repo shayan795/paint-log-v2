@@ -2681,29 +2681,8 @@ function openSharePopover(anchorEl, text, url){
   var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
   pop.style.top = top + "px";
   pop.style.left = left + "px";
-  // X クリック: 所有者なら最新の「塗装レシピ」文字付きカバーを生成・反映してから X を開く（V1方式）。
-  // ポップアップブロック回避のため空タブを同期で開き、生成完了後にそのタブを X へ遷移させる。
-  pop.querySelector('[data-act="x"]').addEventListener("click", function(e){
-    e.preventDefault();
-    var xa = this;
-    var win = window.open("about:blank", "_blank");
-    try { if (win && win.document){ win.document.write('<!doctype html><meta charset="utf-8"><title>共有の準備中…</title><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#888">共有用の画像を準備しています…</body>'); } } catch(_){}
-    var lbl = xa.querySelector('span:last-child'); var orig = lbl ? lbl.textContent : "";
-    if (lbl) lbl.textContent = "画像を準備中…";
-    var opened = false;
-    var go = function(){
-      if (opened) return; opened = true;
-      if (win && !win.closed){ win.location.href = tweetUrl; }
-      else { window.open(tweetUrl, "_blank", "noopener,noreferrer"); }
-      closeSharePopover();
-    };
-    if (typeof window.__ensureFreshCoverForShare === "function"){
-      window.__ensureFreshCoverForShare(function(){ go(); });
-      setTimeout(go, 8000);   // 保険: 8秒で必ず開く
-    } else {
-      go();
-    }
-  });
+  // X クリック直後にポップを閉じる（カバーは投稿時に文字付きで保存済みなので共有時の生成は不要）
+  pop.querySelector('[data-act="x"]').addEventListener("click", function(){ setTimeout(closeSharePopover, 60); });
   pop.querySelector('[data-act="copy"]').onclick = function(){
     var label = pop.querySelector(".copy-label");
     var done = function(ok){ if (label) label.textContent = ok ? "コピーしました ✓" : "コピーに失敗"; setTimeout(closeSharePopover, 900); };
@@ -2948,54 +2927,6 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); });
     });
   }
-  // 旧フォーマット（中央の「塗装レシピ」文字なし）で保存された既存投稿のカバーを、
-  // 所有者が自分の投稿を開いた時に一度だけ文字付きへ自動更新する。
-  // localStorage フラグで「1投稿1回」に抑え、無駄なアップロードを防ぐ。
-  function regenerateCoverIfNeeded(uid, recipeId, oldCoverUrl){
-    if (!recipeId) return;
-    try { if (localStorage.getItem("covertext_" + recipeId) === "1") return; } catch(_){}
-    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
-    if (!has) return;   // 画像が無い投稿はカバー自体が無いのでスキップ
-    generateCardUrl("dark", function(durl){
-      uploadImage(uid, durl, "cover").then(function(url){
-        if (!url) return;
-        sb.from("recipes").update({ cover_url: url }).eq("id", recipeId).then(function(r){
-          if (r && !r.error){
-            try { localStorage.setItem("covertext_" + recipeId, "1"); } catch(_){}
-            // 旧カバーが新カバーと別ファイルなら掃除（失敗は無視）
-            var oldPath = toStoragePath(oldCoverUrl);
-            var newPath = toStoragePath(url);
-            if (oldPath && newPath && oldPath !== newPath){
-              sb.storage.from("recipes").remove([oldPath]).then(function(){}, function(){});
-            }
-          }
-        });
-      }, function(){});
-    });
-  }
-  // 共有時用: 所有者なら最新の「塗装レシピ」文字付きカバーを生成・反映してから cb(url) を呼ぶ。
-  // 非所有者・画像なし・既に反映済みなら即 cb(null)（既存 cover_url をそのまま使う）。
-  // shareRecipe（グローバル）から呼べるよう window に公開する。
-  window.__ensureFreshCoverForShare = function(cb){
-    cb = cb || function(){};
-    if (!sb || !currentRecipeId){ cb(null); return; }
-    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
-    if (!has){ cb(null); return; }                                  // 画像が無い投稿はカバー無し
-    try { if (localStorage.getItem("covertext_" + currentRecipeId) === "1"){ cb(null); return; } } catch(_){}  // 反映済み
-    sb.auth.getSession().then(function(s){
-      var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;
-      if (!uid || uid !== currentOwnerId){ cb(null); return; }       // 所有者以外は cover_url を更新できない
-      generateCardUrl("dark", function(durl){
-        uploadImage(uid, durl, "cover").then(function(url){
-          if (!url){ cb(null); return; }
-          sb.from("recipes").update({ cover_url: url }).eq("id", currentRecipeId).then(function(r){
-            if (r && !r.error){ try { localStorage.setItem("covertext_" + currentRecipeId, "1"); } catch(_){} cb(url); }
-            else cb(null);
-          }, function(){ cb(null); });
-        }, function(){ cb(null); });
-      });
-    }, function(){ cb(null); });
-  };
   // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
   function setVis(isPublic){
     var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
@@ -3067,7 +2998,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         var owner = !!uid && uid === currentOwnerId;
         var edit = document.getElementById("tabEdit");
         if (edit) edit.style.display = owner ? "" : "none";
-        if (owner){ ensureDeleteBtn(); regenerateCoverIfNeeded(uid, currentRecipeId, rec.cover_url); }
+        if (owner){ ensureDeleteBtn(); }
         else {
           removeDeleteBtn();
           if (uid){ ensureSaveBtn(uid); ensureReportBtn(uid); }   // 他人の投稿（ログイン中）：保存＋通報
