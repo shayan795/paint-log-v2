@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# 内部・ユーティリティページはインデックス不要
+Disallow: /diagnostics.html
+Disallow: /goodbye.html
+
+Sitemap: https://plamo-paint.com/sitemap.xml

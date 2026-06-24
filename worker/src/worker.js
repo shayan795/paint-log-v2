@@ -124,10 +124,49 @@ async function serveRecipePage(env, id) {
   });
 }
 
+// 動的サイトマップ: 固定ページ＋全公開投稿の /r/:id を列挙してGoogleに知らせる
+async function serveSitemap(env) {
+  const SITE = env.SITE;
+  const staticPages = [
+    { loc: SITE + "/",            priority: "1.0", changefreq: "daily"   },
+    { loc: SITE + "/course.html", priority: "0.6", changefreq: "monthly" },
+    { loc: SITE + "/help.html",   priority: "0.4", changefreq: "monthly" },
+    { loc: SITE + "/terms.html",  priority: "0.2", changefreq: "yearly"  },
+    { loc: SITE + "/privacy.html",priority: "0.2", changefreq: "yearly"  },
+  ];
+
+  let recipes = [];
+  try {
+    const u = `${env.SUPABASE_URL}/rest/v1/recipes?is_public=eq.true&select=id,created_at&order=created_at.desc&limit=5000`;
+    const res = await fetch(u, {
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`, Accept: "application/json" },
+      cf: { cacheTtl: 600 },
+    });
+    if (res.ok) recipes = await res.json();
+  } catch (_) {}
+
+  const urls = [];
+  for (const p of staticPages) {
+    urls.push(`<url><loc>${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`);
+  }
+  for (const r of recipes) {
+    const lastmod = r.created_at ? `<lastmod>${String(r.created_at).slice(0,10)}</lastmod>` : "";
+    urls.push(`<url><loc>${SITE}/r/${r.id}</loc>${lastmod}<changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+  }
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;
+  return new Response(xml, {
+    headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // /sitemap.xml — 公開投稿を動的列挙
+    if (path === "/sitemap.xml") return serveSitemap(env);
 
     // /r/:id — 短縮URL
     if (path.startsWith("/r/")) {
