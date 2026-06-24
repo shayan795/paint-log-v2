@@ -736,5 +736,70 @@ do $$ declare r record; begin
 end $$;
 
 -- ============================================================================
+-- 段5: ランキング集計関数（公開投稿のみ・本塗装中心で集計）
+-- ----------------------------------------------------------------------------
+-- 定番塗料：本塗装系の工程で使われた塗料を使用投稿数の多い順。サフ/下地/トップ/スミは除外。
+create or replace function public.popular_paints(limit_n int default 12)
+returns table(pid text, label text, brand text, hex text, uses bigint)
+language sql stable security definer set search_path = public as $$
+  select
+    coalesce(rp.paint_id, 'free:'||rp.free_name) as pid,
+    coalesce(pt.name, rp.free_name) as label,
+    coalesce(pt.brand, '自由入力') as brand,
+    pt.hex as hex,
+    count(distinct rp.recipe_id) as uses
+  from public.recipe_paints rp
+  join public.recipes r on r.id = rp.recipe_id and r.is_public = true
+  left join public.paints pt on pt.id = rp.paint_id
+  where coalesce(rp.proc_name,'') !~ '(サフ|下地|サーフェ|プライマ|トップ|クリア|スミ)'
+  group by 1,2,3,4
+  order by uses desc, label
+  limit limit_n;
+$$;
+
+-- 急上昇塗料：直近7日の使用数 ×（直近7日 ÷ 累計）。新しさの割合が高く最近多い塗料が上位。
+create or replace function public.rising_paints(limit_n int default 12)
+returns table(pid text, label text, brand text, hex text, recent bigint, total bigint, score numeric)
+language sql stable security definer set search_path = public as $$
+  with base as (
+    select
+      coalesce(rp.paint_id, 'free:'||rp.free_name) as pid,
+      coalesce(pt.name, rp.free_name) as label,
+      coalesce(pt.brand,'自由入力') as brand,
+      pt.hex as hex,
+      count(distinct rp.recipe_id) as total,
+      count(distinct rp.recipe_id) filter (where r.created_at > now() - interval '7 days') as recent
+    from public.recipe_paints rp
+    join public.recipes r on r.id = rp.recipe_id and r.is_public = true
+    left join public.paints pt on pt.id = rp.paint_id
+    where coalesce(rp.proc_name,'') !~ '(サフ|下地|サーフェ|プライマ|トップ|クリア|スミ)'
+    group by 1,2,3,4
+  )
+  select pid, label, brand, hex, recent, total,
+    round((recent::numeric * (recent::numeric / nullif(total,0)))::numeric, 3) as score
+  from base
+  where recent > 0
+  order by score desc, recent desc
+  limit limit_n;
+$$;
+
+-- 人気塗装方法：公開投稿の methods タグを集計（型は text[]/jsonb どちらでも to_jsonb で吸収）
+create or replace function public.popular_methods(limit_n int default 12)
+returns table(method text, uses bigint)
+language sql stable security definer set search_path = public as $$
+  select m as method, count(*) as uses
+  from public.recipes r,
+       lateral jsonb_array_elements_text(to_jsonb(r.methods)) as m
+  where r.is_public = true
+  group by m
+  order by uses desc, m
+  limit limit_n;
+$$;
+
+grant execute on function public.popular_paints(int)  to anon, authenticated;
+grant execute on function public.rising_paints(int)   to anon, authenticated;
+grant execute on function public.popular_methods(int) to anon, authenticated;
+
+-- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
