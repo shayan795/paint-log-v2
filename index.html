@@ -1171,7 +1171,7 @@ function openNotifications(){
           + '<div class="notif-main"><div class="notif-title">'+esc(n.title||"")+'</div>'
           + '<div class="notif-body">'+esc(n.body||"")+'</div></div>'
           + '<div class="notif-time">'+esc(relTime(n.created_at))+'</div>';
-        row.onclick = function(){ if (n.link) location.href = n.link; };
+        row.onclick = function(){ goToNotifLink(n.link); };
         box.appendChild(row);
       });
       // 開いた瞬間に未読を全件既読化
@@ -1180,6 +1180,23 @@ function openNotifications(){
         sb.from("notifications").update({ read_at: new Date().toISOString() }).in("id", unreadIds).then(refreshBellBadge);
       }
     });
+}
+// 通知クリック時のリンク処理。
+// 同一ページ(index.html)内のハッシュ(reports/inquiries等)はリロードせず該当画面を直接開く。
+// （管理者の通報通知 index.html#reports が「押しても何も起きない」問題の根治）
+function goToNotifLink(link){
+  if (!link) return;
+  var m = link.match(/^(?:index\.html)?#(.+)$/);
+  if (m){
+    var h = m[1];
+    if (h === "reports"){ openReportsAdmin(); return; }
+    if (h === "inquiries"){ openInquiriesAdmin(); return; }
+    if (h === "analytics"){ openAnalyticsAdmin(); return; }
+    if (h === "settings"){ openSettings(); return; }
+    if (h === "notifications"){ openNotifications(); return; }
+    setHash(h); return;
+  }
+  location.href = link;   // 別ページ(legacy.html?id=... 等)は通常遷移
 }
 // ベル🔔バッジ：未読数を取得して bell-btn に表示
 function refreshBellBadge(){
@@ -1213,7 +1230,7 @@ var sb = (window.supabase && window.PAINTLOG_CONFIG && PAINTLOG_CONFIG.SUPABASE_
   ? window.supabase.createClient(PAINTLOG_CONFIG.SUPABASE_URL, PAINTLOG_CONFIG.SUPABASE_ANON_KEY)
   : null;
 
-var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false, _pendingNotifications = false;
+var currentUserId = null, currentName = "", _namePrompted = false, currentIsAdmin = false, _pendingProfile = false, _pendingNotifications = false, _pendingAdminView = null;
 
 /* ===== 段7-3.6 イベント計測（プロダクト・アナリティクス） ===== */
 // 30分非活動でリセットする session_id。匿名でも同一訪問を1セッションに束ねる
@@ -1660,11 +1677,20 @@ function applySession(session){
         refreshBellBadge();   // ログイン後に未読数を表示
       });
     // 管理者判定は is_admin 列を読まずサーバ関数で（誰が管理者かを一般に見せない）
-    sb.rpc("is_admin").then(function(a){ currentIsAdmin = !!(a && a.data === true); renderDrawer(); });
+    sb.rpc("is_admin").then(function(a){
+      currentIsAdmin = !!(a && a.data === true); renderDrawer();
+      // リロードで #reports 等に来た管理者は、管理者確定後に該当画面を開く
+      if (currentIsAdmin && _pendingAdminView){
+        var v = _pendingAdminView; _pendingAdminView = null;
+        if (v === "reports") openReportsAdmin();
+        else if (v === "inquiries") openInquiriesAdmin();
+        else if (v === "analytics") openAnalyticsAdmin();
+      } else { _pendingAdminView = null; }
+    });
   } else {
     setAuthUI(null, null);
     if (!$("screen-records").hidden) renderRecords();
-    _pendingProfile = false; _pendingNotifications = false;
+    _pendingProfile = false; _pendingNotifications = false; _pendingAdminView = null;
     setBellBadge(0);
   }
 }
@@ -2073,6 +2099,7 @@ renderPaints();
   if (um){ showTab("discover", true); openProfile(decodeURIComponent(um[1])); return; }
   if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // 自分のプロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
   if (h === "notifications"){ showTab("discover", true); _pendingNotifications = true; return; }   // 通知一覧もセッション確定後に
+  if (h === "reports" || h === "inquiries" || h === "analytics"){ showTab("discover", true); _pendingAdminView = h; return; }   // 運営画面は管理者確定後に
   showTab("discover", true);
 })();
 </script>
