@@ -2927,6 +2927,24 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); });
     });
   }
+  // 旧フォーマット（中央の「塗装レシピ」文字なし）で保存された既存投稿向け。
+  // 所有者が自分の投稿を開いた時、画面には何も出さず裏でカバーを文字付きへ更新する（空白タブ等は一切なし）。
+  // ct2_<id> フラグで「1投稿1回」に抑える。
+  function silentRefreshCover(uid, recipeId, oldCoverUrl){
+    if (!uid || !recipeId) return;
+    try { if (localStorage.getItem("ct2_" + recipeId) === "1") return; } catch(_){}
+    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
+    if (!has) return;
+    makeCover(uid).then(function(url){
+      if (!url){ return; }
+      sb.from("recipes").update({ cover_url: url }).eq("id", recipeId).then(function(r){
+        if (!r || r.error) return;
+        try { localStorage.setItem("ct2_" + recipeId, "1"); } catch(_){}
+        var oldPath = toStoragePath(oldCoverUrl), newPath = toStoragePath(url);
+        if (oldPath && newPath && oldPath !== newPath){ sb.storage.from("recipes").remove([oldPath]).then(function(){}, function(){}); }
+      }, function(){});
+    });
+  }
   // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
   function setVis(isPublic){
     var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
@@ -2998,7 +3016,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         var owner = !!uid && uid === currentOwnerId;
         var edit = document.getElementById("tabEdit");
         if (edit) edit.style.display = owner ? "" : "none";
-        if (owner){ ensureDeleteBtn(); }
+        if (owner){ ensureDeleteBtn(); silentRefreshCover(uid, currentRecipeId, rec.cover_url); }
         else {
           removeDeleteBtn();
           if (uid){ ensureSaveBtn(uid); ensureReportBtn(uid); }   // 他人の投稿（ログイン中）：保存＋通報
