@@ -751,6 +751,9 @@ var MOCK = {
 var $ = function(id){ return document.getElementById(id); };
 var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); };
+// URLサニタイズ：http(s)のみ許可し javascript:/data: 等のスキームをブロック（保存型XSS対策）。
+// 無効なら空文字を返す（呼び出し側でリンク化せずプレーン表示する）。
+var safeUrl = function(u){ u = String(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
 
 /* ----------------------------- 下タブ切替 ----------------------------- */
 var screens = { discover: $("screen-discover"), records: $("screen-records") };
@@ -1575,8 +1578,8 @@ function renderProfileView(prof, isSelf){
   var bio  = prof.bio || "";
   var link = prof.link || "";
   $("fvTitle").textContent = "プロフィール";
-  var hdrStyle = prof.header_url ? ' style="background-image:url('+esc(prof.header_url)+')"' : '';
-  var avInner  = prof.avatar_url ? '<img src="'+esc(prof.avatar_url)+'" alt="">' : esc(ini);
+  var hdrStyle = safeUrl(prof.header_url) ? ' style="background-image:url('+esc(safeUrl(prof.header_url))+')"' : '';
+  var avInner  = safeUrl(prof.avatar_url) ? '<img src="'+esc(safeUrl(prof.avatar_url))+'" alt="">' : esc(ini);
   fullviewBody.innerHTML =
     '<div class="pf">'
     + '<div class="pf-header"'+hdrStyle+'></div>'
@@ -1586,7 +1589,7 @@ function renderProfileView(prof, isSelf){
     +   '<div class="pf-name">'+esc(name)+'</div>'
     +   (handle ? '<div class="pf-handle">'+esc(handle)+'</div>' : '')
     +   (bio ? '<div class="pf-bio">'+esc(bio)+'</div>' : '')
-    +   (link ? '<a class="pf-link" href="'+esc(link)+'" target="_blank" rel="noopener nofollow">'+esc(link)+'</a>' : '')
+    +   (link ? (safeUrl(link) ? '<a class="pf-link" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener nofollow">'+esc(link)+'</a>' : '<span class="pf-link">'+esc(link)+'</span>') : '')
     + '</div>'
     + '<div class="pf-postsec">'
     +   (isSelf
