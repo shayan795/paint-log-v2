@@ -433,6 +433,38 @@ drop trigger if exists trg_report_inserted on public.reports;
 create trigger trg_report_inserted after insert on public.reports
   for each row execute function public.on_report_inserted();
 
+-- 連投制限：通報は同一ユーザー30秒間隔（スパム/管理画面埋め立て防止・サーバ側で強制）
+create or replace function public.check_report_rate()
+returns trigger language plpgsql as $$
+declare last_at timestamptz;
+begin
+  if NEW.reporter_id is null then return NEW; end if;
+  select max(created_at) into last_at from public.reports where reporter_id = NEW.reporter_id;
+  if last_at is not null and now() - last_at < interval '30 seconds' then
+    raise exception '通報が連続しています。少し時間をおいてからお試しください。';
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_check_report_rate on public.reports;
+create trigger trg_check_report_rate before insert on public.reports
+  for each row execute function public.check_report_rate();
+
+-- 連投制限：お問い合わせは同一ユーザー60秒間隔
+create or replace function public.check_inquiry_rate()
+returns trigger language plpgsql as $$
+declare last_at timestamptz;
+begin
+  if NEW.user_id is null then return NEW; end if;
+  select max(created_at) into last_at from public.inquiries where user_id = NEW.user_id;
+  if last_at is not null and now() - last_at < interval '60 seconds' then
+    raise exception 'お問い合わせが連続しています。1分ほどおいてからお試しください。';
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_check_inquiry_rate on public.inquiries;
+create trigger trg_check_inquiry_rate before insert on public.inquiries
+  for each row execute function public.check_inquiry_rate();
+
 -- reports update（open→reviewed）→ 通報対象投稿の所有者へ report_reviewed
 create or replace function public.on_report_status_changed()
 returns trigger language plpgsql security definer set search_path = public as $$
