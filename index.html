@@ -883,11 +883,12 @@ function openSettings(){
         + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
         + '<a class="set-item" href="help.html">ヘルプ</a>'
         + '<button class="set-item" id="setLogout">ログアウト</button>'
-        + '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>'
+        // 管理者(運営)は誤操作で自分を消すとモデレーション不能になるため退会ボタンを出さない
+        + (currentIsAdmin ? '' : '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>')
         + '<p class="set-ver">塗装レシピ録 v2</p>';
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
-      $("setDelete").onclick = deleteAccount;
+      if ($("setDelete")) $("setDelete").onclick = deleteAccount;
       // DARKMODE:UI — テーマトグルの初期状態反映とクリック処理
       try {
         var curTheme = localStorage.getItem('paintlog_theme') || 'auto';
@@ -1916,10 +1917,11 @@ function renderDrawer(){
   }
   // ログイン中はメニュー一覧の最下部（プライバシーポリシーの下）に同じ形で並べる
   if (currentUserId){
-    [ { label:"別のアカウントでログイン", fn: switchAccount },
-      { label:"ログアウト",               fn: doLogout },
-      { label:"退会（アカウント削除）",     fn: deleteAccount, danger:true }
-    ].forEach(function(it){
+    var accountItems = [ { label:"別のアカウントでログイン", fn: switchAccount },
+      { label:"ログアウト",               fn: doLogout } ];
+    // 管理者(運営)は誤操作で自分を消すとモデレーション不能になるため退会を出さない
+    if (!currentIsAdmin) accountItems.push({ label:"退会（アカウント削除）", fn: deleteAccount, danger:true });
+    accountItems.forEach(function(it){
       var b = document.createElement("button");
       b.textContent = it.label;
       if (it.danger) b.className = "drawer-danger";
