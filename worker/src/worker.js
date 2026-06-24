@@ -112,6 +112,12 @@ async function serveRecipePage(env, id) {
       `<meta name="twitter:image" content="${esc(image)}">`;
 
     html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, `<!--OG_START-->${block}<!--OG_END-->`);
+
+    // クライアント側の Supabase ラウンドトリップを消すため、レシピ本体を script タグに埋め込む
+    // legacy.html の loadById がこれを優先的に使う
+    const initialData = JSON.stringify(rec).replace(/<\/script/gi, "<\\/script");
+    const inject = `<script id="__initial_recipe">window.__INITIAL_RECIPE__=${initialData};</script>`;
+    html = html.replace(/<\/head>/i, inject + "</head>");
   }
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },

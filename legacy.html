@@ -2912,12 +2912,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     if (src.indexOf("data:") !== 0) return Promise.resolve(src);
     return uploadImage(uid, src, tag);
   }
-  // カバー画像（カードから「塗装レシピ」文字を抜いたもの）を生成→アップロード
+  // カバー画像（閲覧ページのヒーローと同じ「塗装レシピ／PAINT RECIPE」文字付き）を生成→アップロード
+  // この cover_url は サイト内サムネ・OGP（X等）の両方で使われるので、両者で見た目を統一する
   function makeCover(uid){
     var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
     if (!has) return Promise.resolve(null);
     return new Promise(function(res){
-      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); }, { noTitle:true });
+      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); });
     });
   }
   // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
@@ -2936,13 +2937,20 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       if (m) id = m[1];
     }
     if (!id) return;
+    // 高速パス: Worker が HTML に埋め込んだ初期レシピがあればそれを使う（Supabase往復ゼロ）
+    if (window.__INITIAL_RECIPE__ && window.__INITIAL_RECIPE__.id === id){
+      applyRecipe(window.__INITIAL_RECIPE__);
+      return;
+    }
     sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods,comments_disabled").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
         var vb = document.getElementById("viewBody");
         if (vb) vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
         return;
       }
-      var rec = res.data;
+      applyRecipe(res.data);
+    });
+    function applyRecipe(rec){
       try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
       state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
@@ -2989,7 +2997,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
           if (uid) sb.rpc("is_admin").then(function(a){ if (a && a.data === true) ensureDeleteBtn(); });
         }
       });
-    });
+    }
   })();
 
   // 公開設定カード＋プレビューバナーの表示切替：編集→プレビュー時のみ出す（投稿閲覧では隠す）
