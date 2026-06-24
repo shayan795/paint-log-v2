@@ -296,7 +296,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .share-pop-backdrop{position:fixed;inset:0;z-index:89;background:transparent}
 .share-pop a,.share-pop button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font:inherit;color:var(--ink);text-decoration:none;text-align:left}
 .share-pop a:hover,.share-pop button:hover{background:#F4F0EB}
-.share-pop .si{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem}
+.share-pop .si{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:var(--ink)}
+.share-pop .si svg{width:19px;height:19px;display:block}
 .share-pop .si-x{background:#000;color:#fff;border-radius:5px;font-family:"Helvetica Neue",Arial,sans-serif}
 [data-theme="dark"] .share-pop{background:var(--surface);border-color:var(--line)}
 [data-theme="dark"] .share-pop a:hover,[data-theme="dark"] .share-pop button:hover{background:var(--surface-2)}
@@ -2669,8 +2670,8 @@ function openSharePopover(anchorEl, text, url){
   var pop = document.createElement("div"); pop.className = "share-pop"; pop.id = "sharePop";
   pop.innerHTML =
     '<a href="'+tweetUrl+'" target="_blank" rel="noopener noreferrer" data-act="x"><span class="si si-x">𝕏</span><span>Xで投稿</span></a>'
-    + '<button type="button" data-act="copy"><span class="si">📋</span><span class="copy-label">リンクをコピー</span></button>'
-    + (navigator.share ? '<button type="button" data-act="more"><span class="si">📤</span><span>その他で共有…</span></button>' : '');
+    + '<button type="button" data-act="copy"><span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></span><span class="copy-label">リンクをコピー</span></button>'
+    + (navigator.share ? '<button type="button" data-act="more"><span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg></span><span>その他で共有…</span></button>' : '');
   document.body.appendChild(bd);
   document.body.appendChild(pop);
   // 位置：アンカーボタンの右下
