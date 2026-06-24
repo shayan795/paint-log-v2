@@ -739,6 +739,7 @@ end $$;
 -- 段5: ランキング集計関数（公開投稿のみ・本塗装中心で集計）
 -- ----------------------------------------------------------------------------
 -- 定番塗料：本塗装系の工程で使われた塗料を使用投稿数の多い順。サフ/下地/トップ/スミは除外。
+drop function if exists public.popular_paints(int);   -- 戻り値の型を変えたので作り直し
 create or replace function public.popular_paints(limit_n int default 12)
 returns table(pid text, label text, brand text, hex text, uses bigint, sample_cover text, sample_id uuid)
 language sql stable security definer set search_path = public as $$
