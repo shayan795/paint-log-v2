@@ -179,6 +179,9 @@ button{font-family:inherit}
 .bell-btn svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7}
 .bell-btn{position:relative}
 .bell-badge{position:absolute; top:-2px; right:-2px; background:var(--accent); color:#fff; font-size:.6rem; font-weight:700; line-height:1; min-width:16px; height:16px; padding:0 4px; border-radius:8px; display:flex; align-items:center; justify-content:center; border:2px solid var(--paper)}
+/* PCサイドバーの「通知」タブ：バッジをベルアイコンの右上に重ねる（左上ロゴへ飛ぶのを防ぐ） */
+#sbBell{position:relative}
+#sbBell .bell-badge{top:6px; left:26px; right:auto}
 /* 通知一覧 */
 .notif-list{padding:6px 12px 24px}
 .notif-row{display:flex; align-items:flex-start; gap:10px; width:100%; padding:14px 12px; border:none; border-bottom:1px solid var(--line); background:none; text-align:left; font:inherit; cursor:pointer}
@@ -385,7 +388,9 @@ button{font-family:inherit}
 .tag-back{font:inherit; font-size:.85rem; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); padding:6px 14px; cursor:pointer; margin-bottom:12px}
 .tag-back:hover{border-color:var(--ink)}
 #screen-tag .view-title{margin-bottom:14px}
-.rep-card{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px}
+.rep-card{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; transition:opacity .15s}
+.rep-card.rep-done{opacity:.55; background:var(--surface-2,#FFFCF7)}
+.rep-card.rep-done .rep-reason::after{content:" ・対応済み"; color:var(--bp); font-size:.78rem; font-weight:700}
 .rep-reason{font-weight:700; color:var(--warn)}
 .rep-detail{font-size:.86rem; color:var(--ink); margin-top:4px; white-space:pre-wrap}
 .rep-meta{font-size:.74rem; color:var(--sub); margin-top:6px}
@@ -1718,12 +1723,14 @@ function makeDeleteBtn(table, id, card){
   };
   return b;
 }
-// 運営：対応済みのトグル（誤操作時に未対応へ戻せる。次回リロードで open のみが残る）
-function bindToggleDone(btn, table, id){
-  var current = "open";
+// 運営：対応済みのトグル（誤操作時に未対応へ戻せる）。
+// 削除しない限り一覧から消えない。reviewed はカードを淡色表示にして区別する。
+function bindToggleDone(btn, table, id, initial, card){
+  var current = (initial === "reviewed") ? "reviewed" : "open";
   function paint(){
     btn.textContent = current === "open" ? "対応済みにする" : "✓ 対応済み（取り消す）";
     btn.classList.toggle("on", current !== "open");
+    if (card) card.classList.toggle("rep-done", current !== "open");
   }
   paint();
   btn.onclick = function(){
@@ -1743,12 +1750,13 @@ function openReportsAdmin(){
   $("fvTitle").textContent = "通報一覧（運営）";
   fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
   fullview.hidden = false; setHash("reports");
+  // status で絞らず全件取得（対応済みも残す）。未対応(open)を上に、各群は新しい順
   sb.from("reports").select("id,reason,detail,status,created_at,recipe_id,recipes(title)")
-    .eq("status", "open").order("created_at", { ascending:false })
+    .order("status", { ascending:true }).order("created_at", { ascending:false })
     .then(function(res){
       if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
       var rows = res.data || [];
-      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>通報一覧</h2><p>未対応の通報はありません。</p></div>'; return; }
+      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>通報一覧</h2><p>通報はありません。</p></div>'; return; }
       var wrap = document.createElement("div"); wrap.style.padding = "16px";
       rows.forEach(function(r){
         var title = (r.recipes && r.recipes.title) ? r.recipes.title : "（無題/削除済み）";
@@ -1761,7 +1769,7 @@ function openReportsAdmin(){
         var view = document.createElement("button"); view.className = "rep-btn"; view.textContent = "投稿を見る";
         view.onclick = function(){ location.href = "legacy.html?id=" + r.recipe_id + "#view"; };
         var done = document.createElement("button"); done.className = "rep-btn";
-        bindToggleDone(done, "reports", r.id);
+        bindToggleDone(done, "reports", r.id, r.status, card);
         var del = makeDeleteBtn("reports", r.id, card);
         act.appendChild(view); act.appendChild(del); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
@@ -1776,12 +1784,13 @@ function openInquiriesAdmin(){
   $("fvTitle").textContent = "お問い合わせ一覧（運営）";
   fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
   fullview.hidden = false; setHash("inquiries");
+  // status で絞らず全件取得（対応済みも残す）。未対応(open)を上に、各群は新しい順
   sb.from("inquiries").select("id,category,body,status,created_at,user_id,profiles(user_id,display_name)")
-    .eq("status", "open").order("created_at", { ascending:false })
+    .order("status", { ascending:true }).order("created_at", { ascending:false })
     .then(function(res){
       if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
       var rows = res.data || [];
-      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>お問い合わせ一覧</h2><p>未対応のお問い合わせはありません。</p></div>'; return; }
+      if (!rows.length){ fullviewBody.innerHTML = '<div class="stub"><h2>お問い合わせ一覧</h2><p>お問い合わせはありません。</p></div>'; return; }
       var wrap = document.createElement("div"); wrap.style.padding = "16px";
       rows.forEach(function(r){
         var who = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "（不明）";
@@ -1792,7 +1801,7 @@ function openInquiriesAdmin(){
           + '<div class="rep-meta">'+esc(who)+' ／ '+esc(d)+'</div>';
         var act = document.createElement("div"); act.className = "rep-act";
         var done = document.createElement("button"); done.className = "rep-btn";
-        bindToggleDone(done, "inquiries", r.id);
+        bindToggleDone(done, "inquiries", r.id, r.status, card);
         var del = makeDeleteBtn("inquiries", r.id, card);
         act.appendChild(del); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
       });
