@@ -680,5 +680,61 @@ create policy comment_likes_delete on public.comment_likes
   for delete using (user_id = auth.uid());
 
 -- ============================================================================
+-- 段5: 集計の土台 — recipe_paints をグリッドから自動展開（人気塗料ランキング用）
+-- 前提: paints.sort_order = クライアント配列index = レシピ grid の c.i（整列seed適用済み）
+-- ----------------------------------------------------------------------------
+-- grid(JSONB) を読んで recipe_paints に展開する。
+-- grid.rows[].cells[<colId>] = {"i": sort_order} or {"c": "自由名"}
+-- grid.procs[] = [{"id":"q1","name":"サフ"} ...] で colId→工程名
+create or replace function public.sync_recipe_paints(p_recipe_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  g jsonb; proc_map jsonb := '{}'::jsonb; p jsonb; row_elem jsonb;
+  cell_key text; cell_val jsonb; v_proc text; v_paint_id text; v_free text;
+begin
+  select grid into g from public.recipes where id = p_recipe_id;
+  delete from public.recipe_paints where recipe_id = p_recipe_id;   -- 入れ直し
+  if g is null then return; end if;
+
+  if jsonb_typeof(g->'procs') = 'array' then
+    for p in select jsonb_array_elements(g->'procs') loop
+      proc_map := proc_map || jsonb_build_object(p->>'id', p->>'name');
+    end loop;
+  end if;
+
+  if jsonb_typeof(g->'rows') = 'array' then
+    for row_elem in select jsonb_array_elements(g->'rows') loop
+      if jsonb_typeof(row_elem->'cells') = 'object' then
+        for cell_key, cell_val in select key, value from jsonb_each(row_elem->'cells') loop
+          v_proc := proc_map->>cell_key; v_paint_id := null; v_free := null;
+          if cell_val ? 'i' then
+            select id into v_paint_id from public.paints where sort_order = (cell_val->>'i')::int;
+          elsif cell_val ? 'c' then
+            v_free := nullif(btrim(cell_val->>'c'), '');
+          end if;
+          if v_paint_id is not null or v_free is not null then
+            insert into public.recipe_paints(recipe_id, paint_id, free_name, proc_name)
+            values (p_recipe_id, v_paint_id, v_free, v_proc);
+          end if;
+        end loop;
+      end if;
+    end loop;
+  end if;
+end; $$;
+
+-- recipes の grid が入る/変わるたびに recipe_paints を同期（cover/view_count更新では発火しない）
+create or replace function public.trg_sync_recipe_paints()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin perform public.sync_recipe_paints(NEW.id); return NEW; end; $$;
+drop trigger if exists trg_recipe_paints_sync on public.recipes;
+create trigger trg_recipe_paints_sync after insert or update of grid on public.recipes
+  for each row execute function public.trg_sync_recipe_paints();
+
+-- 既存投稿を一括バックフィル（過去分も集計対象に）
+do $$ declare r record; begin
+  for r in select id from public.recipes loop perform public.sync_recipe_paints(r.id); end loop;
+end $$;
+
+-- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
