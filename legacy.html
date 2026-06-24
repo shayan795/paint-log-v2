@@ -2933,7 +2933,6 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 
   // ?id=UUID または /r/:id があれば既存レシピを読み込む（RLSで0件＝非公開の他人/削除済み）
   (function loadById(){
-    if (!sb) return;
     var id = new URLSearchParams(location.search).get("id");
     if (!id){
       // 短縮URL /r/:id にも対応（Cloudflare Worker 経由でアクセスされた場合）
@@ -2942,10 +2941,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     }
     if (!id) return;
     // 高速パス: Worker が HTML に埋め込んだ初期レシピがあればそれを使う（Supabase往復ゼロ）
+    // ★sb未初期化（CDN遅延・失敗）でも表示できるよう sb チェックより先に判定する
     if (window.__INITIAL_RECIPE__ && window.__INITIAL_RECIPE__.id === id){
       applyRecipe(window.__INITIAL_RECIPE__);
       return;
     }
+    // ここから先は Supabase からフェッチが必要
+    if (!sb) return;
     sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods,comments_disabled").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
         var vb = document.getElementById("viewBody");
@@ -2979,7 +2981,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       if (rec.is_public){
         try {
           var today = new Date().toISOString().slice(0,10);
-          if (localStorage.getItem("pv_" + rec.id) !== today){
+          if (sb && localStorage.getItem("pv_" + rec.id) !== today){
             localStorage.setItem("pv_" + rec.id, today);
             sb.rpc("increment_view", { rid: rec.id }).then(function(){}, function(){});
           }
@@ -2987,7 +2989,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         // 段7-3.6: イベント計測
         trackLegacy("view_recipe", { recipe_id: rec.id });
       }
-      // 所有者だけ「編集する」「削除」を出す
+      // 所有者だけ「編集する」「削除」を出す（sbがある場合のみ）
+      if (!sb) return;
       sb.auth.getSession().then(function(s){
         var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;
         var owner = !!uid && uid === currentOwnerId;
