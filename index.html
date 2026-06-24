@@ -271,6 +271,10 @@ button{font-family:inherit}
 .pp-thumb .ph-ico{font-size:1.6rem; color:var(--line-d)}
 .pp-cap{font-size:.82rem; font-weight:700; margin-top:7px; line-height:1.3}
 .pp-sub{font-size:.7rem; color:var(--sub); margin-top:1px}
+/* 塗料の色チップ表示（塗料は写真が無いので色そのものを見せる） */
+.pp-thumb.pp-color{background:var(--ppc,#cccccc)}
+.pp-thumb.pp-color .ph-ico{display:none}
+.pp-uses{font-size:.66rem; color:var(--accent); font-weight:700; margin-top:2px}
 
 /* 下タブ */
 .bottomnav{
@@ -1987,9 +1991,10 @@ function makeTile(item, hidden, onClick){
   return b;
 }
 var CAT_INITIAL = 4;   // 最初に見せる人気の塗装方法の数（残りは「もっと見る」で表示）
-function renderCategories(){
+// list: [{slug,label}] を受け取ってタイルを描く（実データ/プリセット共通）
+function renderCategoryTiles(list){
   var grid = $("catGrid"); grid.innerHTML = "";
-  PAINT_METHODS.forEach(function(m, i){
+  list.forEach(function(m, i){
     var fn = (function(s, l){ return function(){ openTagResults(s, l); }; })(m.slug, m.label);
     var tile = makeTile({ label:m.label, img:null }, i >= CAT_INITIAL, fn);
     tile.setAttribute("data-slug", m.slug);
@@ -1998,7 +2003,7 @@ function renderCategories(){
   loadTileCovers();   // 各タグの代表画像（最新公開投稿のcover）を後から差し込む
   var more = $("catMore");
   if (!more) return;
-  var extra = PAINT_METHODS.length - CAT_INITIAL;
+  var extra = list.length - CAT_INITIAL;
   if (extra > 0){
     more.style.display = "";
     more.textContent = "もっと見る（+" + extra + "）";
@@ -2010,6 +2015,18 @@ function renderCategories(){
   } else {
     more.style.display = "none";
   }
+}
+// 人気の塗装方法：実使用(popular_methods)が十分あれば使用数順（独自タグ含む）。薄ければプリセット一覧。
+function renderCategories(){
+  var presets = PAINT_METHODS.map(function(m){ return { slug:m.slug, label:m.label }; });
+  if (!sb || !sb.rpc){ renderCategoryTiles(presets); return; }
+  sb.rpc("popular_methods", { limit_n: 20 }).then(function(res){
+    var rows = (res && !res.error && res.data) ? res.data : [];
+    if (rows.length < 4){ renderCategoryTiles(presets); return; }
+    renderCategoryTiles(rows.map(function(r){
+      return { slug:r.method, label: METHOD_LABEL[r.method] || ("#"+r.method) };
+    }));
+  }, function(){ renderCategoryTiles(presets); });
 }
 // 人気の塗装方法タイルに代表画像（そのタグの人気＝トレンド最上位投稿のcover）を差し込む
 function loadTileCovers(){
@@ -2036,24 +2053,58 @@ function loadTileCovers(){
       }
     });
 }
+// 今話題の塗料作例：実投稿(公開・cover有)をトレンド順に。薄ければMOCK。
 function renderTrending(){
-  var grid = $("trendGrid"); if (!grid) return; grid.innerHTML = "";
-  MOCK.trendingWorks.forEach(function(t){ grid.appendChild(makeTile(t, false)); });
+  var grid = $("trendGrid"); if (!grid) return;
+  function showMock(){ grid.innerHTML = ""; MOCK.trendingWorks.forEach(function(t){ grid.appendChild(makeTile(t, false)); }); }
+  if (!sb){ showMock(); return; }
+  sb.from("recipes").select("id,title,cover_url,view_count,created_at").eq("is_public", true)
+    .not("cover_url", "is", null).order("created_at", { ascending:false }).limit(30)
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      rows.sort(function(a, b){ return trendingScore(b) - trendingScore(a); });
+      rows = rows.slice(0, 8);
+      if (rows.length < 4){ showMock(); return; }
+      grid.innerHTML = "";
+      rows.forEach(function(r){
+        var go = (function(id){ return function(){ location.href = "legacy.html?id=" + id + "#view"; }; })(r.id);
+        grid.appendChild(makeTile({ label:r.title || "無題のレシピ", img:r.cover_url }, false, go));
+      });
+    }, showMock);
 }
+// 人気の塗料：実データ(popular_paints)を色チップ＋名前＋ブランドで表示。薄ければMOCK。
 function renderPaints(){
-  var grid = $("paintGrid"); grid.innerHTML = "";
-  MOCK.popularPaints.forEach(function(p){
+  var grid = $("paintGrid"); if (!grid) return;
+  function paintCard(opts){
+    // opts: { label, brand, hex, uses, img }
     var card = document.createElement("button");
     card.className = "paint-post";
-    var thumb = p.img
-      ? '<span class="pp-thumb"><img src="'+esc(p.img)+'" alt=""></span>'
-      : '<span class="pp-thumb"><span class="ph-ico">🖼</span></span>';
-    var label = (p.code ? p.code + " " : "") + p.name;
-    card.innerHTML = thumb + '<div class="pp-cap">'+esc(label)+'</div>'+
-      '<div class="pp-sub">'+esc(p.brand)+' を使った作品</div>';
-    card.addEventListener("click", function(){ openStub(p.brand+" "+label); });
+    var thumb;
+    if (opts.img){
+      thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt=""></span>';
+    } else {
+      thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'"></span>';
+    }
+    card.innerHTML = thumb
+      + '<div class="pp-cap">'+esc(opts.label)+'</div>'
+      + '<div class="pp-sub">'+esc(opts.brand)+'</div>'
+      + (opts.uses ? '<div class="pp-uses">'+opts.uses+'件の作例</div>' : '');
+    card.addEventListener("click", function(){ openStub(opts.brand+" "+opts.label); });
     grid.appendChild(card);
-  });
+  }
+  function showMock(){
+    grid.innerHTML = "";
+    MOCK.popularPaints.forEach(function(p){
+      paintCard({ label:(p.code?p.code+" ":"")+p.name, brand:p.brand, img:p.img, hex:null });
+    });
+  }
+  if (!sb || !sb.rpc){ showMock(); return; }
+  sb.rpc("popular_paints", { limit_n: 12 }).then(function(res){
+    var rows = (res && !res.error && res.data) ? res.data : [];
+    if (rows.length < 4){ showMock(); return; }   // データが薄い間はMOCK
+    grid.innerHTML = "";
+    rows.forEach(function(r){ paintCard({ label:r.label, brand:r.brand, hex:r.hex, uses:r.uses }); });
+  }, showMock);
 }
 
 /* ----------------------------- カルーセル ----------------------------- */
