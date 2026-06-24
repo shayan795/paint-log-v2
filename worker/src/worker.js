@@ -168,6 +168,12 @@ export default {
     // /sitemap.xml — 公開投稿を動的列挙
     if (path === "/sitemap.xml") return serveSitemap(env);
 
+    // /robots.txt — Worker で明示的に返す（GitHub proxy や Cloudflare 既定に依存しない）
+    if (path === "/robots.txt") {
+      const body = `User-agent: *\nAllow: /\n\nDisallow: /diagnostics.html\nDisallow: /goodbye.html\n\nSitemap: ${env.SITE}/sitemap.xml\n`;
+      return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
+    }
+
     // /r/:id — 短縮URL
     if (path.startsWith("/r/")) {
       const id = path.slice(3).split("/")[0];
