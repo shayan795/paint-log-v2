@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>塗装レシピ録 — ガンプラ・模型の塗料記録ツール</title>
+<title>塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
@@ -15,11 +15,11 @@
   document.documentElement.dataset.theme=d?'dark':'light';
 }catch(e){}})();</script>
 <!-- DARKMODE:END -->
-<meta name="description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を色グループごとに記録して、URL一つで共有できる無料ツール。ガンプラの色分け・塗装手順を残せます。">
+<meta name="description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を色グループごとに記録して、URL一つで共有できる無料ツール。部位ごとの色分け・塗装手順を残せます。">
 <!-- OGP / Twitter Card --><!--OG_START-->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="塗装レシピ録 / Paint Log">
-<meta property="og:title" content="塗装レシピ録 — プラモ・ガンプラの塗装レシピを記録＆共有">
+<meta property="og:title" content="塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール">
 <meta property="og:description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。">
 <meta property="og:url" content="https://plamo-paint.com/">
 <meta property="og:image" content="https://plamo-paint.com/og-image.png">
@@ -27,7 +27,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="塗装レシピ録 — プラモ・ガンプラの塗装レシピを記録＆共有">
+<meta name="twitter:title" content="塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール">
 <meta name="twitter:description" content="使った塗料を、もう一度たどれる。「塗装レシピ」を記録してURL一つで共有できる無料ツール。">
 <meta name="twitter:image" content="https://plamo-paint.com/og-image.png"><!--OG_END-->
 <link rel="canonical" href="https://plamo-paint.com/">
@@ -2681,8 +2681,29 @@ function openSharePopover(anchorEl, text, url){
   var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
   pop.style.top = top + "px";
   pop.style.left = left + "px";
-  // X クリック直後にポップを閉じる
-  pop.querySelector('[data-act="x"]').addEventListener("click", function(){ setTimeout(closeSharePopover, 60); });
+  // X クリック: 所有者なら最新の「塗装レシピ」文字付きカバーを生成・反映してから X を開く（V1方式）。
+  // ポップアップブロック回避のため空タブを同期で開き、生成完了後にそのタブを X へ遷移させる。
+  pop.querySelector('[data-act="x"]').addEventListener("click", function(e){
+    e.preventDefault();
+    var xa = this;
+    var win = window.open("about:blank", "_blank");
+    try { if (win && win.document){ win.document.write('<!doctype html><meta charset="utf-8"><title>共有の準備中…</title><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#888">共有用の画像を準備しています…</body>'); } } catch(_){}
+    var lbl = xa.querySelector('span:last-child'); var orig = lbl ? lbl.textContent : "";
+    if (lbl) lbl.textContent = "画像を準備中…";
+    var opened = false;
+    var go = function(){
+      if (opened) return; opened = true;
+      if (win && !win.closed){ win.location.href = tweetUrl; }
+      else { window.open(tweetUrl, "_blank", "noopener,noreferrer"); }
+      closeSharePopover();
+    };
+    if (typeof window.__ensureFreshCoverForShare === "function"){
+      window.__ensureFreshCoverForShare(function(){ go(); });
+      setTimeout(go, 8000);   // 保険: 8秒で必ず開く
+    } else {
+      go();
+    }
+  });
   pop.querySelector('[data-act="copy"]').onclick = function(){
     var label = pop.querySelector(".copy-label");
     var done = function(ok){ if (label) label.textContent = ok ? "コピーしました ✓" : "コピーに失敗"; setTimeout(closeSharePopover, 900); };
@@ -2952,6 +2973,29 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       }, function(){});
     });
   }
+  // 共有時用: 所有者なら最新の「塗装レシピ」文字付きカバーを生成・反映してから cb(url) を呼ぶ。
+  // 非所有者・画像なし・既に反映済みなら即 cb(null)（既存 cover_url をそのまま使う）。
+  // shareRecipe（グローバル）から呼べるよう window に公開する。
+  window.__ensureFreshCoverForShare = function(cb){
+    cb = cb || function(){};
+    if (!sb || !currentRecipeId){ cb(null); return; }
+    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
+    if (!has){ cb(null); return; }                                  // 画像が無い投稿はカバー無し
+    try { if (localStorage.getItem("covertext_" + currentRecipeId) === "1"){ cb(null); return; } } catch(_){}  // 反映済み
+    sb.auth.getSession().then(function(s){
+      var uid = s && s.data && s.data.session && s.data.session.user && s.data.session.user.id;
+      if (!uid || uid !== currentOwnerId){ cb(null); return; }       // 所有者以外は cover_url を更新できない
+      generateCardUrl("dark", function(durl){
+        uploadImage(uid, durl, "cover").then(function(url){
+          if (!url){ cb(null); return; }
+          sb.from("recipes").update({ cover_url: url }).eq("id", currentRecipeId).then(function(r){
+            if (r && !r.error){ try { localStorage.setItem("covertext_" + currentRecipeId, "1"); } catch(_){} cb(url); }
+            else cb(null);
+          }, function(){ cb(null); });
+        }, function(){ cb(null); });
+      });
+    }, function(){ cb(null); });
+  };
   // 公開ラジオ（編集/プレビュー両方）を is_public に合わせる
   function setVis(isPublic){
     var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
