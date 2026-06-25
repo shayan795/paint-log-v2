@@ -281,6 +281,10 @@ button{font-family:inherit}
 /* 急上昇バッジ（作例写真の右上に小さく）＋「最近N件」 */
 .pp-fire{position:absolute; right:8px; top:8px; background:var(--accent); color:#fff; font-size:.6rem; font-weight:800; padding:2px 7px; border-radius:999px; box-shadow:0 1px 4px rgba(0,0,0,.25); letter-spacing:.02em}
 .pp-uses.pp-up{color:var(--accent)}
+/* 順位（左上・どんな色の上でも読めるよう半透明の黒ピル）＝急上昇チャートの位置 */
+.pp-rank{position:absolute; left:8px; top:8px; min-width:23px; height:23px; padding:0 6px; display:flex; align-items:center; justify-content:center; font-size:.92rem; font-weight:800; font-style:italic; color:#fff; background:rgba(0,0,0,.4); border-radius:8px; letter-spacing:.01em}
+/* HEXコード（左下・色チップを「スペック付きスウォッチ」に見せる） */
+.pp-hex{position:absolute; left:8px; bottom:8px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.62rem; font-weight:700; color:#fff; background:rgba(0,0,0,.34); padding:2px 7px; border-radius:6px; letter-spacing:.04em}
 
 /* 下タブ */
 .bottomnav{
@@ -2087,16 +2091,19 @@ function makePaintCard(grid, opts){
   // opts: { label, brand, hex, uses, recent, img, sampleId, rising }
   var card = document.createElement("button");
   card.className = "paint-post";
+  var rank = opts.rank ? '<span class="pp-rank">'+opts.rank+'</span>' : '';
   var fire = opts.rising ? '<span class="pp-fire">急上昇</span>' : '';
+  // 色チップの時はHEX値を左下に重ねる（ただの色面を「スペック付きスウォッチ」にして情報量を足す）
+  var hexTag = (opts.rising && opts.hex) ? '<span class="pp-hex">'+esc(String(opts.hex).toUpperCase())+'</span>' : '';
   var thumb;
   if (opts.img){
     // その塗料を使った作例の写真を引用（色チップより魅力的）。色は左下に小さく重ねる
-    thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">' + fire
+    thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">' + rank + fire
       + (opts.hex ? '<span class="pp-swatch" style="background:'+esc(opts.hex)+'"></span>' : '')
       + '</span>';
   } else {
     // 作例がまだ無い塗料は色そのものを大きく見せる
-    thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'">' + fire + '</span>';
+    thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'">' + rank + fire + hexTag + '</span>';
   }
   var meta = opts.rising
     ? (opts.recent ? '<div class="pp-uses pp-up">↑ 最近'+opts.recent+'件</div>' : '')
@@ -2137,8 +2144,8 @@ function renderRising(){
     var rows = (res && !res.error && res.data) ? res.data : [];
     if (rows.length < 3){ hide(); return; }   // 急上昇は本物のみ。薄ければ非表示
     grid.innerHTML = "";
-    // 急上昇は「今この色が来てる」を見せたいので、作例写真ではなく塗料そのものの色チップで表示
-    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, recent:r.recent, rising:true }); });
+    // 急上昇は「今この色が来てる」を見せたいので、作例写真ではなく塗料そのものの色チップで表示。順位も付ける。
+    rows.forEach(function(r, i){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, recent:r.recent, rank:i+1, rising:true }); });
     sec.style.display = "";
   }, hide);
 }
