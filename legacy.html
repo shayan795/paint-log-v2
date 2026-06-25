@@ -2469,7 +2469,9 @@ function generateCardUrl(theme, cb, opts) {
       x.textAlign = "left"; x.textBaseline = "alphabetic";
     }
 
-    cb(cv.toDataURL("image/png"));
+    // カバーは一番多く表示される画像。写真中心なのでPNGではなくJPEGにして容量を約8分の1に（転送量対策）。
+    // 背景を全面塗りしているので透明部分は無く、JPEG化で破綻しない。文字も1080pxなら品質0.88で劣化は見えない。
+    cb(cv.toDataURL("image/jpeg", 0.88));
   };
   const srcs = (state.photos || []).slice(0,2);
   if (!srcs.length){ draw([]); return; }
