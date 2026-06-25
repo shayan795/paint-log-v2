@@ -299,6 +299,27 @@ button{font-family:inherit}
 /* HEXコード（左下・色チップを「スペック付きスウォッチ」に見せる） */
 .pp-hex{position:absolute; left:8px; bottom:8px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.62rem; font-weight:700; color:#fff; background:rgba(0,0,0,.34); padding:2px 7px; border-radius:6px; letter-spacing:.04em}
 
+/* ===== 塗料ページ（塗料タップ → 作例＋購入リンク） ===== */
+.paint-page{padding:20px 18px 40px}
+.paint-hero{display:flex; gap:15px; align-items:center}
+/* ヘッダーの光沢スウォッチ（チップと同じ塗膜表現） */
+.paint-hero-sw{position:relative; flex:none; width:88px; height:88px; border-radius:18px; overflow:hidden;
+  background:
+    radial-gradient(125% 85% at 24% 16%, rgba(255,255,255,.42), rgba(255,255,255,.06) 42%, rgba(255,255,255,0) 60%),
+    linear-gradient(157deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 40%, rgba(0,0,0,.20) 100%),
+    var(--ppc,#cccccc);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.34), inset 0 -10px 22px rgba(0,0,0,.16);
+}
+.paint-meta{min-width:0}
+.paint-name{font-size:1.08rem; font-weight:800; line-height:1.25}
+.paint-brand{font-size:.8rem; color:var(--sub); margin-top:3px}
+.paint-buy{display:flex; gap:8px; margin-top:11px; flex-wrap:wrap}
+.buy{display:inline-block; padding:8px 15px; border-radius:10px; font-size:.8rem; font-weight:800; text-decoration:none}
+.buy.amazon{background:#ff9900; color:#1a1a1a}
+.buy.rakuten{background:#bf0000; color:#fff}
+.paint-note{font-size:.72rem; color:var(--sub); margin:14px 0 0; line-height:1.55}
+.paint-works-h{font-size:.95rem; margin:24px 0 10px}
+
 /* 下タブ */
 .bottomnav{
   position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:min(var(--maxw),100%);
@@ -856,6 +877,76 @@ function openStub(title){
 }
 function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; setHash($("screen-records").hidden ? "discover" : "records"); }
 $("fvBack").addEventListener("click", closeFull);
+
+/* ----------------------------- 塗料ページ ----------------------------- */
+// アフィリエイトリンク（legacy.html と同じID・形式。塗料の購入リンクに付与）
+var AMAZON_TAG = "plamopaint-22";
+var RAKUTEN_ID = "5534da04.25b770df.5534da05.bfd723b3";
+function amazonUrl(name){
+  return "https://www.amazon.co.jp/s?k=" + encodeURIComponent(name) + (AMAZON_TAG ? "&tag=" + encodeURIComponent(AMAZON_TAG) : "");
+}
+function rakutenUrl(name){
+  var search = "https://search.rakuten.co.jp/search/mall/" + encodeURIComponent(name) + "/";
+  return RAKUTEN_ID
+    ? "https://hb.afl.rakuten.co.jp/hgc/" + encodeURIComponent(RAKUTEN_ID) + "/?pc=" + encodeURIComponent(search)
+    : search;
+}
+// その塗料を使った公開作例を集めて作品グリッドで出す
+function loadPaintWorks(pid, box){
+  if (!box) return;
+  if (!sb || !pid){ box.innerHTML = '<p class="pf-empty">この塗料を使った公開作例はまだありません。</p>'; return; }
+  var isFree = pid.indexOf("free:") === 0;
+  var col = isFree ? "free_name" : "paint_id";
+  var key = isFree ? pid.slice(5) : pid;
+  sb.from("recipe_paints")
+    .select("recipe_id, recipes:recipe_id(id,title,cover_url,is_public,view_count,created_at)")
+    .eq(col, key).limit(120)
+    .then(function(res){
+      var rows = (res && !res.error && res.data) ? res.data : [];
+      var seen = {}, works = [];
+      rows.forEach(function(x){
+        var r = x.recipes;
+        if (!r || r.is_public !== true || !r.cover_url) return;   // 公開＋カバー有のみ
+        if (seen[r.id]) return; seen[r.id] = 1;                    // 同じ作品の重複を除外
+        works.push(r);
+      });
+      works.sort(function(a, b){ return (b.view_count||0) - (a.view_count||0); });
+      works = works.slice(0, 18);
+      if (!works.length){ box.innerHTML = '<p class="pf-empty">この塗料を使った公開作例はまだありません。</p>'; return; }
+      box.innerHTML = ""; var g = document.createElement("div"); g.className = "tag-grid";
+      works.forEach(function(r){ g.appendChild(recordCard(r)); }); box.appendChild(g);
+    }, function(){ box.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; });
+}
+// 塗料ページ本体：上に光沢スウォッチ＋名前＋購入リンク、下にその塗料を使った作例
+function openPaint(opts){
+  opts = opts || {};
+  var name  = String(opts.label || "塗料");
+  var brand = String(opts.brand || "");
+  var hex   = opts.hex || "";
+  var query = (brand ? brand + " " : "") + name;   // 購入の検索クエリ（ブランド＋名前）
+  $("fvTitle").textContent = name;
+  if (typeof track === "function") track("page_view", { tab:"paint", paint: query });
+  var sw = hex
+    ? '<span class="paint-hero-sw" style="--ppc:'+esc(hex)+'"><span class="pp-hex">'+esc(String(hex).toUpperCase())+'</span></span>'
+    : '<span class="paint-hero-sw" style="background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 9px,#E5E9F0 9px,#E5E9F0 18px)"></span>';
+  fullviewBody.innerHTML =
+    '<div class="paint-page">'
+    + '<div class="paint-hero">' + sw
+    +   '<div class="paint-meta"><div class="paint-name">'+esc(name)+'</div>'
+    +     (brand ? '<div class="paint-brand">'+esc(brand)+'</div>' : '')
+    +     '<div class="paint-buy">'
+    +       '<a class="buy amazon" target="_blank" rel="nofollow noopener" href="'+esc(amazonUrl(query))+'">Amazonで探す</a>'
+    +       '<a class="buy rakuten" target="_blank" rel="nofollow noopener" href="'+esc(rakutenUrl(query))+'">楽天で探す</a>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<p class="paint-note">リンクは各ストアの商品検索に飛びます。ここから購入いただくと運営の維持費にあてられます（あなたの価格は変わりません）。</p>'
+    + '<h3 class="paint-works-h">この塗料を使った作例</h3>'
+    + '<div id="paintWorks"><p class="pf-empty">読み込み中…</p></div>'
+    + '</div>';
+  fullview.hidden = false;
+  loadPaintWorks(opts.pid, $("paintWorks"));
+}
 
 // 設定（アカウントのハブ。ログイン必須）
 function openSettings(){
@@ -2125,10 +2216,8 @@ function makePaintCard(grid, opts){
     + '<div class="pp-cap">'+esc(opts.label)+'</div>'
     + '<div class="pp-sub">'+esc(opts.brand)+'</div>'
     + meta;
-  card.addEventListener("click", function(){
-    if (opts.sampleId) location.href = "legacy.html?id=" + opts.sampleId + "#view";  // 作例があればその投稿へ
-    else openStub(opts.brand + " " + opts.label);
-  });
+  // 定番・急上昇とも、タップで「塗料ページ」（作例＋購入リンク）を開く
+  card.addEventListener("click", function(){ openPaint(opts); });
   grid.appendChild(card);
 }
 // 人気の塗料：実データ(popular_paints)を作例写真＋名前＋ブランドで表示。薄ければMOCK。
@@ -2145,7 +2234,7 @@ function renderPaints(){
     var rows = (res && !res.error && res.data) ? res.data : [];
     if (rows.length < 4){ showMock(); return; }   // データが薄い間はMOCK
     grid.innerHTML = "";
-    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id }); });
+    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id, pid:r.pid }); });
   }, showMock);
 }
 // 急上昇の塗料：直近で伸びている塗料(rising_paints)。本物のトレンドのみ＝データが薄ければセクションごと非表示（偽トレンドを出さない）。
@@ -2158,7 +2247,7 @@ function renderRising(){
     if (rows.length < 3){ hide(); return; }   // 急上昇は本物のみ。薄ければ非表示
     grid.innerHTML = "";
     // 急上昇は「今この色が来てる」を見せたいので、作例写真ではなく塗料そのものの色チップで表示。順位も付ける。
-    rows.forEach(function(r, i){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, recent:r.recent, rank:i+1, rising:true }); });
+    rows.forEach(function(r, i){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, recent:r.recent, rank:i+1, rising:true, pid:r.pid }); });
     sec.style.display = "";
   }, hide);
 }
