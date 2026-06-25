@@ -762,6 +762,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- 急上昇塗料：直近7日の使用数 ×（直近7日 ÷ 累計）。新しさの割合が高く最近多い塗料が上位。
+-- UIでは塗料そのものの色チップで見せる方針なので、作例写真(sample_cover)は返さない（定番との見た目の差別化）。
 create or replace function public.rising_paints(limit_n int default 12)
 returns table(pid text, label text, brand text, hex text, recent bigint, total bigint, score numeric)
 language sql stable security definer set search_path = public as $$

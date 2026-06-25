@@ -278,6 +278,9 @@ button{font-family:inherit}
 /* 作例写真の上に塗料の色を小さく重ねる（どの塗料の作例か一目で分かる） */
 .pp-swatch{position:absolute; left:8px; bottom:8px; width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .pp-uses{font-size:.66rem; color:var(--accent); font-weight:700; margin-top:2px}
+/* 急上昇バッジ（作例写真の右上に小さく）＋「最近N件」 */
+.pp-fire{position:absolute; right:8px; top:8px; background:var(--accent); color:#fff; font-size:.6rem; font-weight:800; padding:2px 7px; border-radius:999px; box-shadow:0 1px 4px rgba(0,0,0,.25); letter-spacing:.02em}
+.pp-uses.pp-up{color:var(--accent)}
 
 /* 下タブ */
 .bottomnav{
@@ -585,6 +588,10 @@ textarea.pf-field{resize:vertical; line-height:1.6}
     <section class="block">
       <h3>人気の塗料</h3>
       <div class="paint-grid" id="paintGrid"></div>
+    </section>
+    <section class="block" id="risingSec" style="display:none">
+      <h3>急上昇の塗料</h3>
+      <div class="paint-grid" id="risingGrid"></div>
     </section>
   </main>
 
@@ -2075,37 +2082,42 @@ function renderTrending(){
       });
     }, showMock);
 }
-// 人気の塗料：実データ(popular_paints)を色チップ＋名前＋ブランドで表示。薄ければMOCK。
+// 塗料カード1枚（人気の塗料／急上昇で共用）。opts.rising=true なら「急上昇」バッジ＋「最近N件」表示。
+function makePaintCard(grid, opts){
+  // opts: { label, brand, hex, uses, recent, img, sampleId, rising }
+  var card = document.createElement("button");
+  card.className = "paint-post";
+  var fire = opts.rising ? '<span class="pp-fire">急上昇</span>' : '';
+  var thumb;
+  if (opts.img){
+    // その塗料を使った作例の写真を引用（色チップより魅力的）。色は左下に小さく重ねる
+    thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">' + fire
+      + (opts.hex ? '<span class="pp-swatch" style="background:'+esc(opts.hex)+'"></span>' : '')
+      + '</span>';
+  } else {
+    // 作例がまだ無い塗料は色そのものを大きく見せる
+    thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'">' + fire + '</span>';
+  }
+  var meta = opts.rising
+    ? (opts.recent ? '<div class="pp-uses pp-up">↑ 最近'+opts.recent+'件</div>' : '')
+    : (opts.uses   ? '<div class="pp-uses">'+opts.uses+'件の作例</div>' : '');
+  card.innerHTML = thumb
+    + '<div class="pp-cap">'+esc(opts.label)+'</div>'
+    + '<div class="pp-sub">'+esc(opts.brand)+'</div>'
+    + meta;
+  card.addEventListener("click", function(){
+    if (opts.sampleId) location.href = "legacy.html?id=" + opts.sampleId + "#view";  // 作例があればその投稿へ
+    else openStub(opts.brand + " " + opts.label);
+  });
+  grid.appendChild(card);
+}
+// 人気の塗料：実データ(popular_paints)を作例写真＋名前＋ブランドで表示。薄ければMOCK。
 function renderPaints(){
   var grid = $("paintGrid"); if (!grid) return;
-  function paintCard(opts){
-    // opts: { label, brand, hex, uses, img, sampleId }
-    var card = document.createElement("button");
-    card.className = "paint-post";
-    var thumb;
-    if (opts.img){
-      // その塗料を使った作例の写真を引用（色チップより魅力的）。色は左下に小さく重ねる
-      thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">'
-        + (opts.hex ? '<span class="pp-swatch" style="background:'+esc(opts.hex)+'"></span>' : '')
-        + '</span>';
-    } else {
-      // 作例がまだ無い塗料は色そのものを大きく見せる
-      thumb = '<span class="pp-thumb pp-color" style="--ppc:'+esc(opts.hex||'#cccccc')+'"></span>';
-    }
-    card.innerHTML = thumb
-      + '<div class="pp-cap">'+esc(opts.label)+'</div>'
-      + '<div class="pp-sub">'+esc(opts.brand)+'</div>'
-      + (opts.uses ? '<div class="pp-uses">'+opts.uses+'件の作例</div>' : '');
-    card.addEventListener("click", function(){
-      if (opts.sampleId) location.href = "legacy.html?id=" + opts.sampleId + "#view";  // 作例があればその投稿へ
-      else openStub(opts.brand + " " + opts.label);
-    });
-    grid.appendChild(card);
-  }
   function showMock(){
     grid.innerHTML = "";
     MOCK.popularPaints.forEach(function(p){
-      paintCard({ label:(p.code?p.code+" ":"")+p.name, brand:p.brand, img:p.img, hex:null });
+      makePaintCard(grid, { label:(p.code?p.code+" ":"")+p.name, brand:p.brand, img:p.img, hex:null });
     });
   }
   if (!sb || !sb.rpc){ showMock(); return; }
@@ -2113,8 +2125,22 @@ function renderPaints(){
     var rows = (res && !res.error && res.data) ? res.data : [];
     if (rows.length < 4){ showMock(); return; }   // データが薄い間はMOCK
     grid.innerHTML = "";
-    rows.forEach(function(r){ paintCard({ label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id }); });
+    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id }); });
   }, showMock);
+}
+// 急上昇の塗料：直近で伸びている塗料(rising_paints)。本物のトレンドのみ＝データが薄ければセクションごと非表示（偽トレンドを出さない）。
+function renderRising(){
+  var grid = $("risingGrid"), sec = $("risingSec"); if (!grid || !sec) return;
+  function hide(){ sec.style.display = "none"; }
+  if (!sb || !sb.rpc){ hide(); return; }
+  sb.rpc("rising_paints", { limit_n: 12 }).then(function(res){
+    var rows = (res && !res.error && res.data) ? res.data : [];
+    if (rows.length < 3){ hide(); return; }   // 急上昇は本物のみ。薄ければ非表示
+    grid.innerHTML = "";
+    // 急上昇は「今この色が来てる」を見せたいので、作例写真ではなく塗料そのものの色チップで表示
+    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, recent:r.recent, rising:true }); });
+    sec.style.display = "";
+  }, hide);
 }
 
 /* ----------------------------- カルーセル ----------------------------- */
@@ -2164,6 +2190,7 @@ renderReco();
 renderCategories();
 renderTrending();
 renderPaints();
+renderRising();
 // 既定は探す。legacy のサイドバー等から index.html#records / #discover で来たらそのタブを開く。
 (function(){
   // ?tab=records 形式（legacyのサイドバーから来たとき。hashの方が他のロジックで上書きされる事故を回避）
