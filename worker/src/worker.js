@@ -113,7 +113,25 @@ async function serveRecipePage(env, id) {
       `<meta name="twitter:description" content="${esc(desc)}">` +
       `<meta name="twitter:image" content="${esc(image)}">`;
 
-    html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, `<!--OG_START-->${block}<!--OG_END-->`);
+    // 構造化データ(JSON-LD)。検索エンジンにレシピ情報を機械可読で渡す（リッチ表示・理解の助け）。
+    // 万一例外が出てもページを壊さないよう try/catch で握りつぶす（低リスク優先）。本文HTMLには一切触れない。
+    let ldBlock = "";
+    try {
+      const ld = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": (rec.title && rec.title.trim()) ? rec.title.trim() : "塗装レシピ",
+        "description": desc,
+        "url": pageUrl,
+        "inLanguage": "ja",
+        "isPartOf": { "@type": "WebSite", "name": "塗装レシピ録 / Paint Log", "url": env.SITE },
+      };
+      if (image) ld.image = [image];
+      if (authorLabel) ld.author = { "@type": "Person", "name": authorLabel };
+      ldBlock = `<script type="application/ld+json">${JSON.stringify(ld).replace(/<\/script/gi, "<\\/script")}</script>`;
+    } catch (_) { ldBlock = ""; }
+
+    html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, `<!--OG_START-->${block}${ldBlock}<!--OG_END-->`);
 
     // クライアント側の Supabase ラウンドトリップを消すため、レシピ本体を script タグに埋め込む
     // legacy.html の loadById がこれを優先的に使う
