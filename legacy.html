@@ -3296,6 +3296,16 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         var session = r && r.data && r.data.session;
         if (!session){ alert("投稿にはログインが必要です。"); location.href = "index.html"; return; }
         var uid = session.user.id;
+        // 0) 非公開投稿の上限（無料10件）を写真アップ前にチェック（新規の非公開のみ・公開や既存編集は対象外）
+        var _limitChk = (!isPublic && !currentRecipeId)
+          ? sb.from("recipes").select("id", { count:"exact", head:true }).eq("owner_id", uid).eq("is_public", false)
+          : Promise.resolve({ count:0 });
+        return _limitChk.then(function(_lc){
+          if (!isPublic && !currentRecipeId && (((_lc && _lc.count) || 0) >= 10)){
+            btn.disabled = false; btn.textContent = orig;
+            alert("無料プランの非公開投稿は10件までです。\n公開で投稿するか、非公開の投稿を減らしてから保存してください。");
+            return;
+          }
         // 1) 写真をStorageへ（data:のみアップ。既存URLは流用）
         var photosSrc = (state.photos || []).slice();
         var photoUrls = photosSrc.slice();
@@ -3333,9 +3343,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             });
           });
         });
+        });
       }).catch(function(e){
         btn.disabled = false; btn.textContent = orig;
-        alert("保存に失敗しました：" + (e && e.message ? e.message : e));
+        var msg = (e && e.message) ? e.message : String(e);
+        if (msg.indexOf("PRIVATE_LIMIT") >= 0){ alert("無料プランの非公開投稿は10件までです。\n公開で投稿するか、非公開の投稿を減らしてから保存してください。"); return; }
+        if (msg.indexOf("DRAFT_LIMIT")   >= 0){ alert("無料プランの下書きは5件までです。\n下書き一覧から不要なものを削除してください。"); return; }
+        alert("保存に失敗しました：" + msg);
       });
     });
   }
@@ -3383,8 +3397,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         });
       });
     }).catch(function(e){
-      legacyToast("下書きの保存に失敗しました");
-      return { ok:false, msg: (e && e.message) || "error" };
+      var m = (e && e.message) || "error";
+      legacyToast(m.indexOf("DRAFT_LIMIT") >= 0 ? "下書きは5件まで。一覧から不要なものを削除してください" : "下書きの保存に失敗しました");
+      return { ok:false, msg: m };
     });
   }
   window.saveDraftServer = saveDraftServer;

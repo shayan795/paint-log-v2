@@ -828,6 +828,58 @@ create policy drafts_insert on public.drafts for insert with check (owner_id = a
 create policy drafts_update on public.drafts for update using (owner_id = auth.uid());
 create policy drafts_delete on public.drafts for delete using (owner_id = auth.uid());
 
+-- ============================================================
+-- 無料プランの上限（将来のサブスクで解放）
+--   無料: 非公開投稿10件 / 下書き5件
+--   プレミアム(premium_users に行がある): どちらも無制限
+-- 重要: 上限はDBトリガーで強制（アプリ側だけだとAPIで回避できてしまうため）。
+-- 重要: プレミアム判定は本人が書き換えられない別テーブルに置く（自分でプレミアム化できないように）。
+-- ============================================================
+create table if not exists public.premium_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  since   timestamptz not null default now()
+);
+alter table public.premium_users enable row level security;
+drop policy if exists premium_select on public.premium_users;
+-- 自分がプレミアムか「読む」だけ許可。insert/update/deleteのポリシーは作らない＝ユーザーは付与できない。
+-- 付与は管理者がSupabaseダッシュボード（service_role）で premium_users に行を追加して行う。
+create policy premium_select on public.premium_users for select using (user_id = auth.uid());
+
+-- 非公開投稿の上限（無料10件）。公開は無制限・既存の非公開の編集も対象外。
+create or replace function public.enforce_private_post_limit()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare cnt int;
+begin
+  if NEW.is_public is true then return NEW; end if;                       -- 公開はノーカウント
+  if TG_OP = 'UPDATE' and OLD.is_public is false then return NEW; end if; -- 既存の非公開の編集はOK
+  if exists (select 1 from public.premium_users where user_id = NEW.owner_id) then return NEW; end if;
+  select count(*) into cnt from public.recipes
+    where owner_id = NEW.owner_id and is_public = false and id <> NEW.id;
+  if cnt >= 10 then
+    raise exception 'PRIVATE_LIMIT: 無料プランの非公開投稿は10件までです';
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_private_post_limit on public.recipes;
+create trigger trg_private_post_limit before insert or update on public.recipes
+  for each row execute function public.enforce_private_post_limit();
+
+-- 下書きの上限（無料5件）。
+create or replace function public.enforce_draft_limit()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare cnt int;
+begin
+  if exists (select 1 from public.premium_users where user_id = NEW.owner_id) then return NEW; end if;
+  select count(*) into cnt from public.drafts where owner_id = NEW.owner_id and id <> NEW.id;
+  if cnt >= 5 then
+    raise exception 'DRAFT_LIMIT: 無料プランの下書きは5件までです';
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_draft_limit on public.drafts;
+create trigger trg_draft_limit before insert on public.drafts
+  for each row execute function public.enforce_draft_limit();
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
