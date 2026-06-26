@@ -992,7 +992,7 @@ body{background-image:none}
       <p class="note" style="margin:0 0 12px">プレビューで確認してから投稿できます。非公開で投稿すると自分だけの記録として残すことができます。</p>
       <div class="toolbar" style="margin:0">
         <button class="primary js-publish">投稿する</button>
-        <button class="js-draft" disabled>下書き保存（準備中）</button>
+        <button class="js-draft" type="button">下書き保存</button>
       </div>
     </div>
   </div>
@@ -1081,7 +1081,7 @@ body{background-image:none}
   <p class="note" style="margin:0 0 12px">プレビューで確認してから投稿できます。非公開で投稿すると自分だけの記録として残すことができます。</p>
   <div class="toolbar" style="margin:0">
     <button class="primary js-publish">投稿する</button>
-    <button class="js-draft" disabled>下書き保存（準備中）</button>
+    <button class="js-draft" type="button">下書き保存</button>
   </div>
 </div>
 
@@ -2773,7 +2773,7 @@ document.getElementById("navBtn").onclick    = openNav;
 document.getElementById("navClose").onclick  = closeNav;
 document.getElementById("navOverlay").onclick = closeNav;
 // 「塗装レシピ録」ロゴ（編集/閲覧内）は閲覧プレビューへ
-document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => showPage("view"));
+document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => { showPage("view"); showEditReturnBtn(); });
 // 「とは」ページ: ロゴ/アバター→メイン(index)、ベル→スタブ。確認ダイアログは出さない
 var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
 var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
@@ -2790,6 +2790,77 @@ function editorHasContent(){
     return (r.part||"").trim() || (r.comment||"").trim() || r.photo || Object.keys(r.cells||{}).length;
   });
 }
+
+/* v2: 軽量トースト（alertの代わりに控えめな通知） */
+function legacyToast(msg){
+  var t = document.getElementById("legacyToast");
+  if (!t){
+    t = document.createElement("div"); t.id = "legacyToast";
+    t.style.cssText = "position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:#15181E;color:#fff;padding:11px 22px;border-radius:24px;font-size:.86rem;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:9999;box-shadow:0 6px 20px rgba(20,24,32,.25);max-width:86%;text-align:center";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(function(){ t.style.opacity = "1"; t.style.transform = "translateX(-50%) translateY(0)"; });
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.style.opacity = "0"; t.style.transform = "translateX(-50%) translateY(20px)"; }, 2600);
+}
+
+/* v2: 下書き保存（端末のlocalStorageに編集中の内容を保存し、次回復元できる） */
+var DRAFT_KEY = "paintlog_draft_v1";
+function hasDraft(){ try{ return !!localStorage.getItem(DRAFT_KEY); }catch(_){ return false; } }
+function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(_){} }
+function saveDraft(){
+  try{
+    try{
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ v:1, t:Date.now(), state:state }));
+      return { ok:true, photosDropped:false };
+    }catch(e){
+      // 写真(base64)が大きく端末の保存上限を超えた場合は、写真を除いて文字情報だけ保存
+      var lite = JSON.parse(JSON.stringify(state));
+      lite.photos = [];
+      (lite.rows||[]).forEach(function(r){ if (r) delete r.photo; });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ v:1, t:Date.now(), state:lite, photosDropped:true }));
+      return { ok:true, photosDropped:true };
+    }
+  }catch(e){ return { ok:false }; }
+}
+function restoreDraft(){
+  try{
+    var raw = localStorage.getItem(DRAFT_KEY); if (!raw) return false;
+    var snap = JSON.parse(raw); if (!snap || !snap.state) return false;
+    state = migrate(snap.state);
+    renderAll();
+    if (typeof renderPhoto === "function") renderPhoto();
+    if (typeof renderMethodChips === "function") renderMethodChips();
+    return true;
+  }catch(e){ return false; }
+}
+// 新規作成（?id無し・編集中の既存投稿でない）で開いたとき、下書きがあれば復元を提案
+function offerDraftRestore(){
+  if (currentRecipeId) return;
+  if (new URLSearchParams(location.search).get("id")) return;
+  if (!hasDraft()) return;
+  setTimeout(function(){
+    if (!hasDraft()) return;
+    if (confirm("前回の下書きがあります。復元しますか？\n「キャンセル」を選ぶと下書きは削除され、新規作成になります。")){
+      if (restoreDraft()) legacyToast("下書きを復元しました");
+    } else {
+      clearDraft();
+    }
+  }, 300);
+}
+// 「下書き保存」ボタン（編集画面・プレビュー両方）に結線
+document.querySelectorAll(".js-draft").forEach(function(b){
+  b.addEventListener("click", function(){
+    var r = saveDraft();
+    legacyToast(r.ok ? (r.photosDropped ? "下書きを保存しました（写真は容量制限のため含まれません）" : "下書きを保存しました") : "下書きの保存に失敗しました");
+  });
+});
+// 編集→プレビュー時に「編集する」ボタンを出し、編集画面へ戻れるようにする
+function showEditReturnBtn(){
+  var te = document.getElementById("tabEdit");
+  if (te){ te.onclick = function(){ showPage("edit"); }; te.style.display = ""; }
+}
+
 var _exitTarget = "index.html";
 function exitEditor(target){
   // 既存投稿を編集していた場合は、メインでなく「その投稿の閲覧画面」に戻る
@@ -2818,8 +2889,14 @@ function exitEditor(target){
   ov.onclick = function(e){ if (e.target === ov) close(); };
   document.getElementById("exitDiscard").onclick = function(){ location.href = _exitTarget; };
   document.getElementById("exitSave").onclick = function(){
-    alert("下書き保存は準備中です。\n今は保存できないため、このまま編集を続けるか「変更を破棄して終了」を選んでください。");
+    var r = saveDraft();
     close();
+    if (r.ok){
+      legacyToast(r.photosDropped ? "下書きを保存しました（写真は含まれません）" : "下書きを保存しました");
+      setTimeout(function(){ location.href = _exitTarget; }, 600);   // トーストを見せてから離脱
+    } else {
+      alert("下書きの保存に失敗しました。写真を減らすか、通信状況を確認して再度お試しください。");
+    }
   };
   // PCサイドバーの「探す/記録/ロゴ」も、編集中で内容があれば同じ確認を通す
   document.querySelectorAll('.sidebar a[href^="index.html"]').forEach(function(a){
@@ -2832,6 +2909,7 @@ function exitEditor(target){
 /* ===================== 編集モードのタブ(閲覧プレビューへ) ===================== */
 document.getElementById("tabViewFromEdit").onclick = () => {
   showPage("view");
+  showEditReturnBtn();   // プレビューから編集へ戻れるように「編集する」ボタンを表示
   var pc = document.getElementById("publishCard"); if (pc) pc.style.display = "";  // 編集→プレビューでは公開ボタン＋バナーを出す
   var pb = document.getElementById("pvBanner");    if (pb) pb.style.display = "";
 };
@@ -2858,7 +2936,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     try{ state = decodeState(me[1]); }catch(_){ }
   }
   // v2シェルから #edit / #view / #about で初期モードを指定(ロジック本体は不変)
-  if (hash === "#edit"){ showPage("edit"); return; }
+  if (hash === "#edit"){ showPage("edit"); offerDraftRestore(); return; }
   if (hash === "#view"){ showPage("view"); return; }
   if (hash === "#about"){ showPage("about"); return; }
   // ?id=xxx で来た場合は loadById が view へ切り替える。それ以外は about
@@ -3220,6 +3298,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             else { payload.owner_id = uid; q = sb.from("recipes").insert(payload); }
             return q.select("id").single().then(function(res){
               if (res.error) throw res.error;
+              if (typeof clearDraft === "function") clearDraft();   // 投稿できたら下書きは不要なので消す
               alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
               location.href = "index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
             });
