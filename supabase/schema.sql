@@ -209,10 +209,28 @@ create unique index if not exists profiles_user_id_key on public.profiles(lower(
 -- 段5: 閲覧数（人気/トレンド表示用）。公開投稿のみ加算。他人投稿も増やせるよう SECURITY DEFINER RPC
 alter table public.recipes add column if not exists view_count int not null default 0;
 create or replace function public.increment_view(rid uuid)
-returns void language sql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform set_config('app.allow_view', '1', true);   -- このトランザクション内だけ正規の+1を許可
   update public.recipes set view_count = view_count + 1 where id = rid and is_public = true;
-$$;
+end; $$;
 grant execute on function public.increment_view(uuid) to anon, authenticated;
+
+-- view_count の自己水増し防止：increment_view 経由(app.allow_view='1')以外からの
+-- view_count 変更は元に戻す。所有者が自分の投稿の数字を直接書き換える不正を封じる。
+-- 通常の閲覧・投稿・編集には一切影響しない（人がBANされる類の制限ではない）。
+create or replace function public.guard_view_count()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if NEW.view_count is distinct from OLD.view_count
+     and coalesce(current_setting('app.allow_view', true), '') <> '1' then
+    NEW.view_count := OLD.view_count;
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_guard_view_count on public.recipes;
+create trigger trg_guard_view_count before update on public.recipes
+  for each row execute function public.guard_view_count();
 
 -- user_id を不変にする（一度設定したら変更不可）
 create or replace function public.lock_user_id()
