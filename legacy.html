@@ -2835,55 +2835,15 @@ function legacyToast(msg){
   clearTimeout(t._h); t._h = setTimeout(function(){ t.style.opacity = "0"; t.style.transform = "translateX(-50%) translateY(20px)"; }, 2600);
 }
 
-/* v2: 下書き保存（端末のlocalStorageに編集中の内容を保存し、次回復元できる） */
+/* 旧localStorage下書きの後始末用。下書き本体はサーバー保存(saveDraftServer)に刷新済みで、
+   ここは投稿成功時に古いローカル下書きを消すためだけに残置している。 */
 var DRAFT_KEY = "paintlog_draft_v1";
-function hasDraft(){ try{ return !!localStorage.getItem(DRAFT_KEY); }catch(_){ return false; } }
 function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(_){} }
-function saveDraft(){
-  try{
-    try{
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ v:1, t:Date.now(), state:state }));
-      return { ok:true, photosDropped:false };
-    }catch(e){
-      // 写真(base64)が大きく端末の保存上限を超えた場合は、写真を除いて文字情報だけ保存
-      var lite = JSON.parse(JSON.stringify(state));
-      lite.photos = [];
-      (lite.rows||[]).forEach(function(r){ if (r) delete r.photo; });
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ v:1, t:Date.now(), state:lite, photosDropped:true }));
-      return { ok:true, photosDropped:true };
-    }
-  }catch(e){ return { ok:false }; }
-}
-function restoreDraft(){
-  try{
-    var raw = localStorage.getItem(DRAFT_KEY); if (!raw) return false;
-    var snap = JSON.parse(raw); if (!snap || !snap.state) return false;
-    state = migrate(snap.state);
-    renderAll();
-    if (typeof renderPhoto === "function") renderPhoto();
-    if (typeof renderMethodChips === "function") renderMethodChips();
-    return true;
-  }catch(e){ return false; }
-}
-// 新規作成（?id無し・編集中の既存投稿でない）で開いたとき、下書きがあれば復元を提案
-function offerDraftRestore(){
-  if (currentRecipeId) return;
-  if (new URLSearchParams(location.search).get("id")) return;
-  if (!hasDraft()) return;
-  setTimeout(function(){
-    if (!hasDraft()) return;
-    if (confirm("前回の下書きがあります。復元しますか？\n「キャンセル」を選ぶと下書きは削除され、新規作成になります。")){
-      if (restoreDraft()) legacyToast("下書きを復元しました");
-    } else {
-      clearDraft();
-    }
-  }, 300);
-}
 // 「下書き保存」ボタン（編集画面・プレビュー両方）に結線。実体はサーバー保存（写真込み・複数）。
 document.querySelectorAll(".js-draft").forEach(function(b){
   b.addEventListener("click", function(){
     if (window.saveDraftServer) window.saveDraftServer();
-    else legacyToast("下書き保存は準備中です");
+    else legacyToast("下書き保存に失敗しました。通信状況を確認してください");
   });
 });
 // 編集→プレビュー時に「編集する」ボタンを出し、編集画面へ戻れるようにする

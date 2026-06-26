@@ -869,10 +869,10 @@ var fullview = $("fullview"), fullviewBody = $("fullviewBody");
 function openLegacy(title, hash){
   window.location.href = "legacy.html" + hash;
 }
-function openStub(title){
+function openStub(title, msg){
   $("fvTitle").textContent = title;
   fullviewBody.innerHTML = '<div class="stub"><h2>'+esc(title)+'</h2>'+
-    '<p>このページは準備中です。骨組みの枠だけ用意しています（後で中身を作ります）。</p></div>';
+    '<p>'+esc(msg || "このページは現在ご利用いただけません。")+'</p></div>';
   fullview.hidden = false;
 }
 function closeFull(){ fullview.hidden = true; fullviewBody.innerHTML = ""; setHash($("screen-records").hidden ? "discover" : "records"); }
@@ -1007,7 +1007,7 @@ function openSettings(){
         + '<button class="set-item" id="setLogout">ログアウト</button>'
         // 管理者(運営)は誤操作で自分を消すとモデレーション不能になるため退会ボタンを出さない
         + (currentIsAdmin ? '' : '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>')
-        + '<p class="set-ver">塗装レシピ録 v2</p>';
+        + '<p class="set-ver">塗装レシピ録</p>';
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
       if ($("setDelete")) $("setDelete").onclick = deleteAccount;
@@ -1791,7 +1791,7 @@ function openProfile(targetUserId){
   if (typeof track === "function") track("page_view", { tab:"profile", target_user_id: targetUserId });
   sb.from("profiles").select(SEL).eq("user_id", targetUserId).single()
     .then(function(p){
-      if (p.error || !p.data){ openStub("ユーザーが見つかりません"); return; }
+      if (p.error || !p.data){ openStub("ユーザーが見つかりません", "このユーザーは存在しないか、削除された可能性があります。"); return; }
       renderProfileView(p.data, p.data.id === currentUserId);   // 自分のページなら編集可
     });
 }
