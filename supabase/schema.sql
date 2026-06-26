@@ -805,6 +805,29 @@ grant execute on function public.popular_paints(int)  to anon, authenticated;
 grant execute on function public.rising_paints(int)   to anon, authenticated;
 grant execute on function public.popular_methods(int) to anon, authenticated;
 
+-- ============================================================
+-- 下書き（drafts）— 投稿前の作りかけを写真込みで保存（1人最大5件はアプリ側で制御）
+-- 自分の下書きだけ読み書きできる。公開系のクエリ（recipes/ranking/profile）とは完全に別テーブルなので混入しない。
+-- ============================================================
+create table if not exists public.drafts (
+  id         uuid primary key default gen_random_uuid(),
+  owner_id   uuid not null references auth.users(id) on delete cascade,
+  title      text,
+  grid       jsonb not null default '{}'::jsonb,   -- 編集中のstate（写真はStorageのURL化済みで保持）
+  cover_url  text,                                  -- 一覧サムネ用（1枚目の写真URL）
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_drafts_owner on public.drafts(owner_id, updated_at desc);
+alter table public.drafts enable row level security;
+drop policy if exists drafts_select on public.drafts;
+drop policy if exists drafts_insert on public.drafts;
+drop policy if exists drafts_update on public.drafts;
+drop policy if exists drafts_delete on public.drafts;
+create policy drafts_select on public.drafts for select using (owner_id = auth.uid());
+create policy drafts_insert on public.drafts for insert with check (owner_id = auth.uid());
+create policy drafts_update on public.drafts for update using (owner_id = auth.uid());
+create policy drafts_delete on public.drafts for delete using (owner_id = auth.uid());
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================

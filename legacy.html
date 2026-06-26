@@ -246,6 +246,20 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 @media (max-width:600px){ header h1{font-size:1.05rem} }
 /* ===== 閲覧モード ===== */
 .modetabs{display:flex;gap:8px;margin-bottom:16px}
+/* v2: 下書きバー＆一覧 */
+.draft-bar{display:flex;gap:8px;justify-content:center;margin:-8px 0 18px}
+.draft-btn{border:1px solid var(--line-d);background:#fff;color:var(--sub);border-radius:9px;padding:7px 16px;font-size:.82rem;font-weight:700;cursor:pointer}
+.draft-btn:hover{border-color:var(--ink);color:var(--ink)}
+.draft-dialog{max-width:380px;max-height:80vh;overflow:auto}
+#draftListBody{display:flex;flex-direction:column;gap:8px;margin:4px 0}
+.draft-item{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:10px;padding:8px;cursor:pointer}
+.draft-item:hover{border-color:var(--line-d);background:#FBF8F4}
+.draft-thumb{flex:none;width:48px;height:48px;border-radius:8px;overflow:hidden;background:repeating-linear-gradient(45deg,#EEF0F4,#EEF0F4 7px,#E5E9F0 7px,#E5E9F0 14px);display:block}
+.draft-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.draft-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left}
+.draft-title{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.draft-date{font-size:.72rem;color:var(--sub)}
+.draft-del{flex:none;border:1px solid var(--line-d);background:#fff;color:var(--warn);border-radius:8px;padding:5px 10px;font-size:.74rem;font-weight:700;cursor:pointer}
 .modetab{flex:1;padding:12px;border:1px solid var(--line-d);background:#fff;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;color:var(--sub)}
 .modetab.active{background:var(--bp);color:#fff;border-color:var(--bp)}
 
@@ -875,6 +889,16 @@ body{background-image:none}
   <button class="lt-bell" id="ltBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
 </header>
 
+<!-- v2: 下書き一覧ダイアログ -->
+<div class="exit-overlay" id="draftOverlay">
+  <div class="exit-dialog draft-dialog">
+    <h3>下書き一覧</h3>
+    <p class="note" id="draftHint" style="text-align:center"></p>
+    <div id="draftListBody"></div>
+    <button class="ghost" id="draftClose">閉じる</button>
+  </div>
+</div>
+
 <!-- v2: 編集終了ダイアログ（入力がある時だけ表示） -->
 <div class="exit-overlay" id="exitOverlay">
   <div class="exit-dialog">
@@ -1006,6 +1030,10 @@ body{background-image:none}
 <div class="modetabs">
   <button class="modetab" id="tabViewFromEdit">閲覧プレビュー</button>
   <button class="modetab active" id="tabEditActive">編集</button>
+</div>
+<div class="draft-bar">
+  <button class="draft-btn js-draft" type="button">下書き保存</button>
+  <button class="draft-btn" id="btnDraftList" type="button">下書き一覧</button>
 </div>
 
 <div class="card">
@@ -2848,11 +2876,11 @@ function offerDraftRestore(){
     }
   }, 300);
 }
-// 「下書き保存」ボタン（編集画面・プレビュー両方）に結線
+// 「下書き保存」ボタン（編集画面・プレビュー両方）に結線。実体はサーバー保存（写真込み・複数）。
 document.querySelectorAll(".js-draft").forEach(function(b){
   b.addEventListener("click", function(){
-    var r = saveDraft();
-    legacyToast(r.ok ? (r.photosDropped ? "下書きを保存しました（写真は容量制限のため含まれません）" : "下書きを保存しました") : "下書きの保存に失敗しました");
+    if (window.saveDraftServer) window.saveDraftServer();
+    else legacyToast("下書き保存は準備中です");
   });
 });
 // 編集→プレビュー時に「編集する」ボタンを出し、編集画面へ戻れるようにする
@@ -2889,14 +2917,12 @@ function exitEditor(target){
   ov.onclick = function(e){ if (e.target === ov) close(); };
   document.getElementById("exitDiscard").onclick = function(){ location.href = _exitTarget; };
   document.getElementById("exitSave").onclick = function(){
-    var r = saveDraft();
     close();
-    if (r.ok){
-      legacyToast(r.photosDropped ? "下書きを保存しました（写真は含まれません）" : "下書きを保存しました");
-      setTimeout(function(){ location.href = _exitTarget; }, 600);   // トーストを見せてから離脱
-    } else {
-      alert("下書きの保存に失敗しました。写真を減らすか、通信状況を確認して再度お試しください。");
-    }
+    if (!window.saveDraftServer){ location.href = _exitTarget; return; }
+    window.saveDraftServer().then(function(r){
+      if (r && r.ok){ setTimeout(function(){ location.href = _exitTarget; }, 700); }   // 保存できたら離脱（トーストを見せてから）
+      // 失敗時（未ログイン等）はトーストが出るだけで離脱しない＝作業を守る
+    });
   };
   // PCサイドバーの「探す/記録/ロゴ」も、編集中で内容があれば同じ確認を通す
   document.querySelectorAll('.sidebar a[href^="index.html"]').forEach(function(a){
@@ -2936,7 +2962,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     try{ state = decodeState(me[1]); }catch(_){ }
   }
   // v2シェルから #edit / #view / #about で初期モードを指定(ロジック本体は不変)
-  if (hash === "#edit"){ showPage("edit"); offerDraftRestore(); return; }
+  if (hash === "#edit"){ showPage("edit"); return; }   // 下書きは「下書き一覧」ボタンから手動で開く方式に変更
   if (hash === "#view"){ showPage("view"); return; }
   if (hash === "#about"){ showPage("about"); return; }
   // ?id=xxx で来た場合は loadById が view へ切り替える。それ以外は about
@@ -2957,6 +2983,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   var sb = (window.supabase && cfg.SUPABASE_URL)
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
   /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
+  var currentDraftId = null;   // 編集中の下書きID（下書きから開いた場合にセット。投稿成功で削除）
 
   // 段7-3.6: イベント計測（fire-and-forget。index.htmlと同じ仕様）
   function getLegacySessionId(){
@@ -3298,7 +3325,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
             else { payload.owner_id = uid; q = sb.from("recipes").insert(payload); }
             return q.select("id").single().then(function(res){
               if (res.error) throw res.error;
-              if (typeof clearDraft === "function") clearDraft();   // 投稿できたら下書きは不要なので消す
+              if (typeof clearDraft === "function") clearDraft();   // 旧localStorage下書きの後始末
+              // この投稿が下書きから来ていたら、その下書きを消す（公開できたので不要）
+              if (currentDraftId){ sb.from("drafts").delete().eq("id", currentDraftId).then(function(){}, function(){}); currentDraftId = null; }
               alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
               location.href = "index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
             });
@@ -3310,6 +3339,122 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       });
     });
   }
+
+  /* ===================== v2: 下書き（サーバー保存・複数・写真込み） ===================== */
+  var DRAFT_MAX = 5;
+  // 現在の編集内容を写真込みでサーバーに保存（新規=INSERT / 既存下書き=UPDATE）。Promiseで結果{ok}を返す
+  function saveDraftServer(){
+    if (!sb){ legacyToast("下書き保存はサーバー経由（URL）で開いたときに使えます"); return Promise.resolve({ ok:false }); }
+    return sb.auth.getSession().then(function(r){
+      var session = r && r.data && r.data.session;
+      if (!session){ legacyToast("下書き保存にはログインが必要です"); return { ok:false, msg:"ログインが必要です" }; }
+      var uid = session.user.id;
+      var pre = currentDraftId
+        ? Promise.resolve(0)
+        : sb.from("drafts").select("id", { count:"exact", head:true }).eq("owner_id", uid).then(function(c){ return c.count || 0; });
+      return pre.then(function(cnt){
+        if (!currentDraftId && cnt >= DRAFT_MAX){
+          legacyToast("下書きは" + DRAFT_MAX + "件まで。一覧から不要なものを削除してください");
+          return { ok:false, msg:"上限" };
+        }
+        legacyToast("下書きを保存中…");
+        var photosSrc = (state.photos || []).slice();
+        var photoUrls = photosSrc.slice();
+        var rowPhotos = (state.rows || []).map(function(x){ return x.photo || null; });
+        var rowUrls = rowPhotos.slice();
+        var jobs = [];
+        photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
+        rowPhotos.forEach(function(p, ri){ if (p) jobs.push(ensureUrl(uid, p, "r"+ri).then(function(u){ rowUrls[ri] = u; })); });
+        return Promise.all(jobs).then(function(){
+          var g = JSON.parse(JSON.stringify(state));
+          g.photos = photoUrls.filter(Boolean);
+          if (g.rows) g.rows.forEach(function(x, ri){ if (rowUrls[ri]) x.photo = rowUrls[ri]; else delete x.photo; });
+          var thumb = photoUrls.filter(Boolean)[0] || null;
+          var payload = { owner_id: uid, title: (state.kit || "").trim() || null, grid: g, cover_url: thumb, updated_at: new Date().toISOString() };
+          var q = currentDraftId
+            ? sb.from("drafts").update(payload).eq("id", currentDraftId)
+            : sb.from("drafts").insert(payload);
+          return q.select("id").single().then(function(res){
+            if (res.error) throw res.error;
+            currentDraftId = res.data.id;
+            legacyToast("下書きを保存しました");
+            return { ok:true, id: res.data.id };
+          });
+        });
+      });
+    }).catch(function(e){
+      legacyToast("下書きの保存に失敗しました");
+      return { ok:false, msg: (e && e.message) || "error" };
+    });
+  }
+  window.saveDraftServer = saveDraftServer;
+
+  // 下書き一覧を開く
+  function openDraftList(){
+    if (!sb){ legacyToast("下書きはサーバー経由（URL）で開いたときに使えます"); return; }
+    var ov = document.getElementById("draftOverlay"), body = document.getElementById("draftListBody"), hint = document.getElementById("draftHint");
+    if (!ov || !body) return;
+    body.innerHTML = '<p class="note" style="text-align:center">読み込み中…</p>';
+    if (hint) hint.textContent = "";
+    ov.classList.add("show");
+    sb.auth.getSession().then(function(r){
+      var session = r && r.data && r.data.session;
+      if (!session){ body.innerHTML = '<p class="note" style="text-align:center">下書きを使うにはログインしてください。</p>'; return; }
+      sb.from("drafts").select("id,title,cover_url,updated_at").eq("owner_id", session.user.id).order("updated_at", { ascending:false }).then(function(res){
+        var rows = (res && !res.error && res.data) ? res.data : [];
+        if (hint) hint.textContent = rows.length + " / " + DRAFT_MAX + " 件";
+        if (!rows.length){ body.innerHTML = '<p class="note" style="text-align:center">下書きはまだありません。編集して「下書き保存」で保存できます。</p>'; return; }
+        body.innerHTML = "";
+        rows.forEach(function(d){ body.appendChild(draftItem(d)); });
+      }, function(){ body.innerHTML = '<p class="note" style="text-align:center">読み込みに失敗しました。</p>'; });
+    });
+  }
+  function draftItem(d){
+    var row = document.createElement("div"); row.className = "draft-item";
+    var thumb = d.cover_url ? '<span class="draft-thumb"><img src="'+esc(d.cover_url)+'" alt=""></span>' : '<span class="draft-thumb"></span>';
+    var dt = d.updated_at ? new Date(d.updated_at) : null;
+    var dstr = dt ? ((dt.getMonth()+1)+"/"+dt.getDate()+" "+("0"+dt.getHours()).slice(-2)+":"+("0"+dt.getMinutes()).slice(-2)) : "";
+    row.innerHTML = thumb
+      + '<span class="draft-meta"><span class="draft-title">'+esc(d.title || "無題の下書き")+'</span><span class="draft-date">'+dstr+'</span></span>'
+      + '<button class="draft-del" type="button">削除</button>';
+    row.querySelector(".draft-thumb").onclick = function(){ loadDraftIntoEditor(d.id); };
+    row.querySelector(".draft-meta").onclick  = function(){ loadDraftIntoEditor(d.id); };
+    row.querySelector(".draft-del").onclick   = function(e){ e.stopPropagation(); deleteDraftRow(d.id, row); };
+    return row;
+  }
+  function loadDraftIntoEditor(id){
+    if (!sb || !id) return;
+    sb.from("drafts").select("id,grid").eq("id", id).single().then(function(res){
+      if (res.error || !res.data){ legacyToast("下書きの読み込みに失敗しました"); return; }
+      try{ state = migrate(res.data.grid || {}); }catch(_){ state = res.data.grid || newState(); }
+      currentDraftId = id; currentRecipeId = null;
+      // 下書きは「新規投稿」扱いなので、ボタンを投稿用に戻して下書きボタンも表示
+      document.querySelectorAll(".js-publish").forEach(function(b){ b.textContent = "投稿する"; });
+      document.querySelectorAll(".js-draft").forEach(function(b){ b.style.display = ""; });
+      if (typeof renderAll === "function") renderAll();
+      if (typeof renderPhoto === "function") renderPhoto();
+      if (typeof renderMethodChips === "function") renderMethodChips();
+      var ov = document.getElementById("draftOverlay"); if (ov) ov.classList.remove("show");
+      if (typeof showPage === "function") showPage("edit");
+      legacyToast("下書きを開きました");
+    });
+  }
+  function deleteDraftRow(id, rowEl){
+    if (!confirm("この下書きを削除します。よろしいですか？")) return;
+    sb.from("drafts").delete().eq("id", id).then(function(res){
+      if (res && res.error){ legacyToast("削除に失敗しました"); return; }
+      if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
+      if (currentDraftId === id) currentDraftId = null;
+      var body = document.getElementById("draftListBody"), hint = document.getElementById("draftHint");
+      var n = body ? body.querySelectorAll(".draft-item").length : 0;
+      if (body && !n) body.innerHTML = '<p class="note" style="text-align:center">下書きはまだありません。</p>';
+      if (hint) hint.textContent = n + " / " + DRAFT_MAX + " 件";
+      legacyToast("下書きを削除しました");
+    });
+  }
+  var _btnDraftList = document.getElementById("btnDraftList"); if (_btnDraftList) _btnDraftList.onclick = openDraftList;
+  var _draftClose = document.getElementById("draftClose"); if (_draftClose) _draftClose.onclick = function(){ var ov=document.getElementById("draftOverlay"); if(ov) ov.classList.remove("show"); };
+  var _draftOv = document.getElementById("draftOverlay"); if (_draftOv) _draftOv.onclick = function(e){ if (e.target === _draftOv) _draftOv.classList.remove("show"); };
 })();
 </script>
 
