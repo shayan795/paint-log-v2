@@ -227,6 +227,21 @@ drop trigger if exists trg_lock_user_id on public.profiles;
 create trigger trg_lock_user_id before update on public.profiles
   for each row execute function public.lock_user_id();
 
+-- 【権限昇格の防止】RLSは「自分の行は更新OK」だが列単位の制限はしないため、
+-- 一般ユーザーが自分の is_admin を true にして管理者へ昇格できてしまう。これを塞ぐ。
+-- auth.uid() が null（SQLエディタ/サービスロール）からの付与だけ許可し、一般ユーザーの is_admin 変更は黙って無効化する。
+create or replace function public.guard_profile_admin()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and NEW.is_admin is distinct from OLD.is_admin then
+    NEW.is_admin := OLD.is_admin;
+  end if;
+  return NEW;
+end; $$;
+drop trigger if exists trg_guard_profile_admin on public.profiles;
+create trigger trg_guard_profile_admin before update on public.profiles
+  for each row execute function public.guard_profile_admin();
+
 -- 自分が管理者か判定するヘルパー(RLSの再帰を避けるため security definer)
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
