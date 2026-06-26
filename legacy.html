@@ -3127,7 +3127,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       ensureBackBtn();                  // 「← 戻る」を表示
       ensureAuthorChip(rec.owner_id);   // 投稿者チップ（タップでその人のプロフィールへ）
       // コメントセクション
+      // ★高速表示(Worker埋め込み)ではこのapplyRecipeがコメントscript読込より先に走るため、
+      //   renderComments未定義なら読込完了後(次tick)にやり直す（他人の投稿でコメント欄が空になる不具合の修正）。
       if (window.renderComments) window.renderComments(rec);
+      else setTimeout(function(){ if (window.renderComments) window.renderComments(rec); }, 0);
       // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）
       if (rec.is_public){
         try {
