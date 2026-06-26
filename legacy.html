@@ -260,6 +260,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .draft-title{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .draft-date{font-size:.72rem;color:var(--sub)}
 .draft-del{flex:none;border:1px solid var(--line-d);background:#fff;color:var(--warn);border-radius:8px;padding:5px 10px;font-size:.74rem;font-weight:700;cursor:pointer}
+/* 親の .exit-dialog button{width:100%} を打ち消す（削除ボタンが全幅に伸びてはみ出すのを防ぐ） */
+.draft-dialog .draft-del{width:auto}
+.draft-dialog #draftListBody{width:100%}
 .modetab{flex:1;padding:12px;border:1px solid var(--line-d);background:#fff;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;color:var(--sub)}
 .modetab.active{background:var(--bp);color:#fff;border-color:var(--bp)}
 
@@ -3577,8 +3580,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       btn.type='button'; btn.className='acc-toggle-all';
       btn.textContent='すべて開く';
       btn.addEventListener('click', function(){
-        var allClosed = Array.prototype.every.call(trs, function(tr){ return tr.classList.contains('acc-closed'); });
-        Array.prototype.forEach.call(trs, function(tr){ tr.classList.toggle('acc-closed', !allClosed); });
+        // クリック時に最新の行を取り直す（編集→プレビューを往復するとtrsが古くなり効かない不具合を修正）
+        var trsNow = document.querySelectorAll('#viewTable tbody tr');
+        if (!trsNow.length) return;
+        var allClosed = Array.prototype.every.call(trsNow, function(tr){ return tr.classList.contains('acc-closed'); });
+        Array.prototype.forEach.call(trsNow, function(tr){ tr.classList.toggle('acc-closed', !allClosed); });
         refreshBtnLabel();
       });
       label.appendChild(btn);
