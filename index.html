@@ -443,6 +443,10 @@ button{font-family:inherit}
 .pf-bio{font-size:.9rem; margin-top:10px; line-height:1.6; white-space:pre-wrap}
 .pf-link{display:inline-block; margin-top:8px; color:var(--bp); font-size:.88rem; text-decoration:none; word-break:break-all}
 .pf-link:hover{text-decoration:underline}
+/* プロフィールのXボタン（投稿ページの𝕏リンクと同じ見た目で、プロフィールからXへ飛べる） */
+.pf-x{display:inline-flex; align-items:center; gap:6px; margin-top:8px; padding:6px 14px; border:1px solid var(--line-d); border-radius:999px; font-size:.85rem; font-weight:700; color:var(--ink); text-decoration:none; background:var(--surface,#fff)}
+.pf-x:hover{border-color:var(--ink)}
+.pf-x .x-badge{font-weight:900; font-size:1rem}
 .pf-postsec{padding:18px 16px 8px}
 .pf-postsec > h3{font-size:.95rem; margin:0 0 12px; display:flex; align-items:center; gap:8px}
 .pf-postsec > h3::before{content:""; width:4px; height:14px; background:var(--accent); border-radius:1px}
@@ -1768,6 +1772,16 @@ function renderProfilePosts(ownerId, isSelf, vis){
   });
 }
 
+// Xアカウント(@ID or URL)を x.com のプロフィールURLに正規化。それ以外はnull（投稿ページと同じ判定）
+function xProfileUrl(v){
+  if (!v) return null;
+  var a = String(v).trim();
+  var m = a.match(/(?:twitter\.com|x\.com)\/@?([A-Za-z0-9_]{1,15})/i);
+  if (m) return "https://x.com/" + m[1];
+  a = a.replace(/^@/, "");
+  if (/^[A-Za-z0-9_]{1,15}$/.test(a)) return "https://x.com/" + a;
+  return null;
+}
 // X風プロフィール表示。isSelf=自分（編集ボタン＋公開/非公開タブ）/他人＝閲覧のみ
 function renderProfileView(prof, isSelf){
   prof = prof || {};
@@ -1777,6 +1791,8 @@ function renderProfileView(prof, isSelf){
   var handle = prof.user_id ? "@"+prof.user_id : "";
   var bio  = prof.bio || "";
   var link = prof.link || "";
+  var xurl = xProfileUrl(prof.x_account);
+  var xh   = xurl ? xurl.split("/").pop() : "";
   $("fvTitle").textContent = "プロフィール";
   var hdrStyle = safeUrl(prof.header_url) ? ' style="background-image:url('+esc(safeUrl(prof.header_url))+')"' : '';
   var avInner  = safeUrl(prof.avatar_url) ? '<img src="'+esc(safeUrl(prof.avatar_url))+'" alt="">' : esc(ini);
@@ -1789,6 +1805,7 @@ function renderProfileView(prof, isSelf){
     +   '<div class="pf-name">'+esc(name)+'</div>'
     +   (handle ? '<div class="pf-handle">'+esc(handle)+'</div>' : '')
     +   (bio ? '<div class="pf-bio">'+esc(bio)+'</div>' : '')
+    +   (xurl ? '<div><a class="pf-x" href="'+esc(xurl)+'" target="_blank" rel="noopener nofollow"><span class="x-badge">𝕏</span>@'+esc(xh)+'</a></div>' : '')
     +   (link ? (safeUrl(link) ? '<a class="pf-link" href="'+esc(safeUrl(link))+'" target="_blank" rel="noopener nofollow">'+esc(link)+'</a>' : '<span class="pf-link">'+esc(link)+'</span>') : '')
     + '</div>'
     + '<div class="pf-postsec">'
@@ -1826,7 +1843,9 @@ function renderProfileEdit(prof){
     + '<input id="pfName" class="pf-field" type="text" maxlength="30" value="'+val(prof.display_name)+'">'
     + '<label class="pf-label">自己紹介</label>'
     + '<textarea id="pfBio" class="pf-field" rows="3" maxlength="160" placeholder="制作スタイルや好きなジャンルなど">'+val(prof.bio)+'</textarea>'
-    + '<label class="pf-label">リンク（XやサイトのURL）</label>'
+    + '<label class="pf-label">Xアカウント（任意・@なしのIDかURL）</label>'
+    + '<input id="pfX" class="pf-field" type="text" maxlength="120" placeholder="例: plamo_paint または https://x.com/plamo_paint" value="'+val(prof.x_account)+'">'
+    + '<label class="pf-label">リンク（サイトのURLなど）</label>'
     + '<input id="pfLink" class="pf-field" type="url" placeholder="https://..." value="'+val(prof.link)+'">'
     + '<label class="pf-label">ヘッダー画像</label>'
     + '<div class="pf-imgrow"><span class="pf-imgprev pf-imgprev-h" id="hdrPrev"></span>'
@@ -1848,7 +1867,7 @@ function renderProfileEdit(prof){
   $("pfSave").onclick = function(){
     var nm = $("pfName").value.trim();
     if (!nm){ $("pfName").focus(); return; }   // 表示名は必須
-    saveProfile({ display_name: nm, bio: $("pfBio").value.trim(), link: $("pfLink").value.trim() },
+    saveProfile({ display_name: nm, bio: $("pfBio").value.trim(), link: $("pfLink").value.trim(), x_account: $("pfX").value.trim() },
       function(){ openProfile(); });            // 保存後は表示に戻る
   };
 }
@@ -1857,7 +1876,7 @@ function renderProfileEdit(prof){
 // targetUserId（公開user_id/@handle）省略=自分。指定=他人（閲覧専用）
 function openProfile(targetUserId){
   if (!sb){ openAuth("login"); return; }
-  var SEL = "id,user_id,display_name,bio,link,avatar_url,header_url";
+  var SEL = "id,user_id,display_name,bio,link,avatar_url,header_url,x_account";
   if (!targetUserId){
     if (!currentUserId){ openAuth("login"); return; }   // 自分のプロフィールはログイン必須
     setHash("profile");
