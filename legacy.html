@@ -220,6 +220,11 @@ td.cell[draggable=true]{cursor:grab}
 th.coldragging{opacity:.4}
 th.coldragover{outline:2px dashed #fff;outline-offset:-3px}
 td.delrow,th.addcol-th{border:none;background:transparent}
+/* 色グループの並べ替え（↑↓）。小さなボタンで誤操作しにくく・画面も複雑にしない */
+.roworder{display:inline-flex; gap:6px}
+.ord-btn{width:34px; height:34px; border:1px solid var(--line-d); background:#fff; color:var(--sub); border-radius:8px; font-size:1rem; line-height:1; cursor:pointer; padding:0}
+.ord-btn:hover:not(:disabled){border-color:var(--ink); color:var(--ink)}
+.ord-btn:disabled{opacity:.3; cursor:default}
 .paintlist{display:flex;flex-direction:column;gap:8px}
 .paintrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);padding:8px 10px;flex-wrap:wrap;background:#fff}
 .paintrow .chip{width:22px;height:22px}
@@ -499,8 +504,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   #recipeTable td.cell .chipline{justify-content:flex-end;text-align:right}
   #recipeTable td.cell.empty{font-size:0;justify-content:space-between}
   #recipeTable td.cell.empty::after{content:"＋ 塗料を選ぶ";font-size:.8rem;color:var(--bp);font-weight:700}
-  #recipeTable td.delrow{border-bottom:none;padding:10px 14px;text-align:right}
-  #recipeTable td.delrow .delrow-btn{width:100%}
+  #recipeTable td.delrow{border-bottom:none;padding:10px 14px;display:flex;align-items:center;gap:10px}
+  #recipeTable td.delrow .roworder{margin-right:auto}
+  #recipeTable td.delrow .delrow-btn{width:auto}
   #recipeTable td.delrow .delrow-btn::after{content:" この色グループを削除"}
   #recipeTable .addcol-th{display:none}
 }
@@ -1944,6 +1950,14 @@ function renderGrid(){
     const tdPhoto = tr.insertCell(); tdPhoto.className = "rowphoto";
     tdPhoto.appendChild(makeRowPhotoControl(row));
     const tdD = tr.insertCell(); tdD.className = "delrow";
+    // 並べ替え（↑↓）：色グループの順番を入れ替える
+    const order = document.createElement("span"); order.className = "roworder";
+    const up = document.createElement("button"); up.className = "ord-btn"; up.textContent = "↑"; up.title = "上へ移動"; up.disabled = (ri === 0);
+    up.onclick = () => { if (ri > 0){ const t = state.rows[ri]; state.rows[ri] = state.rows[ri-1]; state.rows[ri-1] = t; renderAll(); } };
+    const down = document.createElement("button"); down.className = "ord-btn"; down.textContent = "↓"; down.title = "下へ移動"; down.disabled = (ri === state.rows.length - 1);
+    down.onclick = () => { if (ri < state.rows.length - 1){ const t = state.rows[ri]; state.rows[ri] = state.rows[ri+1]; state.rows[ri+1] = t; renderAll(); } };
+    order.appendChild(up); order.appendChild(down);
+    tdD.appendChild(order);
     const del = document.createElement("button"); del.className = "small ghost delrow-btn"; del.textContent = "×"; del.title = "行を削除";
     del.onclick = () => { state.rows.splice(ri,1); renderAll(); };
     tdD.appendChild(del);
