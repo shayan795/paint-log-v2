@@ -410,6 +410,19 @@ button{font-family:inherit}
 .auth-link{background:none; border:none; color:var(--bp); font:inherit; font-size:.82rem; cursor:pointer; padding:0; text-decoration:underline}
 /* プロフィール（X風） */
 .pf{width:100%}   /* 画面いっぱい（PCも全幅） */
+/* 画像トリミング（X風・ドラッグ移動＋拡大） */
+.crop-ov{position:fixed; inset:0; background:rgba(10,12,18,.82); z-index:130; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px}
+.crop-title{color:#fff; font-weight:700; font-size:.95rem}
+.crop-stage{position:relative; overflow:hidden; background:#000; touch-action:none; cursor:grab; box-shadow:0 6px 30px rgba(0,0,0,.5); max-width:100%}
+.crop-stage.grabbing{cursor:grabbing}
+.crop-stage.round{border-radius:50%}
+.crop-img{position:absolute; left:0; top:0; max-width:none; user-select:none; -webkit-user-drag:none; pointer-events:none}
+.crop-hint{color:#fff; font-size:.78rem; opacity:.8}
+.crop-zoom{width:min(300px,80%)}
+.crop-row{display:flex; gap:12px; margin-top:4px}
+.crop-btn{padding:10px 24px; border-radius:10px; font-weight:700; font-size:.9rem; border:none; cursor:pointer}
+.crop-ok{background:#BE2A33; color:#fff}
+.crop-cancel{background:#fff; color:#333}
 .pf-header{width:100%; height:clamp(150px,26vw,260px); background:linear-gradient(120deg,#C9CFD9,#E7E7E2); background-size:cover; background-position:center}
 .pf-avatar img{width:100%; height:100%; border-radius:50%; object-fit:cover}
 /* 画像アップロード行（編集フォーム） */
@@ -1630,23 +1643,87 @@ function compressImage(file, maxEdge, quality){
 }
 
 // ヘッダー/アイコン画像をStorageにアップロード→profilesに保存
-function uploadProfileImage(kind, file, statusEl, prevEl){
-  if (!sb || !currentUserId) return;
-  statusEl.textContent = "アップロード中…";
-  var maxEdge = (kind === "avatar") ? 512 : 1500;
-  compressImage(file, maxEdge, 0.85).then(function(blob){
-    var path = currentUserId + "/" + kind + "_" + Date.now() + ".jpg";
-    return sb.storage.from("profile").upload(path, blob, { contentType:"image/jpeg", upsert:true });
-  }).then(function(up){
+// 加工済みblob（cropper出力）をStorage→profilesへ。再圧縮不要。
+function uploadProfileBlob(kind, blob, statusEl, prevEl){
+  if (!sb || !currentUserId || !blob) return;
+  if (statusEl) statusEl.textContent = "アップロード中…";
+  var path = currentUserId + "/" + kind + "_" + Date.now() + ".jpg";
+  sb.storage.from("profile").upload(path, blob, { contentType:"image/jpeg", upsert:true }).then(function(up){
     if (up.error) throw up.error;
     var url = sb.storage.from("profile").getPublicUrl(up.data.path).data.publicUrl;
     var field = (kind === "avatar") ? { avatar_url:url } : { header_url:url };
     return sb.from("profiles").update(field).eq("id", currentUserId).then(function(r){
       if (r.error) throw r.error;
       if (prevEl) prevEl.style.backgroundImage = "url(" + url + ")";
-      statusEl.textContent = "更新しました ✓";
+      if (statusEl) statusEl.textContent = "更新しました ✓";
     });
-  }).catch(function(e){ statusEl.textContent = "失敗: " + (e.message || e); });
+  }).catch(function(e){ if (statusEl) statusEl.textContent = "失敗: " + (e.message || e); });
+}
+// 互換: Fileを圧縮してそのまま上げる（cropperを通さない経路用・現状未使用だが残置）
+function uploadProfileImage(kind, file, statusEl, prevEl){
+  if (!sb || !currentUserId) return;
+  if (statusEl) statusEl.textContent = "アップロード中…";
+  compressImage(file, (kind === "avatar") ? 512 : 1500, 0.85)
+    .then(function(blob){ uploadProfileBlob(kind, blob, statusEl, prevEl); })
+    .catch(function(e){ if (statusEl) statusEl.textContent = "失敗: " + (e.message || e); });
+}
+// X風の画像トリミング：ドラッグで移動＋スライダー/ホイールで拡大→見えている範囲を切り出して onDone(blob)
+function openImageCropper(file, opts, onDone){
+  opts = opts || {};
+  var aspect = opts.aspect || 1, outW = opts.outW || 512, outH = opts.outH || Math.round(outW / aspect);
+  var img = new Image();
+  img.onerror = function(){ alert("この画像は読み込めませんでした"); };
+  img.onload = function(){
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    var fw = Math.min(window.innerWidth - 40, 340), fh = Math.round(fw / aspect);
+    var maxH = window.innerHeight - 220;
+    if (fh > maxH){ fh = Math.max(80, maxH); fw = Math.round(fh * aspect); }
+    var coverScale = Math.max(fw / iw, fh / ih);
+    var scale = coverScale, offsetX = (fw - iw * scale) / 2, offsetY = (fh - ih * scale) / 2;
+
+    var ov = document.createElement("div"); ov.className = "crop-ov";
+    ov.innerHTML =
+      '<div class="crop-title">' + esc(opts.title || "位置を調整") + '</div>'
+      + '<div class="crop-stage' + (opts.round ? " round" : "") + '" style="width:' + fw + 'px;height:' + fh + 'px"></div>'
+      + '<div class="crop-hint">ドラッグで移動 / スライダーで拡大</div>'
+      + '<input type="range" class="crop-zoom" min="1" max="3" step="0.01" value="1">'
+      + '<div class="crop-row"><button class="crop-btn crop-cancel">キャンセル</button><button class="crop-btn crop-ok">決定</button></div>';
+    document.body.appendChild(ov);
+    var stage = ov.querySelector(".crop-stage");
+    img.className = "crop-img"; stage.appendChild(img);
+
+    function apply(){
+      offsetX = Math.min(0, Math.max(fw - iw * scale, offsetX));
+      offsetY = Math.min(0, Math.max(fh - ih * scale, offsetY));
+      img.style.width = (iw * scale) + "px"; img.style.height = (ih * scale) + "px";
+      img.style.left = offsetX + "px"; img.style.top = offsetY + "px";
+    }
+    function setScale(ns){
+      ns = Math.max(coverScale, ns);
+      var cx = fw / 2, cy = fh / 2, ix = (cx - offsetX) / scale, iy = (cy - offsetY) / scale;
+      scale = ns; offsetX = cx - ix * scale; offsetY = cy - iy * scale; apply();
+    }
+    apply();
+
+    var zoom = ov.querySelector(".crop-zoom");
+    zoom.addEventListener("input", function(){ setScale(coverScale * parseFloat(zoom.value)); });
+    stage.addEventListener("wheel", function(e){ e.preventDefault(); var nv = Math.min(3, Math.max(1, (scale / coverScale) * (e.deltaY < 0 ? 1.06 : 0.94))); zoom.value = nv; setScale(coverScale * nv); }, { passive:false });
+
+    var dragging = false, sx0 = 0, sy0 = 0, ox0 = 0, oy0 = 0;
+    stage.addEventListener("pointerdown", function(e){ dragging = true; sx0 = e.clientX; sy0 = e.clientY; ox0 = offsetX; oy0 = offsetY; stage.setPointerCapture(e.pointerId); stage.classList.add("grabbing"); });
+    stage.addEventListener("pointermove", function(e){ if (!dragging) return; offsetX = ox0 + (e.clientX - sx0); offsetY = oy0 + (e.clientY - sy0); apply(); });
+    function endDrag(){ dragging = false; stage.classList.remove("grabbing"); }
+    stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+
+    function close(){ try { document.body.removeChild(ov); } catch (_) {} URL.revokeObjectURL(img.src); }
+    ov.querySelector(".crop-cancel").onclick = close;
+    ov.querySelector(".crop-ok").onclick = function(){
+      var c = document.createElement("canvas"); c.width = outW; c.height = outH;
+      c.getContext("2d").drawImage(img, -offsetX / scale, -offsetY / scale, fw / scale, fh / scale, 0, 0, outW, outH);
+      c.toBlob(function(b){ close(); if (b && onDone) onDone(b); }, "image/jpeg", 0.85);
+    };
+  };
+  img.src = URL.createObjectURL(file);
 }
 
 // 退会＝アカウント＋全データ完全削除（サーバの delete_user 関数を呼ぶ。cascadeで投稿等も消える）
@@ -1764,8 +1841,10 @@ function renderProfileEdit(prof){
     + '</div>';
   if (prof.header_url) $("hdrPrev").style.backgroundImage = "url(" + prof.header_url + ")";
   if (prof.avatar_url) $("avPrev").style.backgroundImage  = "url(" + prof.avatar_url + ")";
-  $("hdrFile").onchange = function(e){ var f = e.target.files[0]; if (f) uploadProfileImage("header", f, $("hdrStatus"), $("hdrPrev")); };
-  $("avFile").onchange  = function(e){ var f = e.target.files[0]; if (f) uploadProfileImage("avatar", f, $("avStatus"), $("avPrev")); };
+  $("hdrFile").onchange = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    openImageCropper(f, { aspect:3, outW:1500, outH:500, round:false, title:"ヘッダー画像の位置を調整" }, function(blob){ uploadProfileBlob("header", blob, $("hdrStatus"), $("hdrPrev")); }); };
+  $("avFile").onchange  = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    openImageCropper(f, { aspect:1, outW:512, outH:512, round:true, title:"アイコンの位置を調整" }, function(blob){ uploadProfileBlob("avatar", blob, $("avStatus"), $("avPrev")); }); };
   $("pfSave").onclick = function(){
     var nm = $("pfName").value.trim();
     if (!nm){ $("pfName").focus(); return; }   // 表示名は必須
