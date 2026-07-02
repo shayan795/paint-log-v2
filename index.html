@@ -846,7 +846,7 @@ function recordCard(r){
   var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
   var badge = (r.is_public === false) ? '<span class="rec-private">非公開</span>' : '';
   c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
-  c.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+  c.addEventListener("click", function(){ location.href = "/r/" + r.id; });
   return c;
 }
 // 記録タブ：作成した投稿＋保存した投稿（クリップ）の2セクション
@@ -1200,7 +1200,7 @@ function openTagResults(slug, label){
           var card = document.createElement("div"); card.className = "reco-card";
           card.innerHTML = '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt=""></div>'
             + '<div class="reco-title">'+esc(r.title||"無題")+'</div>';
-          card.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+          card.addEventListener("click", function(){ location.href = "/r/" + r.id; });
           recoRow.appendChild(card);
           var dot = document.createElement("span"); dot.className = "dot" + (i === 0 ? " on" : ""); recoDots.appendChild(dot);
         });
@@ -2014,7 +2014,7 @@ function openReportsAdmin(){
           + '<div class="rep-meta">対象：'+esc(title)+' ／ '+esc(d)+'</div>';
         var act = document.createElement("div"); act.className = "rep-act";
         var view = document.createElement("button"); view.className = "rep-btn"; view.textContent = "投稿を見る";
-        view.onclick = function(){ location.href = "legacy.html?id=" + r.recipe_id + "#view"; };
+        view.onclick = function(){ location.href = "/r/" + r.recipe_id; };
         var done = document.createElement("button"); done.className = "rep-btn";
         bindToggleDone(done, "reports", r.id, r.status, card);
         var del = makeDeleteBtn("reports", r.id, card);
@@ -2203,7 +2203,7 @@ function renderReco(){
           : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
         var author = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "";
         card.innerHTML = thumb + '<div class="reco-title">'+esc(r.title||"無題")+'</div><div class="reco-author">'+esc(author)+'</div>';
-        card.addEventListener("click", function(){ location.href = "legacy.html?id=" + r.id + "#view"; });
+        card.addEventListener("click", function(){ location.href = "/r/" + r.id; });
         row.appendChild(card);
         var dot = document.createElement("span");
         dot.className = "dot" + (i === 0 ? " on" : "");
@@ -2298,7 +2298,7 @@ function renderTrending(){
       if (rows.length < 4){ showMock(); return; }
       grid.innerHTML = "";
       rows.forEach(function(r){
-        var go = (function(id){ return function(){ location.href = "legacy.html?id=" + id + "#view"; }; })(r.id);
+        var go = (function(id){ return function(){ location.href = "/r/" + id; }; })(r.id);
         grid.appendChild(makeTile({ label:r.title || "無題のレシピ", img:r.cover_url }, false, go));
       });
     }, showMock);
