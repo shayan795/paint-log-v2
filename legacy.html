@@ -337,6 +337,11 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .vband a.vauthor-x{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);font-weight:600;border:1px solid var(--line-d);border-radius:999px;padding:3px 11px 3px 8px;transition:.15s}
 .vband a.vauthor-x:hover{border-color:var(--ink);background:var(--ink);color:#fff}
 .vband a.vauthor-x .x-badge{font-family:"Helvetica Neue",Arial,sans-serif;font-weight:700;font-size:.82rem;line-height:1}
+/* X風の小さなアクティビティ表示（バーグラフ＋表示回数）。著者チップの直下に控えめに置く */
+.v-views{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--sub);font-variant-numeric:tabular-nums;margin:2px 0 12px;padding:0 2px}
+.v-views svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+.v-views .vv-num{font-weight:700;color:var(--ink)}
+.v-views .vv-unit{opacity:.85}
 .vmeta-memo{font-size:.9rem;color:var(--ink);margin-top:16px;line-height:1.85;white-space:pre-wrap;background:#fff;border:1px solid var(--line-d);border-left:4px solid var(--accent);padding:14px 16px}
 .vmeta-memo-label{display:block;font-size:.66rem;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
 
@@ -3105,15 +3110,20 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
       //   renderComments未定義なら読込完了後(次tick)にやり直す（他人の投稿でコメント欄が空になる不具合の修正）。
       if (window.renderComments) window.renderComments(rec);
       else setTimeout(function(){ if (window.renderComments) window.renderComments(rec); }, 0);
-      // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）
+      // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）＋X風の表示回数を出す
       if (rec.is_public){
+        var showViews = function(){
+          if (!sb) return;
+          sb.from("recipes").select("view_count").eq("id", rec.id).single()
+            .then(function(r){ if (r && r.data) renderViewCount(r.data.view_count || 0); }, function(){});
+        };
         try {
           var today = new Date().toISOString().slice(0,10);
           if (sb && localStorage.getItem("pv_" + rec.id) !== today){
             localStorage.setItem("pv_" + rec.id, today);
-            sb.rpc("increment_view", { rid: rec.id }).then(function(){}, function(){});
-          }
-        } catch(_){ }
+            sb.rpc("increment_view", { rid: rec.id }).then(showViews, showViews);   // 加算後に最新値を表示
+          } else { showViews(); }                                                   // 既に加算済みなら現在値を表示
+        } catch(_){ showViews(); }
         // 段7-3.6: イベント計測
         trackLegacy("view_recipe", { recipe_id: rec.id });
       }
@@ -3230,6 +3240,23 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
         + (p.user_id ? '<span class="vac-id">@'+esc(p.user_id)+'</span>' : '') + '</span>';
       vb.insertBefore(a, vb.firstChild);
     });
+  }
+  // X風の小さなアクティビティ表示（バーグラフ＋表示回数）。著者チップの直下に置く。公開投稿のみ。
+  function fmtViews(n){
+    n = n || 0;
+    if (n >= 10000) return (Math.round(n / 1000) / 10).toString().replace(/\.0$/, "") + "万";
+    return n.toLocaleString("ja-JP");
+  }
+  function renderViewCount(count){
+    var existing = document.getElementById("vViews");
+    if (existing){ var s = existing.querySelector(".vv-num"); if (s) s.textContent = fmtViews(count); return; }
+    var vb = document.getElementById("viewBody"); if (!vb) return;
+    var el = document.createElement("div"); el.id = "vViews"; el.className = "v-views"; el.title = "表示回数";
+    el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="14"/></svg>'
+      + '<span class="vv-num">' + fmtViews(count) + '</span><span class="vv-unit">表示</span>';
+    var author = document.getElementById("vAuthor");
+    if (author && author.parentNode === vb) vb.insertBefore(el, author.nextSibling);
+    else vb.insertBefore(el, vb.firstChild);
   }
   // 投稿閲覧ページの「← 戻る」（誰でも使える。バー左端に固定）
   function ensureBackBtn(){
