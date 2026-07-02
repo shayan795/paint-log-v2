@@ -965,6 +965,31 @@ function openPaint(opts){
   loadPaintWorks(opts.pid, $("paintWorks"));
 }
 
+// 自分のデータ（プロフィール＋全レシピ:公開/非公開）をJSONでダウンロード。既存RLS(自分の行はSELECT可)の範囲。
+function exportMyData(){
+  if (!sb || !currentUserId) return;
+  var btn = $("setExport"); if (btn){ btn.disabled = true; btn.textContent = "エクスポート中…"; }
+  var reset = function(){ if (btn){ btn.disabled = false; btn.textContent = "自分のデータをエクスポート（JSON）"; } };
+  Promise.all([
+    sb.from("profiles").select("*").eq("id", currentUserId).single(),
+    sb.from("recipes").select("*").eq("owner_id", currentUserId).order("created_at", { ascending:false })
+  ]).then(function(r){
+    var data = {
+      service: "塗装レシピ録 / plamo-paint.com",
+      exported_at: new Date().toISOString(),
+      profile: (r[0] && !r[0].error) ? r[0].data : null,
+      recipes: (r[1] && !r[1].error) ? (r[1].data || []) : []
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var d = new Date(); var stamp = d.getFullYear() + ("0"+(d.getMonth()+1)).slice(-2) + ("0"+d.getDate()).slice(-2);
+    var a = document.createElement("a"); a.href = url; a.download = "paintlog-export-" + stamp + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    reset(); if (typeof toast === "function") toast("データをダウンロードしました");
+  }, function(e){ reset(); alert("エクスポートに失敗しました：" + (e && e.message ? e.message : e)); });
+}
+
 // 設定（アカウントのハブ。ログイン必須）
 function openSettings(){
   if (!sb || !currentUserId){ openAuth("login"); return; }
@@ -1021,12 +1046,14 @@ function openSettings(){
         + '<a class="set-item" href="terms.html">利用規約</a>'
         + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
         + '<a class="set-item" href="help.html">ヘルプ</a>'
+        + '<button class="set-item" id="setExport">自分のデータをエクスポート（JSON）</button>'
         + '<button class="set-item" id="setLogout">ログアウト</button>'
         // 管理者(運営)は誤操作で自分を消すとモデレーション不能になるため退会ボタンを出さない
         + (currentIsAdmin ? '' : '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>')
         + '<p class="set-ver">塗装レシピ録</p>';
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;
+      if ($("setExport")) $("setExport").onclick = exportMyData;
       if ($("setDelete")) $("setDelete").onclick = deleteAccount;
       // DARKMODE:UI — テーマトグルの初期状態反映とクリック処理
       try {
