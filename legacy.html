@@ -293,7 +293,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .v-report-foot{margin:32px 0 12px; text-align:center}
 .v-report-btn{font:inherit; font-size:.78rem; color:var(--sub); background:none; border:none; cursor:pointer; text-decoration:underline}
 .v-report-btn:hover{color:var(--warn)}
-.v-authorchip{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);padding:12px 2px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.v-authorrow{display:flex;align-items:center;border-bottom:1px solid var(--line);margin-bottom:10px}
+.v-authorchip{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);padding:12px 2px}
 .v-authorchip:hover .vac-meta b{text-decoration:underline}
 .v-authorchip .vac-av{width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--bp-bg);color:var(--bp);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
 .v-authorchip .vac-av img{width:100%;height:100%;object-fit:cover}
@@ -338,7 +339,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .vband a.vauthor-x:hover{border-color:var(--ink);background:var(--ink);color:#fff}
 .vband a.vauthor-x .x-badge{font-family:"Helvetica Neue",Arial,sans-serif;font-weight:700;font-size:.82rem;line-height:1}
 /* X風の小さなアクティビティ表示（バーグラフ＋表示回数）。著者チップの直下に控えめに置く */
-.v-views{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--sub);font-variant-numeric:tabular-nums;margin:2px 0 12px;padding:0 2px}
+.v-views{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--sub);font-variant-numeric:tabular-nums;margin-left:auto;padding:0 6px;white-space:nowrap;flex:none}
 .v-views svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
 .v-views .vv-num{font-weight:700;color:var(--ink)}
 .v-views .vv-unit{opacity:.85}
@@ -744,6 +745,8 @@ body{background-image:none}
 .vrecipe-table tr.acc-closed td:not(.vr-part){display:none !important}
 .vrecipe-table tr.acc-closed td.vr-part{border-bottom:none}
 .vrecipe-table tr.acc-closed td.vr-part::after{transform:translateY(-50%) rotate(-90deg)}
+/* グループ見出しの写真は潰れて実質非表示（マーク丸・写真の名残が点として残る）ので、写真要素ごと隠す */
+.vrecipe-table td.vr-part .vr-photo{display:none}
 /* 「すべて開く／閉じる」ボタン（vsection-labelの右に配置） */
 .acc-toggle-all{
   float:right; font:inherit; font-size:.74rem; font-weight:700;
@@ -3229,16 +3232,19 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
   }
   // 投稿者チップ（アバター＋表示名）。タップで index の他人プロフィールへ
   function ensureAuthorChip(ownerId){
-    if (document.getElementById("vAuthor") || !ownerId) return;
+    if (document.getElementById("vAuthorRow") || !ownerId) return;
     sb.from("profiles").select("user_id,display_name,avatar_url").eq("id", ownerId).single().then(function(pp){
       if (pp.error || !pp.data) return;
       var p = pp.data, vb = document.getElementById("viewBody"); if (!vb) return;
+      var row = document.createElement("div"); row.id = "vAuthorRow"; row.className = "v-authorrow";
       var a = document.createElement("a"); a.id = "vAuthor"; a.className = "v-authorchip";
       if (p.user_id) a.href = "index.html#u/" + encodeURIComponent(p.user_id);
       var av = p.avatar_url ? '<img src="'+esc(p.avatar_url)+'" alt="">' : '<span class="vac-ini">'+esc((p.display_name||"?").charAt(0))+'</span>';
       a.innerHTML = '<span class="vac-av">'+av+'</span><span class="vac-meta"><b>'+esc(p.display_name||"ユーザー")+'</b>'
         + (p.user_id ? '<span class="vac-id">@'+esc(p.user_id)+'</span>' : '') + '</span>';
-      vb.insertBefore(a, vb.firstChild);
+      row.appendChild(a);
+      var v = document.getElementById("vViews"); if (v) row.appendChild(v);   // 先に描画済みなら表示回数を行の右端へ取り込む
+      vb.insertBefore(row, vb.firstChild);
     });
   }
   // X風の小さなアクティビティ表示（バーグラフ＋表示回数）。著者チップの直下に置く。公開投稿のみ。
@@ -3254,9 +3260,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
     var el = document.createElement("div"); el.id = "vViews"; el.className = "v-views"; el.title = "表示回数";
     el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="14"/></svg>'
       + '<span class="vv-num">' + fmtViews(count) + '</span><span class="vv-unit">表示</span>';
-    var author = document.getElementById("vAuthor");
-    if (author && author.parentNode === vb) vb.insertBefore(el, author.nextSibling);
-    else vb.insertBefore(el, vb.firstChild);
+    var row = document.getElementById("vAuthorRow");
+    if (row){ row.appendChild(el); return; }                 // 著者行の右端へ
+    var vb = document.getElementById("viewBody");            // 著者行がまだ無ければ仮置き（生成時に取り込む）
+    if (vb) vb.insertBefore(el, vb.firstChild);
   }
   // 投稿閲覧ページの「← 戻る」（誰でも使える。バー左端に固定）
   function ensureBackBtn(){
