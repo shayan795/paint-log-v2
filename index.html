@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>塗装レシピ録 — Paint Log｜プラモデル・模型の塗装レシピ記録ツール</title>
 <meta name="description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を色グループごとに記録して、URL一つで共有できる無料ツール。部位ごとの色分け・塗装手順を残せます。">
 <!-- OGP / Twitter Card --><!--OG_START-->
@@ -1225,45 +1225,60 @@ function openSearchResults(q){
   var recoSec = $("tagRecoSec"); recoSec.hidden = true;
   window.scrollTo(0,0);
   var qLow = q.toLowerCase();
-  // 公開投稿を新着300件取得→ クライアント側でtitle/methods/grid内自由入力塗料名でフィルタ
-  sb.from("recipes").select("id,title,cover_url,is_public,created_at,methods,grid,owner_id").eq("is_public", true)
-    .order("created_at", { ascending:false }).limit(300)
-    .then(function(res){
-      if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
-      var rows = res.data || [];
-      var hits = [];
-      rows.forEach(function(r){
-        var why = null;
-        if (r.title && r.title.toLowerCase().indexOf(qLow) >= 0) why = "タイトル一致";
-        else if (Array.isArray(r.methods)){
-          var hit = r.methods.some(function(s){
-            var lab = (METHOD_LABEL[s] || s).toLowerCase();
-            return s.toLowerCase() === qLow || s.toLowerCase().indexOf(qLow) >= 0 || lab.indexOf(qLow) >= 0;
-          });
-          if (hit) why = "#タグ一致";
-        }
-        if (!why && r.grid && Array.isArray(r.grid.rows)){
-          var paintHit = r.grid.rows.some(function(row){
-            if (!row || !row.cells) return false;
-            return Object.keys(row.cells).some(function(k){
-              var c = row.cells[k]; return c && typeof c.c === "string" && c.c.toLowerCase().indexOf(qLow) >= 0;
-            });
-          });
-          if (paintHit) why = "塗料一致";
-        }
-        if (why){ r._why = why; hits.push(r); }
-      });
-      if (typeof track === "function") track("search", { q: q, hit_count: hits.length });
-      if (!hits.length){ list.innerHTML = '<p class="pf-empty">「'+esc(q)+'」に一致する公開投稿はありません。</p>'; return; }
-      list.innerHTML = "";
-      hits.forEach(function(r){
-        var c = recordCard(r);
-        // マッチ理由ラベル
-        var tip = document.createElement("span"); tip.className = "match-why"; tip.textContent = r._why;
-        c.querySelector(".pf-post-thumb")?.appendChild(tip);
-        list.appendChild(c);
-      });
+
+  // 結果描画（RPC/フォールバック共通）。各行に r._why（理由ラベル）を持たせておく。
+  function renderHits(hits){
+    if (typeof track === "function") track("search", { q: q, hit_count: hits.length });
+    if (!hits.length){ list.innerHTML = '<p class="pf-empty">「'+esc(q)+'」に一致する公開投稿はありません。</p>'; return; }
+    list.innerHTML = "";
+    hits.forEach(function(r){
+      var c = recordCard(r);
+      if (r._why){ var tip = document.createElement("span"); tip.className = "match-why"; tip.textContent = r._why; var th = c.querySelector(".pf-post-thumb"); if (th) th.appendChild(tip); }
+      list.appendChild(c);
     });
+  }
+
+  // フォールバック：公開投稿を新着300件取得→クライアント側でtitle/methods/grid内塗料名フィルタ。
+  // （search_recipes RPC 未適用の環境でも動くよう残置）
+  function searchFallback(){
+    sb.from("recipes").select("id,title,cover_url,is_public,created_at,methods,grid,owner_id").eq("is_public", true)
+      .order("created_at", { ascending:false }).limit(300)
+      .then(function(res){
+        if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
+        var rows = res.data || [], hits = [];
+        rows.forEach(function(r){
+          var why = null;
+          if (r.title && r.title.toLowerCase().indexOf(qLow) >= 0) why = "タイトル一致";
+          else if (Array.isArray(r.methods)){
+            var hit = r.methods.some(function(s){
+              var lab = (METHOD_LABEL[s] || s).toLowerCase();
+              return s.toLowerCase() === qLow || s.toLowerCase().indexOf(qLow) >= 0 || lab.indexOf(qLow) >= 0;
+            });
+            if (hit) why = "#タグ一致";
+          }
+          if (!why && r.grid && Array.isArray(r.grid.rows)){
+            var paintHit = r.grid.rows.some(function(row){
+              if (!row || !row.cells) return false;
+              return Object.keys(row.cells).some(function(k){
+                var c = row.cells[k]; return c && typeof c.c === "string" && c.c.toLowerCase().indexOf(qLow) >= 0;
+              });
+            });
+            if (paintHit) why = "塗料一致";
+          }
+          if (why){ r._why = why; hits.push(r); }
+        });
+        renderHits(hits);
+      });
+  }
+
+  // まずサーバー検索（search_recipes RPC）。未適用/エラーなら300件フォールバックへ。
+  if (sb.rpc){
+    var WHY = { title:"タイトル一致", tag:"#タグ一致", paint:"塗料一致" };
+    sb.rpc("search_recipes", { _q: q, _limit: 50 }).then(function(res){
+      if (!res || res.error || !Array.isArray(res.data)){ searchFallback(); return; }
+      renderHits(res.data.map(function(r){ r._why = WHY[r.match_reason] || null; return r; }));
+    }, searchFallback);
+  } else { searchFallback(); }
 }
 function doSearchFrom(inp){
   var v = inp && inp.value ? inp.value.trim() : "";
@@ -1611,8 +1626,8 @@ function showOnboarding(){
     if (!USERID_RE.test(id)){ err.textContent = "ユーザーIDは半角英数と _ の3〜20文字"; return; }
     if (!nm || !agree.checked) return;
     btn.disabled = true; err.textContent = "確認中…";
-    // ユーザーID重複チェック（大小無視）
-    sb.from("profiles").select("id").ilike("user_id", id).then(function(res){
+    // ユーザーID重複チェック（大小無視）。ilikeの _ % \ はワイルドカードなのでエスケープして完全一致にする
+    sb.from("profiles").select("id").ilike("user_id", id.replace(/([\\%_])/g, "\\$1")).then(function(res){
       if (res.data && res.data.length){ err.textContent = "このユーザーIDは既に使われています"; btn.disabled = false; return; }
       // user_id（不変）＋ニックネーム＋規約同意時刻を保存。本名は使わない
       saveProfile({ user_id: id, display_name: nm, terms_agreed_at: new Date().toISOString() }, function(r){
