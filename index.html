@@ -738,6 +738,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 <!-- 認証ライブラリ＋接続設定（classic。HTTP配信時のみログイン動作。file://やオフラインでも閲覧は維持） -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="src/config.js"></script>
+<script src="src/methods.js"></script>
 <script>
 /* ============================================================================
    塗装レシピ録 v2 — アプリシェルのロジック（モジュール不使用＝どこでも動く）
@@ -745,21 +746,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
    ============================================================================ */
 "use strict";
 
-/* 塗装方法マスター（単一の真実。legacy.html と同一内容を持つ） */
-var PAINT_METHODS = [
-  { slug:"grad",       label:"グラデーション塗装" },
-  { slug:"candy",      label:"キャンディ塗装" },
-  { slug:"candy_red",  label:"キャンディ塗装 レッド" },
-  { slug:"candy_blue", label:"キャンディ塗装 ブルー" },
-  { slug:"wrap",       label:"ラップ塗装" },
-  { slug:"marble",     label:"大理石塗装" },
-  { slug:"weather",    label:"ウェザリング" },
-  { slug:"brush",      label:"筆塗り" },
-  { slug:"metal",      label:"メタリック塗装" },
-  { slug:"matte",      label:"つや消し仕上げ" },
-  { slug:"mask",       label:"マスキング塗り分け" }
-];
-var METHOD_LABEL = {}; PAINT_METHODS.forEach(function(m){ METHOD_LABEL[m.slug] = m.label; });
+/* 塗装方法マスターは src/methods.js に一元化（config.jsの直後で読み込み。PAINT_METHODS / METHOD_LABEL を提供） */
 
 /* ----------------------------- 仮データ(MOCK) ----------------------------- */
 var MOCK = {

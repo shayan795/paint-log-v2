@@ -893,6 +893,7 @@ body{background-image:none}
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="src/config.js"></script>
+<script src="src/methods.js"></script>
 </head>
 <body>
 
@@ -1766,21 +1767,7 @@ const newProc = name => ({ id: "q" + (procSeq++), name });
 let state = newState();
 var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既存投稿（スクリプト間で共有）
 
-/* 塗装方法マスター（index.html と同一内容） */
-var PAINT_METHODS = [
-  { slug:"grad",       label:"グラデーション塗装" },
-  { slug:"candy",      label:"キャンディ塗装" },
-  { slug:"candy_red",  label:"キャンディ塗装 レッド" },
-  { slug:"candy_blue", label:"キャンディ塗装 ブルー" },
-  { slug:"wrap",       label:"ラップ塗装" },
-  { slug:"marble",     label:"大理石塗装" },
-  { slug:"weather",    label:"ウェザリング" },
-  { slug:"brush",      label:"筆塗り" },
-  { slug:"metal",      label:"メタリック塗装" },
-  { slug:"matte",      label:"つや消し仕上げ" },
-  { slug:"mask",       label:"マスキング塗り分け" }
-];
-var METHOD_LABEL = {}; PAINT_METHODS.forEach(function(m){ METHOD_LABEL[m.slug] = m.label; });
+/* 塗装方法マスターは src/methods.js に一元化（config.jsの直後で読み込み。PAINT_METHODS / METHOD_LABEL を提供） */
 
 /* 編集：塗装方法チップ（プリセット＝トグル／独自＝#入力）。選択は state.methods(配列)に保持 */
 function addCustomTag(raw){
