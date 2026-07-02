@@ -1926,7 +1926,7 @@ function renderGrid(){
       if (cell){
         td.className = "cell";
         const p = cell.i !== undefined ? PAINTS[cell.i] : null;
-        td.innerHTML = `<div class="chipline"><span class="chip" style="background:${p ? p[3] : "#ddd"}"></span>
+        td.innerHTML = `<div class="chipline"><span class="chip" style="background:${safeColor(p ? p[3] : "#ddd")}"></span>
           <span class="pname">${esc(p ? p[2] : cell.c)}<span class="pcode">${p ? esc((p[0]+" "+p[1]).trim()) : "自由入力"}</span></span></div>`;
         td.draggable = true;
         td.dataset.ri = ri; td.dataset.qid = proc.id;
@@ -2083,7 +2083,7 @@ function renderResults(q){
   pResults.innerHTML = "";
   hits.slice(0,60).forEach(o => {
     const d = document.createElement("div");
-    d.innerHTML = `<span class="chip" style="background:${o.p[3]}"></span><span>${esc(o.p[2])}</span><span class="meta">${esc((o.p[0]+" "+o.p[1]).trim())}</span>`;
+    d.innerHTML = `<span class="chip" style="background:${safeColor(o.p[3])}"></span><span>${esc(o.p[2])}</span><span class="meta">${esc((o.p[0]+" "+o.p[1]).trim())}</span>`;
     d.onclick = () => setCell({i:o.i});
     pResults.appendChild(d);
   });
@@ -2133,7 +2133,7 @@ function renderUsed(targetId){
     const div = document.createElement("div");
     if (isView) {
       div.className = "vpaint-row";
-      div.innerHTML = `<span class="vpaint-chip" style="background:${p ? p[3] : "#ddd"}"></span>
+      div.innerHTML = `<span class="vpaint-chip" style="background:${safeColor(p ? p[3] : "#ddd")}"></span>
         <span class="vpaint-info"><b>${esc(p ? p[2] : c.c)}</b><span>${p ? esc((p[0]+" "+p[1]).trim()) : "自由入力"}</span></span>
         <span class="vpaint-links">
           <a class="buy amazon" target="_blank" rel="nofollow noopener" href="${amazonUrl(name)}">Amazon</a>
@@ -2142,7 +2142,7 @@ function renderUsed(targetId){
         </span>`;
     } else {
       div.className = "paintrow";
-      div.innerHTML = `<span class="chip" style="background:${p ? p[3] : "#ddd"}"></span>
+      div.innerHTML = `<span class="chip" style="background:${safeColor(p ? p[3] : "#ddd")}"></span>
         <span class="info"><b>${esc(p ? p[2] : c.c)}</b><span>${p ? esc((p[0]+" "+p[1]).trim()) : "自由入力"}</span></span>
         <span class="buyrow">
           <a class="buy amazon" target="_blank" rel="nofollow noopener" href="${amazonUrl(name)}">Amazon</a>
@@ -2633,9 +2633,9 @@ function renderViewMode(){
   html += "</tr></thead><tbody>";
   state.rows.forEach(row => {
     if (!row.part.trim() && !Object.keys(row.cells).length && !row.photo) return;
-    const vrPhotoStyle = row.photo_pos ? ` style="--pp:${esc(row.photo_pos)}"` : "";
+    const vrPhotoStyle = row.photo_pos ? ` style="--pp:${safePos(row.photo_pos)}"` : "";
     const vrMark = (row.photo_mark && typeof row.photo_mark.x==='number')
-      ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${esc(row.photo_mark.c||'#E01E28')}"></div>`
+      ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${safeColor(row.photo_mark.c||'#E01E28')}"></div>`
       : "";
     const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
@@ -2645,7 +2645,7 @@ function renderViewMode(){
         const p = c.i !== undefined ? PAINTS[c.i] : null;
         const buyName = p ? (p[0]+" "+p[1]+" "+p[2]).replace(/\s+/g," ").trim() : c.c;
         html += `<td class="vr-cell" data-label="${esc(proc.name)}">
-          <span class="vr-left"><span class="vrecipe-chip" style="background:${p?p[3]:'#ddd'}"></span><span class="vr-proc">${esc(proc.name)}</span></span>
+          <span class="vr-left"><span class="vrecipe-chip" style="background:${safeColor(p?p[3]:'#ddd')}"></span><span class="vr-proc">${esc(proc.name)}</span></span>
           <span class="vrecipe-name">
             <span class="vrecipe-pname">${esc(p?p[2]:c.c)}</span>
             <span class="vrecipe-pcode">${p?esc((p[0]+" "+p[1]).trim()):""}</span>
@@ -2928,6 +2928,19 @@ document.getElementById("tabEditActive").onclick = () => { /* 既に編集中 */
 
 /* ===================== 起動(モード振り分け) ===================== */
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// CSS値のサニタイズ：esc()はCSS文脈の ; : ( ) を通すため、style属性へ色/位置を出す箇所はこちらで検証する。
+// grid由来（ユーザー制御・#r=共有URLでも同経路）の photo_mark.c / photo_pos によるCSS注入を封じる。
+const safeColor = v => {
+  v = String(v == null ? "" : v).trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v;                    // #hex(3/4/6/8)
+  if (/^(rgb|hsl)a?\(\s*[0-9.,%\s\/]+\)$/i.test(v)) return v;      // rgb()/rgba()/hsl()/hsla()
+  if (/^[a-zA-Z]{1,20}$/.test(v)) return v;                        // 色名キーワード(red, transparent 等)
+  return "#ddd";
+};
+const safePos = v => {                                             // object-position用（"50% 30%"等）
+  v = String(v == null ? "" : v).trim();
+  return /^[0-9a-zA-Z%.\s-]{0,40}$/.test(v) ? v : "50% 50%";
+};
 (function boot(){
   // 短縮URL /r/:id は V2 の loadById (Supabase経由) に任せるので、ここではスキップ
   if (/^\/r\/[A-Za-z0-9\-]+/.test(location.pathname)){
