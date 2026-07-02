@@ -95,7 +95,11 @@ async function serveRecipePage(env, id) {
       : (prof.user_id ? "@" + prof.user_id : (rec.author_label || "").trim());
     const title = (rec.title && rec.title.trim() ? rec.title.trim() + "｜" : "") + "塗装レシピ録";
     const desc = buildDescription(rec, authorLabel);
-    const image = rec.cover_url || `${env.SITE}/og-image.png`;
+    // cover_url は所有者がAPIで任意値に設定可能なため、Supabase Storage か自サイト由来のみ採用。
+    // それ以外（外部の悪意画像等）は汎用OGPにフォールバック。
+    const fallbackImg = `${env.SITE}/og-image.png`;
+    const cover = String(rec.cover_url || "");
+    const image = (cover.startsWith(env.SUPABASE_URL) || cover.startsWith(env.SITE)) ? cover : fallbackImg;
     const pageUrl = `${env.SITE}/r/${rec.id}`;
 
     const block =
