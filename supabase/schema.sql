@@ -617,8 +617,10 @@ create or replace function public.check_comment_ngword()
 returns trigger language plpgsql as $$
 declare ng text;
 begin
+  -- 部分一致は誤爆が多い（例:「カス」→「カスタム」）ため、死・暴力の直接語のみに最小化。
+  -- 荒らし対策の本命は通報＋管理者モデレーション。詳細は migrations/003_comment_ngword.sql。
   for ng in select unnest(array[
-    '死ね','殺す','クズ','ゴミ','うざい','馬鹿野郎','カス','消えろ','ブス','キモい'
+    '死ね','殺す','消えろ'
   ]) loop
     if NEW.body ilike '%' || ng || '%' then
       raise exception 'このコメントには使用できない語句が含まれています。';
@@ -627,7 +629,8 @@ begin
   return NEW;
 end; $$;
 drop trigger if exists trg_check_comment_ngword on public.comments;
-create trigger trg_check_comment_ngword before insert or update on public.comments
+-- 編集時の再チェックで既存コメントが編集不能に陥る不具合を避けるため insert のみ
+create trigger trg_check_comment_ngword before insert on public.comments
   for each row execute function public.check_comment_ngword();
 
 -- 編集時に edited_at を自動セット
