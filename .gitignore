@@ -8,3 +8,4 @@ node_modules/
 # V1の引き継ぎ素材（それぞれ別リポジトリ。v2には含めない）
 引き継ぎ/
 site引き継ぎ/
+site-bundle.txt
