@@ -90,9 +90,11 @@ async function serveRecipePage(env, id) {
 
   if (rec) {
     const prof = rec.profiles || {};
+    // 外部メタ(og/twitter/JSON-LD)の「制作者」は検証済みの display_name / @user_id のみ採用する。
+    // 自由入力の author_label は身元未検証のため外部メタには出さない（なりすまし・スパム表示の防止）。
     const authorLabel = (prof.display_name && prof.display_name.trim())
       ? prof.display_name.trim()
-      : (prof.user_id ? "@" + prof.user_id : (rec.author_label || "").trim());
+      : (prof.user_id ? "@" + prof.user_id : "");
     const title = (rec.title && rec.title.trim() ? rec.title.trim() + "｜" : "") + "塗装レシピ録";
     const desc = buildDescription(rec, authorLabel);
     // cover_url は所有者がAPIで任意値に設定可能なため、Supabase Storage か自サイト由来のみ採用。
