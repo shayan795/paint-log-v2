@@ -892,8 +892,8 @@ body{background-image:none}
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="src/config.js"></script>
-<script src="src/methods.js"></script>
+<script src="/src/config.js"></script>
+<script src="/src/methods.js"></script>
 </head>
 <body>
 
@@ -930,23 +930,23 @@ body{background-image:none}
 
 <!-- v2: PC左サイドバー（index.html と同じ。どの画面からもメインへ戻れる） -->
 <aside class="sidebar">
-  <a class="sb-logo" href="index.html"><img class="sb-logo-img" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></a>
+  <a class="sb-logo" href="/index.html"><img class="sb-logo-img" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></a>
   <div class="sb-search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     <input type="search" placeholder="探す">
   </div>
   <nav class="sb-nav">
-    <a class="sb-item" href="index.html#discover">
+    <a class="sb-item" href="/index.html#discover">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>探す</span>
     </a>
-    <a class="sb-item sb-create" href="legacy.html#edit">
+    <a class="sb-item sb-create" href="/legacy.html#edit">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>作る</span>
     </a>
-    <a class="sb-item" href="index.html?tab=records">
+    <a class="sb-item" href="/index.html?tab=records">
       <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"/></svg><span>記録</span>
     </a>
   </nav>
-  <a class="sb-account" href="index.html"><span class="sb-av">K</span><span>ゲスト</span></a>
+  <a class="sb-account" href="/index.html"><span class="sb-av">K</span><span>ゲスト</span></a>
 </aside>
 
 <!-- ============ グローバルナビ(ハンバーガー) ============ -->
@@ -954,7 +954,7 @@ body{background-image:none}
 <div class="nav-overlay" id="navOverlay"></div>
 <nav class="nav-drawer" id="navDrawer">
   <div class="nav-head">
-    <div class="nav-logo js-goview" title="閲覧ページ"><img class="nav-logo-img" src="assets/logo-word.png" alt="塗装レシピ録 / Plamo-Paint"></div>
+    <div class="nav-logo js-goview" title="閲覧ページ"><img class="nav-logo-img" src="/assets/logo-word.png" alt="塗装レシピ録 / Plamo-Paint"></div>
     <button class="nav-close" id="navClose" aria-label="閉じる">×</button>
   </div>
   <div class="nav-list" id="navList"></div>
@@ -971,7 +971,7 @@ body{background-image:none}
     <button class="ab-bell" id="aboutBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
   </header>
   <div class="about-hero">
-    <img class="ah-logo-img" id="aboutLogo" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint" title="メインへ戻る">
+    <img class="ah-logo-img" id="aboutLogo" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint" title="メインへ戻る">
   </div>
   <p class="about-lead">使った塗料を、もう一度たどれる。<br>プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。</p>
   <div class="about-sec">
@@ -998,7 +998,7 @@ body{background-image:none}
       <li><b>権限による保護。</b>データベース側の権限制御（RLS）により、利用者は自分のデータだけを編集・削除でき、他の利用者の投稿やプロフィールは改ざんできない設計です。</li>
       <li><b>第三者提供は行いません。</b>法令に基づく場合を除き、個人情報を第三者に提供することはありません。</li>
     </ul>
-    <p style="font-size:.82rem;color:var(--sub);margin-top:10px">詳細は <a href="privacy.html" style="color:var(--accent)">プライバシーポリシー</a> および <a href="terms.html" style="color:var(--accent)">利用規約</a> をご確認ください。</p>
+    <p style="font-size:.82rem;color:var(--sub);margin-top:10px">詳細は <a href="/privacy.html" style="color:var(--accent)">プライバシーポリシー</a> および <a href="/terms.html" style="color:var(--accent)">利用規約</a> をご確認ください。</p>
   </div>
   <div class="v-cta">
     <div style="font-size:.72rem;letter-spacing:.14em;color:#9AA3B2;margin-bottom:4px">PAINTLOG</div>
@@ -1043,7 +1043,7 @@ body{background-image:none}
 <!-- ============ 作成モード(本人が編集する画面) ============ -->
 <div id="editMode">
 <header>
-  <h1 class="js-goview" title="閲覧ページを見る"><img class="hd-logo" src="assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></h1>
+  <h1 class="js-goview" title="閲覧ページを見る"><img class="hd-logo" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></h1>
 </header>
 <div class="modetabs">
   <button class="modetab" id="tabViewFromEdit">閲覧プレビュー</button>
@@ -2587,7 +2587,7 @@ function renderViewMode(){
   if (Array.isArray(state.methods) && state.methods.length){
     methodsHtml = '<div class="vmethods">' + state.methods.map(function(s){
       var lbl = "#" + (METHOD_LABEL[s] || s);   // プリセット名／独自どちらも # 付きで雰囲気を出す
-      return '<a class="vmethod" href="index.html?m='+encodeURIComponent(s)+'#m/'+esc(s)+'">'+esc(lbl)+'</a>';
+      return '<a class="vmethod" href="/index.html?m='+encodeURIComponent(s)+'#m/'+esc(s)+'">'+esc(lbl)+'</a>';
     }).join("") + '</div>';
   }
   band.innerHTML = `
@@ -3079,7 +3079,7 @@ const safePos = v => {                                             // object-pos
               ? '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません。<br>非公開の投稿か、削除された可能性があります。</p>'
               : '<div style="padding:48px 16px;text-align:center;color:var(--sub)">'
                 + '<p>この投稿は非公開の可能性があります。<br>投稿者ご本人は、ログインすると表示できます。</p>'
-                + '<a href="index.html" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#BE2A33;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
+                + '<a href="/index.html" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#BE2A33;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
                 + '</div>';
           }, function(){
             vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
