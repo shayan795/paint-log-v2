@@ -2815,12 +2815,12 @@ document.getElementById("navOverlay").onclick = closeNav;
 // 「塗装レシピ録」ロゴ（編集/閲覧内）は閲覧プレビューへ
 document.querySelectorAll(".js-goview").forEach(el => el.onclick = () => { showPage("view"); showEditReturnBtn(); });
 // 「とは」ページ: ロゴ/アバター→メイン(index)、ベル→スタブ。確認ダイアログは出さない
-var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "index.html";
-var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "index.html";
-var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => location.href = "index.html#notifications";
+var _aboutLogo = document.getElementById("aboutLogo");     if (_aboutLogo)   _aboutLogo.onclick   = () => location.href = "/index.html";
+var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _aboutAvatar.onclick = () => location.href = "/index.html";
+var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => location.href = "/index.html#notifications";
 var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
 // 編集/閲覧の上バー：ベル→スタブ（❌はinline onclickでexitEditor）
-var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => location.href = "index.html#notifications";
+var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => location.href = "/index.html#notifications";
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
@@ -2861,7 +2861,7 @@ function showEditReturnBtn(){
   if (te){ te.onclick = function(){ showPage("edit"); }; te.style.display = ""; }
 }
 
-var _exitTarget = "index.html";
+var _exitTarget = "/index.html";
 function exitEditor(target){
   // 既存投稿を編集していた場合は、メインでなく「その投稿の閲覧画面」に戻る
   if (currentRecipeId){
@@ -2874,10 +2874,10 @@ function exitEditor(target){
       return;
     }
     // 投稿を閲覧中の❌＝前のページ（記録/プロフィール等）へ戻る
-    if (history.length > 1) history.back(); else location.href = "index.html#records";
+    if (history.length > 1) history.back(); else location.href = "/index.html#records";
     return;
   }
-  _exitTarget = target || "index.html";
+  _exitTarget = target || "/index.html";
   if (!editorHasContent()){ location.href = _exitTarget; return; }   // 何も入力していなければそのまま戻る
   document.getElementById("exitOverlay").classList.add("show");
 }
@@ -2897,7 +2897,7 @@ function exitEditor(target){
     });
   };
   // PCサイドバーの「探す/記録/ロゴ」も、編集中で内容があれば同じ確認を通す
-  document.querySelectorAll('.sidebar a[href^="index.html"]').forEach(function(a){
+  document.querySelectorAll('.sidebar a[href^="/index.html"]').forEach(function(a){
     a.addEventListener("click", function(e){
       if (editorHasContent()){ e.preventDefault(); exitEditor(a.getAttribute("href")); }
     });
@@ -3238,7 +3238,7 @@ const safePos = v => {                                             // object-pos
       var p = pp.data, vb = document.getElementById("viewBody"); if (!vb) return;
       var row = document.createElement("div"); row.id = "vAuthorRow"; row.className = "v-authorrow";
       var a = document.createElement("a"); a.id = "vAuthor"; a.className = "v-authorchip";
-      if (p.user_id) a.href = "index.html#u/" + encodeURIComponent(p.user_id);
+      if (p.user_id) a.href = "/index.html#u/" + encodeURIComponent(p.user_id);
       var av = p.avatar_url ? '<img src="'+esc(p.avatar_url)+'" alt="">' : '<span class="vac-ini">'+esc((p.display_name||"?").charAt(0))+'</span>';
       a.innerHTML = '<span class="vac-av">'+av+'</span><span class="vac-meta"><b>'+esc(p.display_name||"ユーザー")+'</b>'
         + (p.user_id ? '<span class="vac-id">@'+esc(p.user_id)+'</span>' : '') + '</span>';
@@ -3270,7 +3270,7 @@ const safePos = v => {                                             // object-pos
     if (document.getElementById("vBack")) return;
     var b = document.createElement("button");
     b.id = "vBack"; b.className = "v-edit-inline vb-back"; b.textContent = "← 戻る";
-    b.onclick = function(){ if (history.length > 1) history.back(); else location.href = "index.html"; };
+    b.onclick = function(){ if (history.length > 1) history.back(); else location.href = "/index.html"; };
     var bar = vBar(); bar.insertBefore(b, bar.firstChild);
   }
   function removeDeleteBtn(){ var d=document.getElementById("vDelete"); if(d) d.remove(); }
@@ -3295,7 +3295,7 @@ const safePos = v => {                                             // object-pos
         return rm.then(function(){ return sb.from("recipes").delete().eq("id", currentRecipeId); });
       }).then(function(res){
         if (res && res.error){ alert("削除に失敗しました：" + res.error.message); return; }
-        location.href = "index.html#records";
+        location.href = "/index.html#records";
       }).catch(function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
     };
     var bar = vBar();
@@ -3321,7 +3321,7 @@ const safePos = v => {                                             // object-pos
       btn.disabled = true; var orig = btn.textContent; btn.textContent = "保存中…";
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
-        if (!session){ alert("投稿にはログインが必要です。"); location.href = "index.html"; return; }
+        if (!session){ alert("投稿にはログインが必要です。"); location.href = "/index.html"; return; }
         var uid = session.user.id;
         // 0) 非公開投稿の上限（無料10件）を写真アップ前にチェック（新規の非公開のみ・公開や既存編集は対象外）
         var _limitChk = (!isPublic && !currentRecipeId)
@@ -3366,7 +3366,7 @@ const safePos = v => {                                             // object-pos
               // この投稿が下書きから来ていたら、その下書きを消す（公開できたので不要）
               if (currentDraftId){ sb.from("drafts").delete().eq("id", currentDraftId).then(function(){}, function(){}); currentDraftId = null; }
               alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
-              location.href = "index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
+              location.href = "/index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
             });
           });
         });
