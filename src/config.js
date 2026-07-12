@@ -24,9 +24,12 @@
     SUPABASE_ANON_KEY: "sb_publishable_ZMaz3JjPfU0q_pq7Y9QwSQ_QimbhfgX",
   };
 
-  // 開発用DB（作ったらここに貼る）。未設定は null のまま。
-  // 例: var DEV = { SUPABASE_URL: "https://xxxx.supabase.co", SUPABASE_ANON_KEY: "sb_publishable_xxx" };
-  var DEV = null;
+  // 開発用DB（2つ目の無料Supabase「plamo-paint-dev」）。localhostのみここに繋ぐ。
+  // 公開キーなのでコミットしてOK（本番はフェイルセーフで常にPRODを使う）。
+  var DEV = {
+    SUPABASE_URL: "https://sazcssakhqiznochuprz.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable_AIm5N2YaD7PNKgJDpzTyFg_JIaxWvJP",
+  };
 
   var host = (location && location.hostname) || "";
   var isLocal = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "";
