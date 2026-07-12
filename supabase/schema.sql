@@ -49,6 +49,7 @@ create table if not exists public.recipes (
   grid         jsonb not null default '{}',  -- レシピ全体(procs/rows/cells/photos)
   cover_url    text,                         -- 表紙画像のURL(実体はR2。base64は入れない)
   is_public    boolean not null default false,
+  methods      text[] not null default '{}'::text[],  -- 塗装方法タグ（本番実体に合わせ text[]）
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
