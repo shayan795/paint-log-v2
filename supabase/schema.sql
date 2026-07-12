@@ -917,6 +917,17 @@ drop trigger if exists trg_draft_limit on public.drafts;
 create trigger trg_draft_limit before insert on public.drafts
   for each row execute function public.enforce_draft_limit();
 
+-- ----------------------------------------------------------------------------
+-- 退会：自分のアカウントを削除（auth.users削除→cascadeで関連データも消える）。
+-- ----------------------------------------------------------------------------
+create or replace function public.delete_user()
+returns void language plpgsql security definer
+set search_path to 'public', 'auth', 'storage' as $$
+begin
+  delete from auth.users where id = auth.uid();
+end; $$;
+grant execute on function public.delete_user() to authenticated;
+
 -- ============================================================================
 -- 完了。次に seed_paints.sql を実行して塗料512色を投入する。
 -- ============================================================================
