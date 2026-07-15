@@ -496,7 +496,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 
 /* スマホ: 編集表をカード型に切替(縦文字化・視認性悪化を防ぐ) */
 @media(max-width:640px){
-  .proc-panel{display:none}
+  .proc-panel{display:block}  /* スマホは表ヘッダを隠すため、工程の追加/改名/削除/並替はこのパネルで行う */
   #recipeTable thead{display:none}
   #recipeTable, #recipeTable tbody, #recipeTable tr, #recipeTable td{display:block;width:100%}
   #editMode .scroll{overflow-x:visible;border:none}
@@ -2556,12 +2556,14 @@ function renderViewMode(){
   const heroEl = document.getElementById("viewHero");
   heroEl.style.display = "none";
   heroEl.innerHTML = "";
+  // サイト内表示のヒーローは「塗装レシピ」文字を描かない(毎回のくどさ解消)。
+  // 共有/OGP用の cover_url は別途 makeCover() が文字付きで生成するため、ここは無影響。
   generateCardUrl("dark", dataUrl => {
     const img = document.createElement("img");
     img.src = dataUrl; img.alt = "塗装レシピカード";
     heroEl.appendChild(img);
     heroEl.style.display = "block";
-  });
+  }, { noTitle: true });
 
   // --- 写真はヒーローのカード画像に合成済みなので、ここでは重複表示しない ---
   const thumb = document.getElementById("viewThumb");
@@ -2614,8 +2616,11 @@ function renderViewMode(){
 
   // --- レシピ表(閲覧用・PCは表/スマホはカード型に切替) ---
   const vt = document.getElementById("viewTable");
+  // 空白の工程列(どの色グループにも塗料が入っていない工程)は投稿後の表示から省く
+  const cellHasContent = c => !!c && (c.i !== undefined || (c.c != null && String(c.c).trim() !== ""));
+  const viewProcs = state.procs.filter(proc => state.rows.some(row => cellHasContent(row.cells[proc.id])));
   let html = "<thead><tr><th>部位 / グループ</th>";
-  state.procs.forEach(p => html += `<th>${esc(p.name)}</th>`);
+  viewProcs.forEach(p => html += `<th>${esc(p.name)}</th>`);
   html += "</tr></thead><tbody>";
   state.rows.forEach(row => {
     if (!row.part.trim() && !Object.keys(row.cells).length && !row.photo) return;
@@ -2625,7 +2630,7 @@ function renderViewMode(){
       : "";
     const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
-    state.procs.forEach(proc => {
+    viewProcs.forEach(proc => {
       const c = row.cells[proc.id];
       if (c) {
         const p = c.i !== undefined ? PAINTS[c.i] : null;
@@ -2652,7 +2657,7 @@ function renderViewMode(){
     html += "</tr>";
     // PC用: コメントを下に全幅で表示する独立行(スマホではCSSで非表示)
     if (row.comment && row.comment.trim()){
-      html += `<tr class="vr-comment-row"><td colspan="${state.procs.length+1}"><div class="vr-comment">${esc(row.comment.trim())}</div></td></tr>`;
+      html += `<tr class="vr-comment-row"><td colspan="${viewProcs.length+1}"><div class="vr-comment">${esc(row.comment.trim())}</div></td></tr>`;
     }
   });
   html += "</tbody>";
