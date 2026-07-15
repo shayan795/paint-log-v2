@@ -678,6 +678,8 @@ body{padding-top:60px}                        /* ❌バー分の余白（既存p
 #pickerSearch:focus{outline:none;border-color:var(--line-d)}
 /* 「このセルを空にする」を「閉じる」と同じ薄いグレーに */
 #pickerClear{border-color:var(--line-d);color:var(--sub)}
+/* 「この工程を削除」は破壊的操作なので警告色で区別 */
+#pickerDelProc{border-color:var(--line-d);color:var(--warn)}
 
 /* 「とは」ページ：メイン風の上バー（アバター左＋ベル右）。モバイルのみ。❌バー(確認)は出さない */
 .about-topbar{display:none}
@@ -1146,6 +1148,7 @@ body{background-image:none}
     <div class="actions">
       <button class="small primary" id="pickerCustom">入力した名前で登録(リストに無い塗料)</button>
       <button class="small" id="pickerClear">このセルを空にする</button>
+      <button class="small" id="pickerDelProc">この工程を削除</button>
       <button class="small ghost" id="pickerClose">閉じる</button>
     </div>
   </div>
@@ -2100,6 +2103,16 @@ document.getElementById("pickerCustom").onclick = () => {
   setCell({c:name});
 };
 document.getElementById("pickerClear").onclick = () => { delete state.rows[target.ri].cells[target.proc.id]; closePicker(); renderAll(); };
+// 工程(列)ごと削除。工程は全色グループ共通のため、全グループでこの工程が消える(確認あり)。
+document.getElementById("pickerDelProc").onclick = () => {
+  if (!target) return;
+  const proc = target.proc;
+  if (!confirm(`工程「${proc.name}」を削除しますか?(すべての色グループから、この工程の塗料指定も消えます)`)) return;
+  const idx = state.procs.findIndex(p => p.id === proc.id);
+  if (idx >= 0) state.procs.splice(idx, 1);
+  state.rows.forEach(r => delete r.cells[proc.id]);
+  closePicker(); renderAll();
+};
 document.getElementById("pickerClose").onclick = closePicker;
 overlay.onclick = e => { if (e.target === overlay) closePicker(); };
 
