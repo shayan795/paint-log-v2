@@ -493,10 +493,11 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .proc-panel .pp-row input{flex:1;min-width:0;height:38px}
 .proc-panel .pp-del{flex:none;width:38px;height:38px;padding:0;border:1px solid var(--line-d);background:#fff;color:var(--warn);font-size:1.1rem}
 .proc-panel .pp-add{width:100%;margin-top:4px;border:1px dashed var(--line-d);background:#fff;padding:10px}
+.procadd-btn{display:none}  /* カード内「工程追加」ボタンはスマホのみ表示(PCは表ヘッダ/下部ツールバーを使う) */
 
 /* スマホ: 編集表をカード型に切替(縦文字化・視認性悪化を防ぐ) */
 @media(max-width:640px){
-  .proc-panel{display:block}  /* スマホは表ヘッダを隠すため、工程の追加/改名/削除/並替はこのパネルで行う */
+  .proc-panel{display:none}  /* スマホの工程の追加/削除は各カード内のボタンで行う(上の一覧パネルは廃止) */
   #recipeTable thead{display:none}
   #recipeTable, #recipeTable tbody, #recipeTable tr, #recipeTable td{display:block;width:100%}
   #editMode .scroll{overflow-x:visible;border:none}
@@ -509,11 +510,13 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   #recipeTable td.cell .chipline{justify-content:flex-end;text-align:right}
   #recipeTable td.cell.empty{font-size:0;justify-content:space-between}
   #recipeTable td.cell.empty::after{content:"＋ 塗料を選ぶ";font-size:.8rem;color:var(--bp);font-weight:700}
-  #recipeTable td.delrow{border-bottom:none;padding:10px 14px;display:flex;align-items:center;gap:10px}
+  #recipeTable td.delrow{border-bottom:none;padding:10px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
   #recipeTable td.delrow .roworder{margin-right:auto}
   #recipeTable td.delrow .delrow-btn{width:auto}
-  #recipeTable td.delrow .delrow-btn::after{content:" この色グループを削除"}
+  #recipeTable td.delrow .delrow-btn::after{content:" グループ削除"}
+  #recipeTable td.delrow .procadd-btn{display:inline-flex;width:auto}
   #recipeTable .addcol-th{display:none}
+  #addCol{display:none}   /* スマホは各カードの「工程追加」ボタンを使う */
 }
 
 /* 色グループ写真(編集) */
@@ -1952,7 +1955,11 @@ function renderGrid(){
     down.onclick = () => { if (ri < state.rows.length - 1){ const t = state.rows[ri]; state.rows[ri] = state.rows[ri+1]; state.rows[ri+1] = t; renderAll(); } };
     order.appendChild(up); order.appendChild(down);
     tdD.appendChild(order);
-    const del = document.createElement("button"); del.className = "small ghost delrow-btn"; del.textContent = "×"; del.title = "行を削除";
+    // スマホ用: この色グループのカードに「工程追加」(工程列を1つ追加)。PCでは .procadd-btn を非表示にし表ヘッダ/下部ツールバーを使う。
+    const addProc = document.createElement("button"); addProc.className = "small procadd-btn"; addProc.textContent = "工程追加"; addProc.title = "工程を追加";
+    addProc.onclick = () => { state.procs.push(newProc("工程" + (state.procs.length+1))); renderGrid(); };
+    tdD.appendChild(addProc);
+    const del = document.createElement("button"); del.className = "small ghost delrow-btn"; del.textContent = "×"; del.title = "この色グループを削除";
     del.onclick = () => { state.rows.splice(ri,1); renderAll(); };
     tdD.appendChild(del);
   });
