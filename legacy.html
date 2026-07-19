@@ -1839,6 +1839,9 @@ function migrate(s){
   // 旧 photo(単数) → photos(配列)
   if (s.photo !== undefined){ if (s.photo) s.photos = [s.photo]; delete s.photo; }
   if (!Array.isArray(s.photos)) s.photos = [];
+  // 不正な公開grid(procs/rowsが配列でない・{procs:{}}等)で閲覧者が白画面にならないよう矯正(Codexレビュー#10)
+  if (!Array.isArray(s.procs)) s.procs = [];
+  if (!Array.isArray(s.rows))  s.rows  = [];
   // procSeqを既存idより先に進める
   s.procs.forEach(p => { const n = parseInt(String(p.id).slice(1),10); if (n >= procSeq) procSeq = n + 1; });
   // 追加工程フラグの後方互換(Codexレビュー#23): added 未定義の旧データは、既定5工程名以外を
@@ -2809,7 +2812,7 @@ function shareRecipe(anchorEl){
   var rid = (typeof currentRecipeId !== "undefined" && currentRecipeId) ? currentRecipeId : null;
   var url = rid ? ("https://plamo-paint.com/r/" + rid) : location.href.split("#")[0];
   var text = "🎨 " + title + " の塗装レシピ" + (author ? " by " + author : "") + "\n\n#塗装レシピ録 #ガンプラ #プラモデル";
-  if (typeof window.track === "function") window.track("recipe_shared", { recipe_id: rid });
+  if (typeof window.trackLegacy === "function") window.trackLegacy("recipe_shared", { recipe_id: rid });
   openSharePopover(anchorEl, text, url);
 }
 
@@ -4008,7 +4011,7 @@ const safePhoto = u => {
         sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: body, parent_id: null }).then(function(r){
           if (r.error){ alert('コメント送信に失敗：' + r.error.message); submit.disabled = false; return; }
           input.value = ''; counter.textContent = '0 / 500'; submit.disabled = true;
-          if (typeof window.track === 'function') window.track('comment_posted', { recipe_id: currentRec.id });
+          if (typeof window.trackLegacy === 'function') window.trackLegacy('comment_posted', { recipe_id: currentRec.id });
           render();
         });
       };
@@ -4163,7 +4166,7 @@ const safePhoto = u => {
       if (btn) btn.disabled = true;
       q.then(function(r){
         if (r && r.error){ alert('操作に失敗：'+r.error.message); if (btn) btn.disabled = false; return; }
-        if (typeof window.track === 'function') window.track(liked ? 'comment_unliked' : 'comment_liked', { comment_id: c.id });
+        if (typeof window.trackLegacy === 'function') window.trackLegacy(liked ? 'comment_unliked' : 'comment_liked', { comment_id: c.id });
         render();
       });
     } else if (act === 'reply'){
@@ -4237,7 +4240,7 @@ const safePhoto = u => {
       var text = (atName && body.indexOf('@'+atName) !== 0) ? ('@'+atName+' '+body) : body;
       sb.from('comments').insert({ recipe_id: currentRec.id, user_id: meId, body: text, parent_id: parentId }).then(function(r){
         if (r.error){ alert('返信送信に失敗：'+r.error.message); sub.disabled = false; return; }
-        if (typeof window.track === 'function') window.track('comment_reply_posted', { recipe_id: currentRec.id, parent_id: parentId });
+        if (typeof window.trackLegacy === 'function') window.trackLegacy('comment_reply_posted', { recipe_id: currentRec.id, parent_id: parentId });
         render();
       });
     };
