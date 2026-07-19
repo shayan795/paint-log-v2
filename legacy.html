@@ -2305,7 +2305,7 @@ function renderPhoto(){
   prev.innerHTML = "";
   state.photos.forEach((src, i) => {
     const wrap = document.createElement("span"); wrap.className = "photo-thumb";
-    wrap.innerHTML = `<img src="${src}" alt="完成写真${i+1}">`;
+    wrap.innerHTML = `<img src="${esc(safePhoto(src))}" alt="完成写真${i+1}">`;
     const del = document.createElement("button"); del.className = "thumb-del"; del.textContent = "×"; del.title = "この写真を削除";
     del.onclick = () => { state.photos.splice(i,1); renderPhoto(); };
     wrap.appendChild(del); prev.appendChild(wrap);
@@ -2719,7 +2719,7 @@ function renderViewMode(){
     const vrMark = (row.photo_mark && typeof row.photo_mark.x==='number')
       ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${safeColor(row.photo_mark.c||'#E01E28')}"></div>`
       : "";
-    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
+    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${esc(safePhoto(row.photo))}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
     viewProcs.forEach(proc => {
       const c = row.cells[proc.id];
@@ -2740,7 +2740,7 @@ function renderViewMode(){
       } else html += `<td class="vrecipe-empty" data-label="${esc(proc.name)}">—</td>`;
     });
     // スマホ用: カード末尾(塗料の下)に色グループ写真。PCではCSSで非表示
-    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${row.photo}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div></td>`;
+    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${esc(safePhoto(row.photo))}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div></td>`;
     // 色グループのコメント(入力があるときだけ表示・スマホはカード内に取り込む)
     if (row.comment && row.comment.trim()){
       html += `<td class="vr-comment-cell"><div class="vr-comment">${esc(row.comment.trim())}</div></td>`;
@@ -3022,6 +3022,13 @@ const safeColor = v => {
 const safePos = v => {                                             // object-position用（"50% 30%"等）
   v = String(v == null ? "" : v).trim();
   return /^[0-9a-zA-Z%.\s-]{0,40}$/.test(v) ? v : "50% 50%";
+};
+// 写真URLのサニタイズ（保存型XSS対策）：grid由来（ユーザー制御・#r=共有URLでも同経路）の
+// photos[] / rows[].photo を innerHTML の src 属性へ出す前に通す。https(Storage等)か data:image のみ許可し、
+// それ以外（相対や x" onerror=... の細工文字列）は空にして無害化する。属性値なので必ず esc() と併用する。
+const safePhoto = u => {
+  const s = String(u == null ? "" : u).trim();
+  return (/^https:\/\//i.test(s) || /^data:image\//i.test(s)) ? s : "";
 };
 (function boot(){
   // 短縮URL /r/:id は V2 の loadById (Supabase経由) に任せるので、ここではスキップ
