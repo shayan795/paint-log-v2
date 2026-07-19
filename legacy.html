@@ -495,6 +495,8 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .proc-panel .pp-add{width:100%;margin-top:4px;border:1px dashed var(--line-d);background:#fff;padding:10px}
 .procadd-btn{display:none}  /* カード内「工程追加」ボタンはスマホのみ表示(PCは表ヘッダ/下部ツールバーを使う) */
 .clabel{display:none}       /* カード内の工程名ラベル(タップで改名)はスマホのみ表示。PCは表ヘッダで改名 */
+.cgrip{display:none}        /* 追加した工程のドラッグ用グリップ。スマホのみ表示 */
+body.procdragging{cursor:grabbing}
 
 /* スマホ: 編集表をカード型に切替(縦文字化・視認性悪化を防ぐ) */
 @media(max-width:640px){
@@ -508,6 +510,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   #recipeTable td.part input{width:100%;min-width:0;font-size:1rem}
   #recipeTable td.cell{display:flex;align-items:center;justify-content:space-between;gap:12px;height:auto;min-height:0;padding:12px 14px}
   #recipeTable td.cell .clabel{display:inline-block;font-size:.72rem;color:var(--sub);font-weight:700;flex:none;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #recipeTable td.cell .cgrip{display:inline-block;flex:none;cursor:grab;color:var(--sub);font-size:1rem;line-height:1;padding:2px 6px 2px 0;touch-action:none;user-select:none}
+  #recipeTable td.cell.cell-drop-before{box-shadow:inset 0 3px 0 0 var(--bp)}
+  #recipeTable td.cell.cell-drop-after{box-shadow:inset 0 -3px 0 0 var(--bp)}
   #recipeTable td.cell .chipline{justify-content:flex-end;text-align:right}
   #recipeTable td.cell.empty{font-size:0;justify-content:space-between}
   #recipeTable td.cell.empty::after{content:"＋ 塗料を選ぶ";font-size:.8rem;color:var(--bp);font-weight:700}
@@ -1845,6 +1850,51 @@ let dragSrc = null;
 let colDragSrc = null;
 function clearDragOver(){ table.querySelectorAll(".dragover").forEach(el => el.classList.remove("dragover")); }
 function clearColDragOver(){ table.querySelectorAll(".coldragover").forEach(el => el.classList.remove("coldragover")); }
+// 追加した工程(列)のスマホ向けドラッグ並び替え。iOSは標準D&Dが効かないためPointer Eventsで自作。
+let procDrag = null;
+function clearProcDropMark(){ table.querySelectorAll(".cell-drop-before,.cell-drop-after").forEach(c => c.classList.remove("cell-drop-before","cell-drop-after")); }
+function attachProcCgrip(cgrip, procId){
+  cgrip.style.touchAction = "none";
+  cgrip.addEventListener("click", e => { e.stopPropagation(); });
+  cgrip.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation();
+    procDrag = { id: procId, targetQid: null, before: true };
+    try { cgrip.setPointerCapture(e.pointerId); } catch(_){}
+    document.body.classList.add("procdragging");
+  });
+  cgrip.addEventListener("pointermove", e => {
+    if (!procDrag) return;
+    e.preventDefault();
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const cell = (el && el.closest) ? el.closest("#recipeTable td.cell") : null;
+    clearProcDropMark();
+    if (cell && cell.dataset.qid2 && cell.dataset.qid2 !== procDrag.id){
+      const rect = cell.getBoundingClientRect();
+      const before = e.clientY < rect.top + rect.height / 2;
+      cell.classList.add(before ? "cell-drop-before" : "cell-drop-after");
+      procDrag.targetQid = cell.dataset.qid2; procDrag.before = before;
+    } else { procDrag.targetQid = null; }
+  });
+  const finish = e => {
+    if (!procDrag) return;
+    const d = procDrag; procDrag = null;
+    document.body.classList.remove("procdragging");
+    clearProcDropMark();
+    try { cgrip.releasePointerCapture(e.pointerId); } catch(_){}
+    if (d.targetQid && d.targetQid !== d.id){
+      const from = state.procs.findIndex(p => p.id === d.id);
+      if (from >= 0){
+        const moved = state.procs.splice(from, 1)[0];
+        let target = state.procs.findIndex(p => p.id === d.targetQid);
+        if (target < 0) target = state.procs.length - 1;
+        state.procs.splice(d.before ? target : target + 1, 0, moved);
+        renderGrid();
+      }
+    }
+  };
+  cgrip.addEventListener("pointerup", finish);
+  cgrip.addEventListener("pointercancel", finish);
+}
 function renderGrid(){
   table.innerHTML = "";
   // ヘッダー
@@ -1854,13 +1904,17 @@ function renderGrid(){
     const th = document.createElement("th");
     const box = document.createElement("div"); box.className = "h";
     const grip = document.createElement("span"); grip.className = "colgrip"; grip.textContent = "⠿"; grip.title = "ドラッグで列を入れ替え";
-    grip.draggable = true;
-    grip.addEventListener("dragstart", e => {
-      colDragSrc = pi; th.classList.add("coldragging");
-      e.dataTransfer.effectAllowed = "move";
-      try{ e.dataTransfer.setData("text/plain","col"); }catch(_){}
-    });
-    grip.addEventListener("dragend", () => { th.classList.remove("coldragging"); clearColDragOver(); });
+    if (proc.added){   // 並び替えは「追加した工程」のみ。既定工程(サフ等)はグリップを隠して固定。
+      grip.draggable = true;
+      grip.addEventListener("dragstart", e => {
+        colDragSrc = pi; th.classList.add("coldragging");
+        e.dataTransfer.effectAllowed = "move";
+        try{ e.dataTransfer.setData("text/plain","col"); }catch(_){}
+      });
+      grip.addEventListener("dragend", () => { th.classList.remove("coldragging"); clearColDragOver(); });
+    } else {
+      grip.style.visibility = "hidden";
+    }
     const inp = document.createElement("input");
     inp.value = proc.name; inp.placeholder = "工程名";
     inp.oninput = () => { proc.name = inp.value; };
@@ -1940,6 +1994,13 @@ function renderGrid(){
         });
         td.addEventListener("dragend", () => { td.classList.remove("dragging"); clearDragOver(); });
       } else { td.className = "cell empty"; td.appendChild(clabel); }
+      // 追加した工程はスマホでドラッグ移動できるようグリップを付ける(既定工程は不可)
+      if (proc.added){
+        const cgrip = document.createElement("span");
+        cgrip.className = "cgrip"; cgrip.textContent = "⠿"; cgrip.title = "ドラッグで工程を移動";
+        attachProcCgrip(cgrip, proc.id);
+        td.insertBefore(cgrip, td.firstChild);
+      }
       // ドロップ先(全セル共通)
       td.dataset.ri2 = ri; td.dataset.qid2 = proc.id;
       td.addEventListener("dragover", e => {
@@ -1970,7 +2031,7 @@ function renderGrid(){
     tdD.appendChild(order);
     // スマホ用: この色グループのカードに「工程追加」(工程列を1つ追加)。PCでは .procadd-btn を非表示にし表ヘッダ/下部ツールバーを使う。
     const addProc = document.createElement("button"); addProc.className = "small procadd-btn"; addProc.textContent = "工程追加"; addProc.title = "工程を追加";
-    addProc.onclick = () => { state.procs.push(newProc("工程" + (state.procs.length+1))); renderGrid(); };
+    addProc.onclick = () => { state.procs.push(Object.assign(newProc("工程" + (state.procs.length+1)), { added: true })); renderGrid(); };
     tdD.appendChild(addProc);
     const del = document.createElement("button"); del.className = "small ghost delrow-btn"; del.textContent = "×"; del.title = "この色グループを削除";
     del.onclick = () => { state.rows.splice(ri,1); renderAll(); };
@@ -2053,11 +2114,11 @@ function renderProcPanel(){
     r.append(up, down, inp, x); panel.appendChild(r);
   });
   const add = document.createElement("button"); add.className = "pp-add"; add.textContent = "＋ 工程を追加";
-  add.onclick = () => { state.procs.push(newProc("工程" + (state.procs.length+1))); renderAll(); };
+  add.onclick = () => { state.procs.push(Object.assign(newProc("工程" + (state.procs.length+1)), { added: true })); renderAll(); };
   panel.appendChild(add);
 }
 document.getElementById("addRow").onclick = () => { state.rows.push({part:"", cells:{}}); renderGrid(); };
-document.getElementById("addCol").onclick = () => { state.procs.push(newProc("工程" + (state.procs.length+1))); renderGrid(); };
+document.getElementById("addCol").onclick = () => { state.procs.push(Object.assign(newProc("工程" + (state.procs.length+1)), { added: true })); renderGrid(); };
 
 /* ===================== 塗料ピッカー ===================== */
 const overlay = document.getElementById("overlay");
