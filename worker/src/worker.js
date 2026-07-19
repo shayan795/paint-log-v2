@@ -18,7 +18,7 @@ function esc(s) {
 // Supabase REST API から1件レシピを取得
 async function getRecipeFromSupabase(env, id) {
   // 公開投稿のみ取得（is_public=true）
-  const select = "id,title,author_label,methods,cover_url,owner_id,is_public,grid,profiles:owner_id(display_name,user_id)";
+  const select = "id,title,author_label,methods,cover_url,owner_id,is_public,comments_disabled,grid,profiles:owner_id(display_name,user_id)";
   const url = `${env.SUPABASE_URL}/rest/v1/recipes?id=eq.${encodeURIComponent(id)}&is_public=eq.true&select=${encodeURIComponent(select)}`;
   const res = await fetch(url, {
     headers: {
@@ -26,7 +26,9 @@ async function getRecipeFromSupabase(env, id) {
       Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
       Accept: "application/json",
     },
-    cf: { cacheTtl: 60 },
+    // 認可(is_public)依存の取得はキャッシュしない：公開→非公開/削除を即時反映する(Codexレビュー#3)。
+    // ページ応答は元々no-cacheでWorkerは毎回走るため、増えるのはSupabase往復1回のみ。
+    cf: { cacheTtl: 0 },
   });
   if (!res.ok) return null;
   try {
