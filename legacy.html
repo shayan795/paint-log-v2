@@ -3157,6 +3157,18 @@ const safePhoto = u => {
     var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
     for (var i=0;i<rs.length;i++) rs[i].checked = (rs[i].value === (isPublic ? "public" : "private"));
   }
+  // 公開設定・コメント許可を編集/プレビューの両カードで双方向同期(Codexレビュー#2)。
+  // どちらのカードから投稿しても同じ値になり、「編集で非公開にしたのにプレビューから公開で投稿」を防ぐ。
+  function setAllComments(allow){
+    var cs = document.querySelectorAll(".js-allow-comments");
+    for (var i=0;i<cs.length;i++) cs[i].checked = allow;
+  }
+  (function bindPublishSync(){
+    var rs = document.querySelectorAll('input[name="vis-edit"],input[name="vis-view"]');
+    for (var i=0;i<rs.length;i++){ rs[i].addEventListener("change", function(){ if (this.checked) setVis(this.value === "public"); }); }
+    var cs = document.querySelectorAll(".js-allow-comments");
+    for (var j=0;j<cs.length;j++){ cs[j].addEventListener("change", function(){ setAllComments(this.checked); }); }
+  })();
 
   // ?id=UUID または /r/:id があれば既存レシピを読み込む（RLSで0件＝非公開の他人/削除済み）
   (function loadById(){
@@ -3454,7 +3466,7 @@ const safePhoto = u => {
             var g = JSON.parse(JSON.stringify(state));
             g.photos = photoUrls.filter(Boolean);
             if (g.rows) g.rows.forEach(function(r, ri){ if (rowUrls[ri]) r.photo = rowUrls[ri]; else delete r.photo; });
-            var allowCommentsEl = document.querySelector(".js-allow-comments");
+            var allowCommentsEl = card ? card.querySelector(".js-allow-comments") : document.querySelector(".js-allow-comments");
             var commentsDisabled = allowCommentsEl ? !allowCommentsEl.checked : false;
             var payload = {
               title: (state.kit || "").trim() || null,
