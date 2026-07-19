@@ -1841,6 +1841,10 @@ function migrate(s){
   if (!Array.isArray(s.photos)) s.photos = [];
   // procSeqを既存idより先に進める
   s.procs.forEach(p => { const n = parseInt(String(p.id).slice(1),10); if (n >= procSeq) procSeq = n + 1; });
+  // 追加工程フラグの後方互換(Codexレビュー#23): added 未定義の旧データは、既定5工程名以外を
+  // 「追加分」とみなして並び替え対象にする(この機能導入前に追加した工程が固定扱いになるのを防ぐ)。
+  const DEFAULT_PROCS = ["サフ","下地","本塗装","スミ入れ","トップコート"];
+  s.procs.forEach(p => { if (p && p.added === undefined) p.added = !DEFAULT_PROCS.includes(p.name); });
   return s;
 }
 
@@ -1858,12 +1862,12 @@ function attachProcCgrip(cgrip, procId){
   cgrip.addEventListener("click", e => { e.stopPropagation(); });
   cgrip.addEventListener("pointerdown", e => {
     e.preventDefault(); e.stopPropagation();
-    procDrag = { id: procId, targetQid: null, before: true };
+    procDrag = { id: procId, targetQid: null, before: true, pointerId: e.pointerId };
     try { cgrip.setPointerCapture(e.pointerId); } catch(_){}
     document.body.classList.add("procdragging");
   });
   cgrip.addEventListener("pointermove", e => {
-    if (!procDrag) return;
+    if (!procDrag || e.pointerId !== procDrag.pointerId) return;   // 別ポインタ(多点タッチ)は無視
     e.preventDefault();
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const cell = (el && el.closest) ? el.closest("#recipeTable td.cell") : null;
@@ -1875,13 +1879,14 @@ function attachProcCgrip(cgrip, procId){
       procDrag.targetQid = cell.dataset.qid2; procDrag.before = before;
     } else { procDrag.targetQid = null; }
   });
-  const finish = e => {
-    if (!procDrag) return;
+  // commit=true(pointerup)のときだけ並び替えを確定。pointercancelはcleanupのみ(誤確定防止)。
+  const endDrag = (e, commit) => {
+    if (!procDrag || e.pointerId !== procDrag.pointerId) return;
     const d = procDrag; procDrag = null;
     document.body.classList.remove("procdragging");
     clearProcDropMark();
     try { cgrip.releasePointerCapture(e.pointerId); } catch(_){}
-    if (d.targetQid && d.targetQid !== d.id){
+    if (commit && d.targetQid && d.targetQid !== d.id){
       const from = state.procs.findIndex(p => p.id === d.id);
       if (from >= 0){
         const moved = state.procs.splice(from, 1)[0];
@@ -1892,8 +1897,8 @@ function attachProcCgrip(cgrip, procId){
       }
     }
   };
-  cgrip.addEventListener("pointerup", finish);
-  cgrip.addEventListener("pointercancel", finish);
+  cgrip.addEventListener("pointerup", e => endDrag(e, true));
+  cgrip.addEventListener("pointercancel", e => endDrag(e, false));
 }
 function renderGrid(){
   table.innerHTML = "";
@@ -3626,7 +3631,7 @@ const safePhoto = u => {
       if (!prof){
         if (av){ av.innerHTML=''; av.textContent='ゲ'; av.style.background=''; }
         if (name) name.textContent='ゲスト';
-        acc.setAttribute('href','index.html');
+        acc.setAttribute('href','/index.html');
       } else {
         var label = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
         var ini = label.charAt(0);
@@ -3636,7 +3641,7 @@ const safePhoto = u => {
           else { av.innerHTML=''; av.textContent=ini; }
         }
         if (name) name.textContent=label;
-        acc.setAttribute('href','index.html#profile');
+        acc.setAttribute('href','/index.html#profile');
       }
     }
     // 「とは」ページのモバイル上部バーのアバター
@@ -3974,7 +3979,7 @@ const safePhoto = u => {
     }
     sec.appendChild(formArea);
     var loginBtn = formArea.querySelector('#cLogin');
-    if (loginBtn) loginBtn.onclick = function(){ location.href='index.html#login'; };
+    if (loginBtn) loginBtn.onclick = function(){ location.href='/index.html#login'; };
     var submit = formArea.querySelector('#cSubmit');
     if (submit){
       var input = formArea.querySelector('#cInput');
@@ -4080,7 +4085,7 @@ const safePhoto = u => {
     row.appendChild(av); row.appendChild(main);
 
     var nameEl = main.querySelector('.c-name');
-    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = 'index.html#u/'+encodeURIComponent(prof.user_id); };
+    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = '/index.html#u/'+encodeURIComponent(prof.user_id); };
     main.querySelectorAll(':scope > .c-actions button[data-act]').forEach(function(b){
       b.onclick = function(){ handleAction(b.dataset.act, c, row, c.id); };
     });
@@ -4125,7 +4130,7 @@ const safePhoto = u => {
     main.appendChild(replyHolder);
     row.appendChild(av); row.appendChild(main);
     var nameEl = main.querySelector('.c-name');
-    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = 'index.html#u/'+encodeURIComponent(prof.user_id); };
+    if (nameEl && prof.user_id) nameEl.onclick = function(){ location.href = '/index.html#u/'+encodeURIComponent(prof.user_id); };
     main.querySelectorAll(':scope > .c-actions button[data-act]').forEach(function(b){
       b.onclick = function(){
         // 返信先表示用にこのreplyのprofileを渡しつつ、parent_idはトップレベルに付ける（Instagram式）
