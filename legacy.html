@@ -494,6 +494,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .proc-panel .pp-del{flex:none;width:38px;height:38px;padding:0;border:1px solid var(--line-d);background:#fff;color:var(--warn);font-size:1.1rem}
 .proc-panel .pp-add{width:100%;margin-top:4px;border:1px dashed var(--line-d);background:#fff;padding:10px}
 .procadd-btn{display:none}  /* カード内「工程追加」ボタンはスマホのみ表示(PCは表ヘッダ/下部ツールバーを使う) */
+.clabel{display:none}       /* カード内の工程名ラベル(タップで改名)はスマホのみ表示。PCは表ヘッダで改名 */
 
 /* スマホ: 編集表をカード型に切替(縦文字化・視認性悪化を防ぐ) */
 @media(max-width:640px){
@@ -506,7 +507,7 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
   #recipeTable td.part{min-width:0;border-right:none;background:var(--bp-bg)}
   #recipeTable td.part input{width:100%;min-width:0;font-size:1rem}
   #recipeTable td.cell{display:flex;align-items:center;justify-content:space-between;gap:12px;height:auto;min-height:0;padding:12px 14px}
-  #recipeTable td.cell::before{content:attr(data-label);font-size:.72rem;color:var(--sub);font-weight:700;flex:none}
+  #recipeTable td.cell .clabel{display:inline-block;font-size:.72rem;color:var(--sub);font-weight:700;flex:none;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #recipeTable td.cell .chipline{justify-content:flex-end;text-align:right}
   #recipeTable td.cell.empty{font-size:0;justify-content:space-between}
   #recipeTable td.cell.empty::after{content:"＋ 塗料を選ぶ";font-size:.8rem;color:var(--bp);font-weight:700}
@@ -1914,12 +1915,21 @@ function renderGrid(){
     state.procs.forEach(proc => {
       const td = tr.insertCell();
       td.dataset.label = proc.name;   // スマホのカード型表示で工程名ラベルに使う
+      // スマホのカード表示の工程名ラベル。タップで改名できる(PCはCSSで非表示・表ヘッダで改名)。
+      const clabel = document.createElement("span");
+      clabel.className = "clabel"; clabel.textContent = proc.name; clabel.title = "タップで工程名を変更";
+      clabel.onclick = e => {
+        e.stopPropagation();
+        const nm = prompt("工程名を変更", proc.name);
+        if (nm !== null && nm.trim() !== ""){ proc.name = nm.trim(); renderGrid(); }
+      };
       const cell = row.cells[proc.id];
       if (cell){
         td.className = "cell";
         const p = cell.i !== undefined ? PAINTS[cell.i] : null;
         td.innerHTML = `<div class="chipline"><span class="chip" style="background:${safeColor(p ? p[3] : "#ddd")}"></span>
           <span class="pname">${esc(p ? p[2] : cell.c)}<span class="pcode">${p ? esc((p[0]+" "+p[1]).trim()) : "自由入力"}</span></span></div>`;
+        td.insertBefore(clabel, td.firstChild);
         td.draggable = true;
         td.dataset.ri = ri; td.dataset.qid = proc.id;
         td.addEventListener("dragstart", e => {
@@ -1929,7 +1939,7 @@ function renderGrid(){
           try{ e.dataTransfer.setData("text/plain","cell"); }catch(_){}
         });
         td.addEventListener("dragend", () => { td.classList.remove("dragging"); clearDragOver(); });
-      } else { td.className = "cell empty"; td.textContent = "+"; }
+      } else { td.className = "cell empty"; td.appendChild(clabel); }
       // ドロップ先(全セル共通)
       td.dataset.ri2 = ri; td.dataset.qid2 = proc.id;
       td.addEventListener("dragover", e => {
