@@ -139,13 +139,16 @@ async function serveRecipePage(env, id) {
       ldBlock = `<script type="application/ld+json">${JSON.stringify(ld).replace(/<\/script/gi, "<\\/script")}</script>`;
     } catch (_) { ldBlock = ""; }
 
-    html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, `<!--OG_START-->${block}${ldBlock}<!--OG_END-->`);
+    // ★replace の第2引数は必ず「関数」にすること（文字列だと $' `$&` 等が特殊置換として展開され、
+    //   レシピtitle等のユーザー入力から本文が複製され、注入scriptが早期終了して保存型XSSになる）。
+    html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, () => `<!--OG_START-->${block}${ldBlock}<!--OG_END-->`);
 
     // クライアント側の Supabase ラウンドトリップを消すため、レシピ本体を script タグに埋め込む
     // legacy.html の loadById がこれを優先的に使う
-    const initialData = JSON.stringify(rec).replace(/<\/script/gi, "<\\/script");
+    // < を < に落として script の早期終了自体を封じる（</script 対策の上位互換・JSONとしては同値）
+    const initialData = JSON.stringify(rec).replace(/</g, "\\u003c");
     const inject = `<script id="__initial_recipe">window.__INITIAL_RECIPE__=${initialData};</script>`;
-    html = html.replace(/<\/head>/i, inject + "</head>");
+    html = html.replace(/<\/head>/i, () => inject + "</head>");
   }
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
