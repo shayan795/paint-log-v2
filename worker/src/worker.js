@@ -10,9 +10,39 @@
 //   ORIGIN            …  https://raw.githubusercontent.com/<user>/<repo>/<branch>
 //   SITE              …  https://plamo-paint.com
 
+// 全レスポンスに付ける安全ヘッダ。
+// ※script-src等の本格CSPはインラインscript/styleを多用しているため今は入れない（壊れるため）。
+//   ここではサイトを壊さずに効く「クリックジャッキング防止・MIME推測防止・リファラ抑制・HTTPS強制」を入れる。
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "SAMEORIGIN",
+  "content-security-policy": "frame-ancestors 'self'",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "strict-transport-security": "max-age=15552000",
+};
+
+// 配信してはいけない内部ファイル（GitHub Pagesはリポジトリ全体を公開するため、入口のWorkerで遮断する）。
+// 未修正の脆弱性台帳(BOMBS.md)やDB定義(schema.sql/migrations)が誰でも読める状態を塞ぐ。
+function isBlockedPath(p) {
+  const s = p.toLowerCase();
+  if (/^\/(supabase|migrations|worker|\.github|node_modules|src\/.*\.test)\//.test(s)) return true;
+  if (/\.(sql|md|toml|lock|log|mjs)$/.test(s)) return true;
+  if (/^\/(package(-lock)?\.json|\.gitignore|\.env.*|claude.*|.*引き継ぎ.*)$/.test(s)) return true;
+  return false;
+}
+
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// og:image に使ってよい画像URLか（Supabase Storage か自サイトの「オリジン完全一致」のみ許可）。
+// 前方一致だと supabase.co.evil.com のような外部ドメインを通してしまうため必ずURL解析で判定する。
+function isAllowedImageOrigin(u, env) {
+  try {
+    const o = new URL(String(u || "")).origin;
+    return o === new URL(env.SUPABASE_URL).origin || o === new URL(env.SITE).origin;
+  } catch (_) { return false; }
 }
 
 // Supabase REST API から1件レシピを取得
@@ -30,12 +60,15 @@ async function getRecipeFromSupabase(env, id) {
     // ページ応答は元々no-cacheでWorkerは毎回走るため、増えるのはSupabase往復1回のみ。
     cf: { cacheTtl: 0 },
   });
-  if (!res.ok) return null;
+  // 取得失敗(Supabase障害等)は null ではなく "error" を返す。
+  // null(=本当に存在しない/非公開)と区別しないと、一時障害の間だけ正常な公開レシピにも
+  // 404 を返してしまい検索インデックスから外れる。
+  if (!res.ok) return "error";
   try {
     const arr = await res.json();
     return arr && arr[0] ? arr[0] : null;
   } catch (_) {
-    return null;
+    return "error";
   }
 }
 
@@ -86,9 +119,20 @@ async function fetchOrigin(env, pathname, search = "") {
 
 // /r/:id または ?id=xxx を含むレシピ閲覧ページ：OGタグを差し込んだ legacy.html を返す
 async function serveRecipePage(env, id) {
-  const rec = await getRecipeFromSupabase(env, id);
-  const originRes = await fetchOrigin(env, "/legacy.html");
-  let html = await originRes.text();
+  let rec = await getRecipeFromSupabase(env, id);
+  const fetchFailed = (rec === "error");
+  if (fetchFailed) rec = null;
+  // 配信元(GitHub raw)が落ちた/404を返した場合に、そのエラー本文をレシピページとして
+  // 200で返してしまわないようにする（503を返す）。
+  let originRes, html;
+  try {
+    originRes = await fetchOrigin(env, "/legacy.html");
+    if (!originRes || !originRes.ok) throw new Error("origin " + (originRes && originRes.status));
+    html = await originRes.text();
+  } catch (_) {
+    return new Response("<!doctype html><meta charset=utf-8><title>一時的にアクセスできません</title><p>ただいま混み合っています。しばらくしてからお試しください。",
+      { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  }
 
   if (rec) {
     const prof = rec.profiles || {};
@@ -103,7 +147,9 @@ async function serveRecipePage(env, id) {
     // それ以外（外部の悪意画像等）は汎用OGPにフォールバック。
     const fallbackImg = `${env.SITE}/og-image.png`;
     const cover = String(rec.cover_url || "");
-    const image = (cover.startsWith(env.SUPABASE_URL) || cover.startsWith(env.SITE)) ? cover : fallbackImg;
+    // ★前方一致(startsWith)だと https://<ref>.supabase.co.evil.com/... が通ってしまうため、
+    //   URLとして解析し「オリジン完全一致」で判定する。
+    const image = isAllowedImageOrigin(cover, env) ? cover : fallbackImg;
     const pageUrl = `${env.SITE}/r/${rec.id}`;
 
     const block =
@@ -149,9 +195,24 @@ async function serveRecipePage(env, id) {
     const initialData = JSON.stringify(rec).replace(/</g, "\\u003c");
     const inject = `<script id="__initial_recipe">window.__INITIAL_RECIPE__=${initialData};</script>`;
     html = html.replace(/<\/head>/i, () => inject + "</head>");
+    // canonical をこのレシピ自身に向ける。既定のままだとトップページを指し、
+    // 全レシピページが「重複」と判定されて検索インデックスから消える。
+    html = html.replace(/<!--CANON_START-->[\s\S]*?<!--CANON_END-->/,
+      () => `<!--CANON_START--><link rel="canonical" href="${esc(pageUrl)}"><!--CANON_END-->`);
+  } else {
+    // 非公開化・削除済み・不正IDのレシピURL：ソフト404を避け、404 + noindex を返す
+    // （200のままだと検索結果に中身の無いページが残り続ける）
+    // ただし取得失敗(Supabase障害)のときは 404 にしない。正常な公開レシピを一時障害で
+    // インデックスから落とさないため、200のまま返してクライアント側の再取得に委ねる。
+    html = html.replace(/<!--CANON_START-->[\s\S]*?<!--CANON_END-->/,
+      () => `<!--CANON_START--><meta name="robots" content="noindex,follow"><!--CANON_END-->`);
+    return new Response(html, {
+      status: fetchFailed ? 200 : 404,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS },
+    });
   }
   return new Response(html, {
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", ...SECURITY_HEADERS },
   });
 }
 
@@ -217,13 +278,26 @@ export default {
       return serveRecipePage(env, id);
     }
 
+    // 内部ファイル（DB定義・migration・脆弱性台帳・設定ファイル等）は配信しない
+    if (isBlockedPath(path)) return new Response("Not found", { status: 404, headers: SECURITY_HEADERS });
+
     // それ以外は GitHub Pages の中身を配信（raw は text/plain で返るので拡張子から content-type を再設定）
     const reqPath = path === "/" ? "/index.html" : path;
-    const originRes = await fetchOrigin(env, reqPath, url.search);
-    if (originRes.status === 404) return new Response("Not found", { status: 404 });
-    const h = new Headers();
+    let originRes;
+    try {
+      originRes = await fetchOrigin(env, reqPath, url.search);
+    } catch (_) {
+      return new Response("Service Unavailable", { status: 503, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
+    }
+    if (originRes.status === 404) return new Response("Not found", { status: 404, headers: SECURITY_HEADERS });
+    if (originRes.status >= 500) {
+      return new Response("Service Unavailable", { status: 503, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
+    }
+    const h = new Headers(SECURITY_HEADERS);
     h.set("content-type", ctForPath(reqPath));
-    h.set("cache-control", "public, max-age=300");
+    // 画像・フォント等の不変アセットは長め、HTML/JS等は短めにして更新の伝播を早くする
+    const immutable = /\.(png|jpe?g|gif|webp|svg|ico|woff2?)$/i.test(reqPath);
+    h.set("cache-control", immutable ? "public, max-age=86400" : "public, max-age=300");
     return new Response(originRes.body, { status: originRes.status, headers: h });
   },
 };
