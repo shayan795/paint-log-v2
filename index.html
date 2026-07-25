@@ -830,7 +830,7 @@ function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pa
 // 投稿カード（記録/プロフィール共通）
 function recordCard(r){
   var c = document.createElement("button"); c.className = "pf-post";
-  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt=""></span>' : '<span class="pf-post-thumb"></span>';
+  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></span>' : '<span class="pf-post-thumb"></span>';
   var badge = (r.is_public === false) ? '<span class="rec-private">非公開</span>' : '';
   c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
   c.addEventListener("click", function(){ location.href = "/r/" + r.id; });
@@ -1212,7 +1212,7 @@ function openTagResults(slug, label){
         recoSec.hidden = false;
         withCover.forEach(function(r, i){
           var card = document.createElement("div"); card.className = "reco-card";
-          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt=""></div>'
+          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></div>'
             + '<div class="reco-title">'+esc(r.title||"無題")+'</div>';
           card.addEventListener("click", function(){ location.href = "/r/" + r.id; });
           recoRow.appendChild(card);
@@ -2213,7 +2213,7 @@ function renderReco(){
         var card = document.createElement("div");
         card.className = "reco-card";
         var thumb = r.cover_url
-          ? '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt=""></div>'
+          ? '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></div>'
           : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
         var author = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "";
         card.innerHTML = thumb + '<div class="reco-title">'+esc(r.title||"無題")+'</div><div class="reco-author">'+esc(author)+'</div>';
@@ -2230,7 +2230,7 @@ function renderReco(){
 function makeTile(item, hidden, onClick){
   var b = document.createElement("button");
   b.className = "cat-tile" + (hidden ? " cat-hidden" : "");
-  var img = item.img ? '<img src="'+esc(item.img)+'" alt="">' : '';
+  var img = item.img ? '<img src="'+esc(item.img)+'" alt="" loading="lazy" decoding="async">' : '';
   b.innerHTML = img + '<span class="cat-label">'+esc(item.label)+'</span>';
   b.addEventListener("click", onClick || function(){ openStub(item.label); });
   return b;

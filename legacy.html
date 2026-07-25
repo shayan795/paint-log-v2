@@ -1827,21 +1827,37 @@ function newState(){
 }
 /* 旧バージョンのデータを新形式に変換 */
 function migrate(s){
+  // grid はユーザーが直APIで任意の形に保存できるため、閲覧側が壊れない形に正規化してから使う。
+  // (最上位が配列/文字列、procsやrowsの中身がnull、cellsが配列 等でも白画面にしない)
+  if (!s || typeof s !== "object" || Array.isArray(s)) s = {};
   if (!s.procs){
     const olds = ["サフ","下地","本塗装","スミ入れ","トップコート"];
     s.procs = olds.map(newProc);
     const map = {}; olds.forEach((n,i) => map[n] = s.procs[i].id);
-    (s.rows||[]).forEach(r => {
-      const c = {}; Object.keys(r.cells||{}).forEach(k => { if (map[k]) c[map[k]] = r.cells[k]; });
+    (Array.isArray(s.rows) ? s.rows : []).forEach(r => {
+      if (!r || typeof r !== "object") return;
+      const c = {}; Object.keys(r.cells || {}).forEach(k => { if (map[k]) c[map[k]] = r.cells[k]; });
       r.cells = c;
     });
   }
   // 旧 photo(単数) → photos(配列)
   if (s.photo !== undefined){ if (s.photo) s.photos = [s.photo]; delete s.photo; }
   if (!Array.isArray(s.photos)) s.photos = [];
-  // 不正な公開grid(procs/rowsが配列でない・{procs:{}}等)で閲覧者が白画面にならないよう矯正(Codexレビュー#10)
-  if (!Array.isArray(s.procs)) s.procs = [];
-  if (!Array.isArray(s.rows))  s.rows  = [];
+  s.photos = s.photos.filter(p => typeof p === "string");
+  // 工程: オブジェクト以外を落とし、id/name を必ず文字列にする（idの重複も解消）
+  const seenIds = {};
+  s.procs = (Array.isArray(s.procs) ? s.procs : []).filter(p => p && typeof p === "object").map(p => {
+    let id = (typeof p.id === "string" || typeof p.id === "number") ? String(p.id) : "";
+    if (!id || seenIds[id]) id = "q" + (procSeq++);
+    seenIds[id] = 1; p.id = id;
+    p.name = (typeof p.name === "string") ? p.name : "";
+    return p;
+  });
+  // 色グループ: オブジェクト以外を落とし、cells を必ずオブジェクトにする
+  s.rows = (Array.isArray(s.rows) ? s.rows : []).filter(r => r && typeof r === "object").map(r => {
+    if (!r.cells || typeof r.cells !== "object" || Array.isArray(r.cells)) r.cells = {};
+    return r;
+  });
   // procSeqを既存idより先に進める
   s.procs.forEach(p => { const n = parseInt(String(p.id).slice(1),10); if (n >= procSeq) procSeq = n + 1; });
   // 追加工程フラグの後方互換(Codexレビュー#23): added 未定義の旧データは、既定5工程名以外を
@@ -2969,7 +2985,14 @@ function exitEditor(target){
   // 既存投稿を編集していた場合は、メインでなく「その投稿の閲覧画面」に戻る
   if (currentRecipeId){
     if (currentPage === "edit"){
-      // 既存投稿を編集中の❌＝その投稿の閲覧画面へ戻る
+      // 既存投稿を編集中の❌＝その投稿の閲覧画面へ戻る。
+      // ただし未保存の変更があるときは確認する（そのまま閉じると編集内容が無警告で消えるため）。
+      try {
+        var nowSnap = JSON.stringify({ s: state, m: state.methods || [] });
+        if (window.__loadedSnapshot && nowSnap !== window.__loadedSnapshot){
+          if (!confirm("保存していない変更があります。\n「更新する」を押していない変更は失われます。\n\n編集を閉じますか？")) return;
+        }
+      } catch(_){}
       showPage("view");
       var pc = document.getElementById("publishCard"); if (pc) pc.style.display = "none";
       var pb = document.getElementById("pvBanner");    if (pb) pb.style.display = "none";
@@ -3109,9 +3132,13 @@ const safePhoto = u => {
   // 画像保存（Supabase Storage 'recipes' バケット）
   function uploadImage(uid, dataUrl, tag){
     return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
-      var ext = (blob.type === "image/png") ? "png" : "jpg";
+      // Content-Type はブラウザ申告値をそのまま使わず画像のみ許可する。
+      // (公開バケットのため、text/html等を通すと任意HTMLの配信場所として悪用され得る)
+      var ALLOWED = { "image/jpeg":"jpg", "image/png":"png", "image/webp":"webp" };
+      var ctype = ALLOWED[blob.type] ? blob.type : "image/jpeg";
+      var ext = ALLOWED[ctype];
       var path = uid + "/" + Date.now() + "_" + tag + "." + ext;
-      return sb.storage.from("recipes").upload(path, blob, { contentType: blob.type || "image/jpeg", upsert:true }).then(function(up){
+      return sb.storage.from("recipes").upload(path, blob, { contentType: ctype, upsert:true }).then(function(up){
         if (up.error) throw up.error;
         return sb.storage.from("recipes").getPublicUrl(path).data.publicUrl;
       });
@@ -3212,7 +3239,9 @@ const safePhoto = u => {
       applyRecipe(res.data);
     });
     function applyRecipe(rec){
-      try { state = migrate(rec.grid || {}); } catch(_){ state = rec.grid || newState(); }
+      // migrate が失敗しても「生の(壊れた)grid」を入れない。入れると描画側で例外→白画面になり、
+      // せっかくの正規化が無意味になる。安全な空stateに落とす。
+      try { state = migrate(rec.grid || {}); } catch(_){ try { state = migrate({}); } catch(__){ state = newState(); } }
       state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
       // 既存投稿の編集：ボタンは「更新する」のみ（下書き保存は隠す）
@@ -3226,6 +3255,9 @@ const safePhoto = u => {
       var notes = document.querySelectorAll(".publish-card .note");
       for (var j=0;j<notes.length;j++) notes[j].textContent = "編集内容を保存します（投稿一覧の順番は変わりません）。";
       renderAll();
+      // 「未保存の変更があるか」を判定するための基準（読み込み直後の内容）を控える。
+      // 既存投稿の編集中に❌を押したとき、変更があれば確認してから閉じる（無警告の消失を防ぐ）。
+      try { window.__loadedSnapshot = JSON.stringify({ s: state, m: state.methods || [] }); } catch(_){ window.__loadedSnapshot = null; }
       showPage("view");                 // 投稿閲覧は必ず「閲覧（読み取り）」で開く
       setPublishCard(false);            // 既存投稿の閲覧では公開設定/投稿ボタン・プレビューバナーを出さない
       ensureBackBtn();                  // 「← 戻る」を表示
@@ -3430,10 +3462,14 @@ const safePhoto = u => {
   for (var i=0;i<btns.length;i++){
     btns[i].addEventListener("click", function(){
       var btn = this;
+      // 二重投稿の防止：ボタンは編集カードとプレビューカードに2つあり、btn.disabled だけだと
+      // 保存中にタブを切り替えてもう一方を押せてしまい、同じレシピが2件投稿される。
+      if (window.__publishing) return;
+      window.__publishing = true;
       var card = btn.closest(".publish-card");
       var v = card ? card.querySelector('input[type="radio"]:checked') : null;
       var isPublic = !(v && v.value === "private");
-      if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに使えます。"); return; }
+      if (!sb){ window.__publishing = false; alert("ログインはサーバー経由（URL）で開いたときに使えます。"); return; }
       // 未確定の#タグ入力（Enter押し忘れ救済）を state.methods に反映
       var pendingInput = document.querySelector('#methodChips .mchip-input');
       if (pendingInput && pendingInput.value.trim()){
@@ -3443,7 +3479,13 @@ const safePhoto = u => {
       btn.disabled = true; var orig = btn.textContent; btn.textContent = "保存中…";
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
-        if (!session){ alert("投稿にはログインが必要です。"); location.href = "/index.html"; return; }
+        // セッション切れでも即リダイレクトしない（書きかけのレシピが警告なしに全消失するため）。
+        // 画面に留まり、別タブでログインし直してから再度「投稿する」を押せるようにする。
+        if (!session){
+          window.__publishing = false; btn.disabled = false; btn.textContent = orig;
+          alert("ログインの有効期限が切れています。\n入力内容はこの画面に残っています。別のタブでログインし直してから、もう一度「投稿する」を押してください。");
+          return;
+        }
         var uid = session.user.id;
         // 0) 非公開投稿の上限（無料10件）を写真アップ前にチェック（新規の非公開のみ・公開や既存編集は対象外）
         var _limitChk = (!isPublic && !currentRecipeId)
@@ -3451,14 +3493,18 @@ const safePhoto = u => {
           : Promise.resolve({ count:0 });
         return _limitChk.then(function(_lc){
           if (!isPublic && !currentRecipeId && (((_lc && _lc.count) || 0) >= 10)){
-            btn.disabled = false; btn.textContent = orig;
+            window.__publishing = false; btn.disabled = false; btn.textContent = orig;
             alert("無料プランの非公開投稿は10件までです。\n公開で投稿するか、非公開の投稿を減らしてから保存してください。");
             return;
           }
         // 1) 写真をStorageへ（data:のみアップ。既存URLは流用）
-        var photosSrc = (state.photos || []).slice();
+        // ★保存開始時点の state を丸ごと固定(スナップショット)して以降はこれだけを使う。
+        //   アップロード中(数秒)に行の削除・並べ替えをすると、添字がずれて写真が別の色グループに
+        //   付いたり消えたりするため、保存対象は「押した瞬間の内容」に固定する。
+        var snap = JSON.parse(JSON.stringify(state));
+        var photosSrc = (snap.photos || []).slice();
         var photoUrls = photosSrc.slice();
-        var rowPhotos = (state.rows || []).map(function(r){ return r.photo || null; });
+        var rowPhotos = (snap.rows || []).map(function(r){ return r.photo || null; });
         var rowUrls = rowPhotos.slice();
         var jobs = [];
         photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
@@ -3466,17 +3512,18 @@ const safePhoto = u => {
         return Promise.all(jobs).then(function(){
           return makeCover(uid).then(function(cover){
             // 2) URL化したgridを作る（base64は保存しない）
-            var g = JSON.parse(JSON.stringify(state));
+            // ライブの state ではなくスナップショットから作る（上記の添字ズレ防止）
+            var g = JSON.parse(JSON.stringify(snap));
             g.photos = photoUrls.filter(Boolean);
             if (g.rows) g.rows.forEach(function(r, ri){ if (rowUrls[ri]) r.photo = rowUrls[ri]; else delete r.photo; });
             var allowCommentsEl = card ? card.querySelector(".js-allow-comments") : document.querySelector(".js-allow-comments");
             var commentsDisabled = allowCommentsEl ? !allowCommentsEl.checked : false;
             var payload = {
-              title: (state.kit || "").trim() || null,
-              author_label: (state.author || "").trim() || null,
-              memo: (state.memo || "").trim() || null,
+              title: (snap.kit || "").trim() || null,
+              author_label: (snap.author || "").trim() || null,
+              memo: (snap.memo || "").trim() || null,
               grid: g, is_public: isPublic, cover_url: cover,
-              methods: Array.isArray(state.methods) ? state.methods : [],
+              methods: Array.isArray(snap.methods) ? snap.methods : [],
               comments_disabled: commentsDisabled
             };
             var q;
@@ -3494,7 +3541,7 @@ const safePhoto = u => {
         });
         });
       }).catch(function(e){
-        btn.disabled = false; btn.textContent = orig;
+        window.__publishing = false; btn.disabled = false; btn.textContent = orig;
         var msg = (e && e.message) ? e.message : String(e);
         if (msg.indexOf("PRIVATE_LIMIT") >= 0){ alert("無料プランの非公開投稿は10件までです。\n公開で投稿するか、非公開の投稿を減らしてから保存してください。"); return; }
         if (msg.indexOf("DRAFT_LIMIT")   >= 0){ alert("無料プランの下書きは5件までです。\n下書き一覧から不要なものを削除してください。"); return; }
@@ -3575,7 +3622,7 @@ const safePhoto = u => {
   }
   function draftItem(d){
     var row = document.createElement("div"); row.className = "draft-item";
-    var thumb = d.cover_url ? '<span class="draft-thumb"><img src="'+esc(d.cover_url)+'" alt=""></span>' : '<span class="draft-thumb"></span>';
+    var thumb = d.cover_url ? '<span class="draft-thumb"><img src="'+esc(d.cover_url)+'" alt="" loading="lazy" decoding="async"></span>' : '<span class="draft-thumb"></span>';
     var dt = d.updated_at ? new Date(d.updated_at) : null;
     var dstr = dt ? ((dt.getMonth()+1)+"/"+dt.getDate()+" "+("0"+dt.getHours()).slice(-2)+":"+("0"+dt.getMinutes()).slice(-2)) : "";
     row.innerHTML = thumb
@@ -3635,7 +3682,7 @@ const safePhoto = u => {
     if (!prof){ btn.innerHTML=''; btn.textContent='ゲ'; return; }
     var label = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
     var ini = label.charAt(0);
-    if (prof.avatar_url){ btn.textContent=''; btn.innerHTML='<img src="'+prof.avatar_url+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'; }
+    if (prof.avatar_url){ btn.textContent=''; btn.innerHTML='<img src="'+esc(safePhoto(prof.avatar_url))+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'; }
     else { btn.innerHTML=''; btn.textContent=ini; }
   }
   function set(prof){
@@ -3652,7 +3699,7 @@ const safePhoto = u => {
         var ini = label.charAt(0);
         if (av){
           av.style.overflow='hidden';
-          if (prof.avatar_url){ av.textContent=''; av.innerHTML = '<img src="'+prof.avatar_url+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'; }
+          if (prof.avatar_url){ av.textContent=''; av.innerHTML = '<img src="'+esc(safePhoto(prof.avatar_url))+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'; }
           else { av.innerHTML=''; av.textContent=ini; }
         }
         if (name) name.textContent=label;
