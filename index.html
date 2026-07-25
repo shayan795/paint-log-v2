@@ -1173,7 +1173,8 @@ function openContact(){
     + '<label class="auth-label">内容</label>'
     + '<textarea id="cBody" class="auth-field" rows="6" placeholder="できるだけ具体的にご記入ください"></textarea>'
     + '<div class="auth-err" id="cErr"></div>'
-    + '<button class="auth-submit" id="cSend">送信する</button></div>';
+    + '<button class="auth-submit" id="cSend">送信する</button>'
+    + '<p class="set-ver" style="margin:14px 0 0;font-size:.78rem">メールでのご連絡：<a href="mailto:paintlog.ops@gmail.com">paintlog.ops@gmail.com</a></p></div>';
   fullview.hidden = false;
   $("cSend").onclick = function(){
     var body = $("cBody").value.trim(), cat = $("cCat").value, err = $("cErr"), btn = $("cSend");
