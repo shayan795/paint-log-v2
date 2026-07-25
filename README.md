@@ -45,7 +45,7 @@ Supabase（認証・PostgreSQL・Storage・RLS・RPC・トリガー）
 | `src/config.js` | Supabase接続設定（**公開anonキー**。dev/prod切替あり。§5参照） |
 | `src/methods.js` | 塗装方法マスター（index/legacyから共有） |
 | `src/supabase.js` | Supabaseクライアント補助 |
-| `assets/paints.js` | 塗料マスター（PAINTS配列。並び順=grid内の `c.i` が参照。§7の時限爆弾B-002注意） |
+| `assets/paints.js` | **未使用の旧ファイル**（どのページからも読み込まれていない）。塗料マスターの正本は `legacy.html` 内の `PAINTS` 配列 と `supabase/seed_paints_realigned.sql`。§7のB-002注意 |
 | `assets/*.png` | ロゴ・favicon・ホーム画面アイコン |
 | `worker/src/worker.js` | Cloudflare Worker本体（OGP注入・sitemap・robots・プロキシ・cover_url検証） |
 | `worker/wrangler.toml` | Worker設定（ルート・環境変数） |
@@ -119,13 +119,17 @@ python3 -m http.server 4173
 - 主要テーブル: `recipes`(grid=JSONBでレシピ本体), `recipe_paints`(集計用に展開), `profiles`, `drafts`, `comments`(+`comment_likes`), `notifications`, `events`(自前アナリティクス), `reports`/`inquiries`, `premium_users`, `paints`。
 - **セキュリティの要はRLS**：非公開投稿・メール等は本人のみ。他人のデータは更新/削除不可。`is_admin()` はDB側判定＋自己昇格防止トリガー。CSS/画像出力は `safeColor()`/`safeUrl()`/`esc()` でサニタイズ。
 - **バックアップ**：別リポジトリ **`shayan795/plamo-paint-backups`**（Private）でGitHub Actions cronが毎日 pg_dump → 最新7個ローテ保存。
+  - ⚠️ **pg_dump はデータベースの中身だけ。利用者がアップロードした写真（Storage）は対象外**。
+    写真は `bash scripts/backup_storage.sh` で別途取得する（手順はスクリプト冒頭のコメント）。保存先 `backups/` はGit管理外。
+  - ⚠️ **GitHub Actions の cron は、リポジトリに60日間操作が無いと自動停止する**。停止すると通知は出ないため、
+    月に一度は当該リポジトリで実行履歴を確認するか、`workflow_dispatch` で手動実行して活動を維持すること。
 
 ---
 
 ## 7. 運用上の注意 / 時限爆弾（BOMBS.md）
 
 - `BOMBS.md` に「今は動くが前提が崩れた瞬間に壊れる」箇所を台帳化している。引き継ぎ時に**必ず一読**。
-- 特に **B-002（塗料マスターの並び順 c.i 依存）** は、`assets/paints.js` の並びを変えると既存レシピの色がズレる。並び変更時は要注意（安定ID `c.id` への移行が将来課題）。
+- 特に **B-002（塗料マスターの並び順 c.i 依存）** は、**`legacy.html` 内の `PAINTS` 配列**の並びを変えると既存レシピの色が静かにズレる（エラーは出ない）。並び替え・途中削除は禁止、追加は末尾のみ。DB側の `paints.sort_order`（`seed_paints_realigned.sql`）も同じ並びを保つこと。安定ID `c.id` への移行が将来課題。※`assets/paints.js` は未使用の旧ファイルなので、これを正本として再生成しないこと。
 - 教訓（解決済み）：**ルート以外のパス(/r/:id 等)で配信されるHTMLは、ローカル資産・内部リンクを必ず絶対パス(先頭 /)で参照する**。相対パスはWorkerのキャッチオール・ルートと衝突して壊れる。
 
 ---

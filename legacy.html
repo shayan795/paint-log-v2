@@ -1770,7 +1770,10 @@ const SITE_NAME  = "PaintLog";
    形式: [ブランド/シリーズ, 型番, 名称, 近似色hex]
    型番が確認できていない商品は型番を "" にしてある(リンクは名称検索で機能)
 ================================================================== */
-/* 塗料マスターデータは paints.js に分離(同じフォルダに置くこと) */
+/* ★塗料マスターの正本は「この直下の PAINTS 配列」。assets/paints.js は読み込んでおらず未使用（旧版の名残）。
+   grid のセルは配列の“位置”(c.i)を保存しているため、この配列の並びを変えると
+   既存レシピの塗料が別の色に化ける（エラーは出ない）。並び替え・削除は禁止、追加は末尾のみ。
+   DB側の正本は supabase/seed_paints_realigned.sql（sort_order がこの並びと一致している必要がある）。*/
 
 /* ===================== 状態 ===================== */
 let procSeq = 1;
@@ -3138,7 +3141,9 @@ const safePhoto = u => {
       var ctype = ALLOWED[blob.type] ? blob.type : "image/jpeg";
       var ext = ALLOWED[ctype];
       var path = uid + "/" + Date.now() + "_" + tag + "." + ext;
-      return sb.storage.from("recipes").upload(path, blob, { contentType: ctype, upsert:true }).then(function(up){
+      // ファイル名に時刻が入り実質不変なので、長めのキャッシュを指定して転送量を減らす
+      // （既定は no-cache で、表示のたびにフル転送になり無料枠5GB/月を無駄に消費していた）
+      return sb.storage.from("recipes").upload(path, blob, { contentType: ctype, upsert:true, cacheControl: "31536000" }).then(function(up){
         if (up.error) throw up.error;
         return sb.storage.from("recipes").getPublicUrl(path).data.publicUrl;
       });

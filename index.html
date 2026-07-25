@@ -810,6 +810,17 @@ var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
 // URLサニタイズ：http(s)のみ許可し javascript:/data: 等のスキームをブロック（保存型XSS対策）。
 // 無効なら空文字を返す（呼び出し側でリンク化せずプレーン表示する）。
 var safeUrl = function(u){ u = String(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
+// 一覧サムネ用に縮小版のURLを作る（カバーは1080x1080/約200KBで、一覧に何枚も並ぶと
+// 無料枠の転送量5GB/月をすぐ使い切るため）。Supabaseの画像変換で幅400・品質70にすると
+// 実測で約7分の1(212KB→28KB)になる。変換が使えない場合に備え、img側で元URLに戻す。
+var thumbUrl = function(u){
+  u = String(u || "");
+  return u.indexOf("/storage/v1/object/public/") >= 0
+    ? u.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=400&quality=70"
+    : u;
+};
+// 変換版が失敗したら元画像に戻すための onerror（1回だけ）
+var THUMB_FALLBACK = ' onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=this.src.replace(\'/render/image/public/\',\'/object/public/\').split(\'?\')[0];}"';
 
 /* ----------------------------- 下タブ切替 ----------------------------- */
 var screens = { discover: $("screen-discover"), records: $("screen-records") };
@@ -830,7 +841,7 @@ function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pa
 // 投稿カード（記録/プロフィール共通）
 function recordCard(r){
   var c = document.createElement("button"); c.className = "pf-post";
-  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></span>' : '<span class="pf-post-thumb"></span>';
+  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></span>' : '<span class="pf-post-thumb"></span>';
   var badge = (r.is_public === false) ? '<span class="rec-private">非公開</span>' : '';
   c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
   c.addEventListener("click", function(){ location.href = "/r/" + r.id; });
@@ -1213,7 +1224,7 @@ function openTagResults(slug, label){
         recoSec.hidden = false;
         withCover.forEach(function(r, i){
           var card = document.createElement("div"); card.className = "reco-card";
-          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></div>'
+          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></div>'
             + '<div class="reco-title">'+esc(r.title||"無題")+'</div>';
           card.addEventListener("click", function(){ location.href = "/r/" + r.id; });
           recoRow.appendChild(card);
@@ -2289,7 +2300,7 @@ function renderReco(){
         var card = document.createElement("div");
         card.className = "reco-card";
         var thumb = r.cover_url
-          ? '<div class="reco-thumb"><img src="'+esc(r.cover_url)+'" alt="" loading="lazy" decoding="async"></div>'
+          ? '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></div>'
           : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
         var author = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "";
         card.innerHTML = thumb + '<div class="reco-title">'+esc(r.title||"無題")+'</div><div class="reco-author">'+esc(author)+'</div>';
@@ -2306,7 +2317,7 @@ function renderReco(){
 function makeTile(item, hidden, onClick){
   var b = document.createElement("button");
   b.className = "cat-tile" + (hidden ? " cat-hidden" : "");
-  var img = item.img ? '<img src="'+esc(item.img)+'" alt="" loading="lazy" decoding="async">' : '';
+  var img = item.img ? '<img src="'+esc(thumbUrl(item.img))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'>' : '';
   b.innerHTML = img + '<span class="cat-label">'+esc(item.label)+'</span>';
   b.addEventListener("click", onClick || function(){ openStub(item.label); });
   return b;
