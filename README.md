@@ -98,7 +98,9 @@ python3 -m http.server 4173
 
 ### 開発用DBを用意する手順（dev環境を"稼働"させる）
 1. Supabaseで**2つ目の無料プロジェクト**を作成（無料枠は2プロジェクトまで）。
-2. そのプロジェクトの SQL Editor で `supabase/schema.sql` → `migrations/00X_*.sql`（連番順）を実行。
+2. そのプロジェクトの SQL Editor で **`supabase/schema.sql` → `supabase/seed_paints_realigned.sql` → `migrations/001`〜`007`（連番順）** を実行。
+   - ⚠️ 塗料seedは **`seed_paints_realigned.sql` が正本**（`seed_paints.sql` は並び順がズレた旧ファイル・使用禁止）。
+   - ⚠️ migrations を飛ばすと**修正前の脆弱な定義**のままになる（schema.sqlは初期設計、以降の修正はmigrations側）。
 3. `src/config.js` の `DEV` に、devプロジェクトの `SUPABASE_URL` と anonキーを貼る。
 4. `python3 -m http.server 4173` で localhost を開くと**自動でdev DBに接続**（本番は無影響）。
 5. Storageバケット（`recipes` / `profile`）とそのポリシー（`owner = auth.uid()`）もdev側に作成する。
