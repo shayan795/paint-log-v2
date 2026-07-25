@@ -636,11 +636,11 @@ textarea.pf-field{resize:vertical; line-height:1.6}
       <div class="cat-grid" id="catGrid"></div>
       <button class="more-btn" id="catMore" style="display:none">もっと見る</button>
     </section>
-    <section class="block">
+    <section class="block" id="trendSec" style="display:none">
       <h3>今話題の塗料作例</h3>
       <div class="cat-grid" id="trendGrid"></div>
     </section>
-    <section class="block">
+    <section class="block" id="paintSec" style="display:none">
       <h3>人気の塗料</h3>
       <div class="paint-grid" id="paintGrid"></div>
     </section>
@@ -1634,7 +1634,27 @@ function doLogin(){
   if (!email || !pw){ err.textContent="メールとパスワードを入力してください"; return; }
   btn.disabled=true; err.textContent="ログイン中…";
   sb.auth.signInWithPassword({ email:email, password:pw }).then(function(r){
-    if (r.error){ err.textContent="メールアドレスまたはパスワードが違います"; btn.disabled=false; return; }
+    if (r.error){
+      btn.disabled=false;
+      // 原因を潰さず出し分ける。全部「パスワードが違います」にすると、実際は
+      // 「メール確認がまだ」の人が延々パスワード再設定に流れて詰む。
+      var m = (r.error.message || "") + " " + (r.error.code || "");
+      if (/not confirmed|not_confirmed/i.test(m)){
+        err.innerHTML = 'メールアドレスの確認がまだ完了していません。届いている確認メールのリンクを開いてください。'
+                      + ' <button type="button" class="auth-link" id="aResend">確認メールを再送する</button>';
+        var rb = $("aResend");
+        if (rb) rb.onclick = function(){
+          rb.disabled = true; err.textContent = "再送しています…";
+          sb.auth.resend({ type:"signup", email:email }).then(function(rr){
+            err.textContent = (rr && rr.error) ? ("再送に失敗しました：" + rr.error.message) : "確認メールを再送しました。メールをご確認ください。";
+          }, function(){ err.textContent = "再送に失敗しました。時間をおいてお試しください。"; });
+        };
+        return;
+      }
+      if (/rate limit|too many/i.test(m)){ err.textContent="試行回数が多すぎます。しばらく待ってからお試しください。"; return; }
+      err.textContent="メールアドレスまたはパスワードが違います";
+      return;
+    }
     closeAuth();   // onAuthStateChange がUIを更新
   });
 }
@@ -1989,6 +2009,29 @@ function applySession(session){
   }
 }
 if (sb){
+  // 認証リンク(確認メール・再設定メール)が無効だった場合、Supabaseは
+  // #error=access_denied&error_code=otp_expired&error_description=... を付けてトップに戻す。
+  // 何も表示しないと利用者は理由が分からず放り出されるため、日本語で説明し再送導線を出す。
+  (function showAuthLinkError(){
+    try {
+      var h = (location.hash || "").replace(/^#/, "");
+      if (!h || h.indexOf("error") < 0) return;
+      var q = new URLSearchParams(h);
+      var code = q.get("error_code") || q.get("error") || "";
+      var desc = q.get("error_description") || "";
+      if (!code && !desc) return;
+      try { history.replaceState(null, "", location.pathname); } catch(_){}   // URLを綺麗にする
+      var msg = /expired/i.test(code + desc)
+        ? "メールのリンクの有効期限が切れています。お手数ですが、もう一度お試しください。"
+        : (/used|already/i.test(code + desc)
+            ? "このリンクは既に使用済みです。もう一度お試しください。"
+            : "メールのリンクが無効でした（" + (desc || code) + "）。もう一度お試しください。");
+      setTimeout(function(){
+        if (typeof authMessage === "function"){ openAuth("login"); authMessage("リンクが無効です", msg); }
+        else alert(msg);
+      }, 0);
+    } catch(_){}
+  })();
   sb.auth.getSession().then(function(res){ applySession(res.data.session); });
   sb.auth.onAuthStateChange(function(_e, session){
     applySession(session);
@@ -2331,10 +2374,13 @@ function loadTileCovers(){
       }
     });
 }
-// 今話題の塗料作例：実投稿(公開・cover有)をトレンド順に。薄ければMOCK。
+// 今話題の塗料作例：実投稿(公開・cover有)をトレンド順に。
+// ★実データが薄いときは架空データ(MOCK)を出さずセクションごと非表示にする。
+//   モックはタップしても「ご利用いただけません」に落ちるだけで、初見の人に
+//   「作りかけ・実績の水増し」という印象を与えるため（急上昇と同じ方式に統一）。
 function renderTrending(){
-  var grid = $("trendGrid"); if (!grid) return;
-  function showMock(){ grid.innerHTML = ""; MOCK.trendingWorks.forEach(function(t){ grid.appendChild(makeTile(t, false)); }); }
+  var grid = $("trendGrid"), sec = $("trendSec"); if (!grid) return;
+  function showMock(){ if (sec) sec.style.display = "none"; }   // 名前は据え置き＝呼び出し側は非表示になる
   if (!sb){ showMock(); return; }
   sb.from("recipes").select("id,title,cover_url,view_count,created_at").eq("is_public", true)
     .not("cover_url", "is", null).order("created_at", { ascending:false }).limit(30)
@@ -2348,6 +2394,7 @@ function renderTrending(){
         var go = (function(id){ return function(){ location.href = "/r/" + id; }; })(r.id);
         grid.appendChild(makeTile({ label:r.title || "無題のレシピ", img:r.cover_url }, false, go));
       });
+      if (sec) sec.style.display = "";   // 実データが揃ったときだけ見せる
     }, showMock);
 }
 // 塗料カード1枚（人気の塗料／急上昇で共用）。opts.rising=true なら「急上昇」バッジ＋「最近N件」表示。
@@ -2382,19 +2429,16 @@ function makePaintCard(grid, opts){
 }
 // 人気の塗料：実データ(popular_paints)を作例写真＋名前＋ブランドで表示。薄ければMOCK。
 function renderPaints(){
-  var grid = $("paintGrid"); if (!grid) return;
-  function showMock(){
-    grid.innerHTML = "";
-    MOCK.popularPaints.forEach(function(p){
-      makePaintCard(grid, { label:(p.code?p.code+" ":"")+p.name, brand:p.brand, img:p.img, hex:null });
-    });
-  }
+  var grid = $("paintGrid"), sec = $("paintSec"); if (!grid) return;
+  // ★架空データ(MOCK)は出さない。実データが薄いときはセクションごと非表示（急上昇と同方式）
+  function showMock(){ if (sec) sec.style.display = "none"; }
   if (!sb || !sb.rpc){ showMock(); return; }
   sb.rpc("popular_paints", { limit_n: 12 }).then(function(res){
     var rows = (res && !res.error && res.data) ? res.data : [];
-    if (rows.length < 4){ showMock(); return; }   // データが薄い間はMOCK
+    if (rows.length < 4){ showMock(); return; }   // データが薄い間は非表示
     grid.innerHTML = "";
     rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id, pid:r.pid }); });
+    if (sec) sec.style.display = "";
   }, showMock);
 }
 // 急上昇の塗料：直近で伸びている塗料(rising_paints)。本物のトレンドのみ＝データが薄ければセクションごと非表示（偽トレンドを出さない）。

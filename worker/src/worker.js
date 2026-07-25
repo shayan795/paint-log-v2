@@ -290,8 +290,13 @@ export default {
       return new Response("Service Unavailable", { status: 503, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
     }
     if (originRes.status === 404) return new Response("Not found", { status: 404, headers: SECURITY_HEADERS });
-    if (originRes.status >= 500) {
-      return new Response("Service Unavailable", { status: 503, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
+    // 404以外のエラー(403/429/5xx等)は本文を素通ししない。
+    // 配信元は raw.githubusercontent.com で、アクセス集中時に 403/429 を返すことがある。
+    // これをそのまま max-age=300 で返すと「バズった瞬間にGitHubのエラー文が5分間貼り付く」ため、
+    // 必ず 503 + no-store にしてリロードで復帰できるようにする。
+    if (originRes.status >= 400) {
+      return new Response("<!doctype html><meta charset=utf-8><title>一時的にアクセスできません</title><p>ただいま混み合っています。少し時間をおいて再読み込みしてください。",
+        { status: 503, headers: { ...SECURITY_HEADERS, "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
     }
     const h = new Headers(SECURITY_HEADERS);
     h.set("content-type", ctForPath(reqPath));

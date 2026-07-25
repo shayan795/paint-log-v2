@@ -3435,22 +3435,14 @@ const safePhoto = u => {
     del.id = "vDelete"; del.className = "v-edit-inline v-del"; del.textContent = "削除";
     del.onclick = function(){
       if (!confirm("この投稿を削除します。写真も含めて消え、元に戻せません。よろしいですか？")) return;
-      // 投稿に紐づく画像URL（写真・サムネ）をStorageから先に削除→投稿行を削除
-      sb.from("recipes").select("cover_url,grid").eq("id", currentRecipeId).single().then(function(res){
-        var urls = [];
-        if (res && res.data){
-          if (res.data.cover_url) urls.push(res.data.cover_url);
-          var g = res.data.grid || {};
-          (g.photos || []).forEach(function(u){ if (u) urls.push(u); });
-          (g.rows || []).forEach(function(r){ if (r && r.photo) urls.push(r.photo); });
-        }
-        var paths = urls.map(toStoragePath).filter(Boolean);
-        var rm = paths.length ? sb.storage.from("recipes").remove(paths) : Promise.resolve();
-        return rm.then(function(){ return sb.from("recipes").delete().eq("id", currentRecipeId); });
-      }).then(function(res){
+      // 本文と画像をサーバー側(RPC)で一括削除する。
+      // 旧実装はクライアントから「画像→本文」の順に消していたため、(a)管理者が他人の投稿を
+      // 消すと画像だけ公開URLに残る(書き込み権限が所有者限定・失敗も無視していた)、
+      // (b)本文の削除に失敗すると画像だけ永久に消える、という2つの問題があった。
+      sb.rpc("delete_recipe_with_images", { rid: currentRecipeId }).then(function(res){
         if (res && res.error){ alert("削除に失敗しました：" + res.error.message); return; }
         location.href = "/index.html#records";
-      }).catch(function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
+      }, function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
     };
     var bar = vBar();
     if (edit && edit.parentNode !== bar){ edit.style.position = "static"; bar.appendChild(edit); }
@@ -3652,7 +3644,9 @@ const safePhoto = u => {
   }
   function deleteDraftRow(id, rowEl){
     if (!confirm("この下書きを削除します。よろしいですか？")) return;
-    sb.from("drafts").delete().eq("id", id).then(function(res){
+    // 下書き行だけでなく、その下書きが持つ画像もサーバー側でまとめて消す（Storageに残さない）。
+    // 投稿として公開済みの画像とURLを共有している場合は、その画像は残す仕組み(RPC側で判定)。
+    sb.rpc("delete_draft_with_images", { did: id }).then(function(res){
       if (res && res.error){ legacyToast("削除に失敗しました"); return; }
       if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
       if (currentDraftId === id) currentDraftId = null;
