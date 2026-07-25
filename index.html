@@ -1551,6 +1551,33 @@ function renderAuth(mode){
     $("aG").onclick = googleLogin;
     $("aToLogin").onclick = function(){ renderAuth("login"); };
     $("aSubmit").onclick = doRegister;
+  } else if (mode === "newpw"){
+    // 再設定メールのリンクから戻ってきた直後（PASSWORD_RECOVERY）に出す画面。
+    // このセッションは「本人がメールを受け取れた」ことで認証済みなので、現在のパスワードは要求しない
+    // （要求するとパスワードを忘れた人が永久に再設定できず、ロックアウトする）。
+    b.innerHTML =
+      '<h2>新しいパスワードを設定</h2>'
+      + '<p class="auth-hint" style="display:block;margin-bottom:6px">新しいパスワードを入力してください。</p>'
+      + '<label class="auth-label">新しいパスワード<span class="auth-hint">（6文字以上）</span></label>'
+      + '<input id="aPw" class="auth-field" type="password">'
+      + '<label class="auth-label">新しいパスワード（確認）</label>'
+      + '<input id="aPw2" class="auth-field" type="password">'
+      + '<div class="auth-err" id="aErr"></div>'
+      + '<button class="auth-submit" id="aSubmit">パスワードを設定する</button>';
+    $("aSubmit").onclick = function(){
+      var pw = $("aPw").value, pw2 = $("aPw2").value, err = $("aErr"), btn = $("aSubmit");
+      if (pw.length < 6){ err.textContent = "6文字以上にしてください"; return; }
+      if (pw !== pw2){ err.textContent = "パスワードが一致しません"; return; }
+      btn.disabled = true; err.textContent = "設定中…";
+      sb.auth.updateUser({ password: pw }).then(function(res){
+        if (res.error){ btn.disabled = false; err.textContent = "設定に失敗しました：" + res.error.message; return; }
+        // 実際にパスワードを持ったので has_password を立てる（設定画面の表示が正しくなる）
+        var uid = (res.data && res.data.user && res.data.user.id) || currentUserId;
+        if (uid) sb.from("profiles").update({ has_password: true }).eq("id", uid).then(function(){}, function(){});
+        try { history.replaceState(null, "", location.pathname); } catch(_){}   // URLの復旧トークンを消す
+        authMessage("設定しました", "新しいパスワードでログインできます。");
+      });
+    };
   } else if (mode === "reset"){
     b.innerHTML =
       '<h2>パスワード再設定</h2>'
@@ -1962,7 +1989,12 @@ function applySession(session){
 }
 if (sb){
   sb.auth.getSession().then(function(res){ applySession(res.data.session); });
-  sb.auth.onAuthStateChange(function(_e, session){ applySession(session); });
+  sb.auth.onAuthStateChange(function(_e, session){
+    applySession(session);
+    // 「パスワード再設定メール」のリンクから戻ってきた時だけ、新パスワード設定画面を出す。
+    // これが無いと、パスワードを忘れた人は現在のパスワードを要求する画面しか無く再設定できない。
+    if (_e === "PASSWORD_RECOVERY") openAuth("newpw");
+  });
   // 45秒ごとに未読数を再取得（軽いポーリング。realtime は段8）
   setInterval(function(){ if (currentUserId) refreshBellBadge(); }, 45000);
 } else {
