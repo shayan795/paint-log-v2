@@ -10,7 +10,9 @@ routes = [
 
 # 公開して問題ない値（anon publishable key も含む）
 [vars]
-ORIGIN            = "https://raw.githubusercontent.com/shayan795/paint-log-v2/main"
+# 配信元。GitHub Pages を使う（raw.githubusercontent.com はCDN用途を想定しておらず、
+# アクセス集中時に403/429を返して全ページが503になる。Pagesは100GB/月の帯域枠がある）
+ORIGIN            = "https://shayan795.github.io/paint-log-v2"
 SITE              = "https://plamo-paint.com"
 SUPABASE_URL      = "https://zlkbaojclitlxshpxwpr.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_ZMaz3JjPfU0q_pq7Y9QwSQ_QimbhfgX"

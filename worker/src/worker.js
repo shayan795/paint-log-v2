@@ -24,10 +24,19 @@ const SECURITY_HEADERS = {
 // 配信してはいけない内部ファイル（GitHub Pagesはリポジトリ全体を公開するため、入口のWorkerで遮断する）。
 // 未修正の脆弱性台帳(BOMBS.md)やDB定義(schema.sql/migrations)が誰でも読める状態を塞ぐ。
 function isBlockedPath(p) {
-  const s = p.toLowerCase();
-  if (/^\/(supabase|migrations|worker|\.github|node_modules|src\/.*\.test)\//.test(s)) return true;
-  if (/\.(sql|md|toml|lock|log|mjs)$/.test(s)) return true;
-  if (/^\/(package(-lock)?\.json|\.gitignore|\.env.*|claude.*|.*引き継ぎ.*)$/.test(s)) return true;
+  // ★URLエンコード（%2E=. %2F=/ など）を先に元へ戻してから判定する。
+  //   デコードしないと /%2Egithub/ や /BOMBS%2Emd のような書き方で遮断をすり抜けられる。
+  let s = p;
+  for (let i = 0; i < 3; i++) {            // 二重・三重エンコードにも対応
+    try { const d = decodeURIComponent(s); if (d === s) break; s = d; } catch (_) { break; }
+  }
+  s = s.toLowerCase().replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+  // 許可リスト方式に近い形へ寄せる：配信して良い拡張子だけを通し、それ以外の「素の名前」は落とす
+  if (/^\/(supabase|migrations|worker|scripts|tests|docs|backups|\.github|\.git|node_modules)\//.test(s)) return true;
+  if (/\.(sql|md|toml|lock|log|mjs|sh|yml|yaml|txt|map|bak|old|orig|swp)$/.test(s)) return true;
+  if (/^\/(package(-lock)?\.json|\.gitignore|\.env.*|claude.*|.*引き継ぎ.*|bombs.*|readme.*)$/.test(s)) return true;
+  if (/^\/v1-reference\.html$/.test(s)) return true;   // 旧参考ファイル（XSSが残っている）
+  if (/\/\.\.?(\/|$)/.test(s)) return true;            // パストラバーサル
   return false;
 }
 
