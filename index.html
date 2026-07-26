@@ -813,10 +813,13 @@ var safeUrl = function(u){ u = String(u||"").trim(); return /^https?:\/\//i.test
 // 一覧サムネ用に縮小版のURLを作る（カバーは1080x1080/約200KBで、一覧に何枚も並ぶと
 // 無料枠の転送量5GB/月をすぐ使い切るため）。Supabaseの画像変換で幅400・品質70にすると
 // 実測で約7分の1(212KB→28KB)になる。変換が使えない場合に備え、img側で元URLに戻す。
+// ★resize=contain と height を必ず付けること。width だけ指定すると Supabase の画像変換は
+//   縦横比を保たず 400x1080 のような縦長画像を返し、object-fit で極端に拡大表示されて崩れる。
+//   contain なら元の比率のまま 400x400 の箱に収まる（実測 212KB → 19KB）。
 var thumbUrl = function(u){
   u = String(u || "");
   return u.indexOf("/storage/v1/object/public/") >= 0
-    ? u.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=400&quality=70"
+    ? u.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=400&height=400&resize=contain&quality=70"
     : u;
 };
 // 変換版が失敗したら元画像に戻すための onerror（1回だけ）
