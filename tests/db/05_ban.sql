@@ -119,8 +119,11 @@ begin
   perform tests.eq(area_name, '停止通知の本文に管理者が入力した停止理由が入る', cnt, 1);
 
   -- ================= 6) 本人による自力解除ができないこと =================
-  perform tests.affects(area_name, '停止中の本人が自分の banned_at を直接消すことはできない',
-    format('update public.profiles set banned_at = null, banned_reason = null where id = %L', u1), 0);
+  -- 設計上、UPDATE文そのものは通る（自分の行なので1件が対象になる）が、
+  -- トリガが値を書き戻すため停止は解除されない＝is_admin と同じ「静かな無効化」方式。
+  -- したがってここで見るべきは「影響行数」ではなく「値が変わっていないこと」（下のテスト）。
+  perform tests.affects(area_name, '停止中の本人による banned_at の直接UPDATEは受け付けられる（値はトリガで戻る）',
+    format('update public.profiles set banned_at = null, banned_reason = null where id = %L', u1), 1);
 
   perform tests.as_owner();
   select banned_at into ts from public.profiles where id = u1;
@@ -235,11 +238,22 @@ begin
            r_other, u1, 'スパム', '解除後の通報'));
 
   -- ================= 後片付け =================
+  -- 後片付けが失敗したことに気づけるよう、結果を1件のテストとして必ず記録する
+  -- （黙って握りつぶすと dev にテスト用データが残り続ける）
   begin
     perform tests.as_owner();
     delete from public.inquiries   where user_id    = any(array[u1,u2,u3,u4]);
     delete from public.clip_notified where clipper_id = any(array[u1,u2,u3,u4]);
+    -- reports は recipe_id が ON DELETE CASCADE、reporter_id が ON DELETE SET NULL のため、
+    -- 「お互いの投稿を通報し合った利用者」をまとめて削除すると外部キー違反になる。
+    -- 先に通報を消しておく（テストの後片付け都合。製品の退会処理は1人ずつなので影響しない）。
+    delete from public.reports
+     where reporter_id = any(array[u1,u2,u3,u4])
+        or recipe_id in (select id from public.recipes where owner_id = any(array[u1,u2,u3,u4]));
     perform tests.cleanup_users(array[u1,u2,u3,u4,adm,adm2]);
-  exception when others then null;
+    perform tests.ok(area_name, '後片付け（テスト用の利用者とデータの削除）が成功する', true, null);
+  exception when others then
+    perform tests.ok(area_name, '後片付け（テスト用の利用者とデータの削除）が成功する', false,
+      '後片付けに失敗: ' || left(sqlerrm,140));
   end;
 end $$;

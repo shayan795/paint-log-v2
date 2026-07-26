@@ -5,7 +5,7 @@ declare
   u1 uuid; u2 uuid; adm uuid; adm2 uuid;
   tok text; tok_title text; tok_tag text; tok_paint text; tok_priv text; tok_draft text; tok_wild text; tok_bulk text;
   r_title uuid; r_tag uuid; r_paint uuid; r_priv uuid; r_pct uuid; r_und uuid; r_bsl uuid; r_del uuid;
-  d1 uuid;
+  r_del_anon uuid; d1 uuid; d_anon uuid;
   n int; b boolean; mr text; vc0 int; vc1 int; i int;
 begin
   -- =========================================================
@@ -57,11 +57,17 @@ begin
 
   -- 削除RPC検証用
   insert into public.recipes(owner_id, title, is_public, created_at) values (u1, '削除テスト' || tok, true, now() - interval '1 hour') returning id into r_del;
+  -- ★未ログインからの削除RPC検証は「使い捨ての別データ」で行う。
+  --   もし本当に消せてしまう不具合があっても、後続テスト(11章)の対象データを巻き添えにしないため。
+  insert into public.recipes(owner_id, title, is_public, created_at) values (u1, '削除テスト匿名用' || tok, true, now() - interval '1 hour') returning id into r_del_anon;
 
   -- 下書き（検索に出てはいけない）
   insert into public.drafts(owner_id, title, grid)
   values (u1, '下書き' || tok_draft, jsonb_build_object('memo', tok_draft || '塗料'))
   returning id into d1;
+  insert into public.drafts(owner_id, title, grid)
+  values (u1, '下書き匿名用' || tok, '{}'::jsonb)
+  returning id into d_anon;
 
   -- 通報（report_summary の検証用）
   begin
@@ -230,9 +236,15 @@ begin
   perform tests.denied(area, '未ログインは report_summary（通報集計）を実行できない',
                        'select count(*) from public.report_summary(10)', 'permission denied');
   perform tests.denied(area, '未ログインは delete_recipe_with_images を実行できない',
-                       format('select public.delete_recipe_with_images(%L::uuid)', r_del), 'permission denied');
+                       format('select public.delete_recipe_with_images(%L::uuid)', r_del_anon), 'permission denied');
   perform tests.denied(area, '未ログインは delete_draft_with_images を実行できない',
-                       format('select public.delete_draft_with_images(%L::uuid)', d1), 'permission denied');
+                       format('select public.delete_draft_with_images(%L::uuid)', d_anon), 'permission denied');
+  -- 上のRPCが素通りしていないか（実際にデータが消えていないか）を実データで確かめる
+  perform tests.as_owner();
+  select count(*) into n from public.recipes where id = r_del_anon;
+  perform tests.eq(area, '未ログインの delete_recipe_with_images で投稿が実際に消えていない', n, 1);
+  select count(*) into n from public.drafts where id = d_anon;
+  perform tests.eq(area, '未ログインの delete_draft_with_images で下書きが実際に消えていない', n, 1);
 
   -- =========================================================
   -- 7) 内部専用関数が外から実行できないこと（ログイン済みの一般利用者）

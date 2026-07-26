@@ -24,10 +24,11 @@ begin
   pub_r2   := gen_random_uuid();
   priv_r   := gen_random_uuid();
   closed_r := gen_random_uuid();
-  insert into public.recipes(id, owner_id, title, is_public, comments_disabled, created_at) values (pub_r,    r_owner, 'テスト公開投稿',        true,  false),
-    (pub_r2,   r_owner, 'テスト公開投稿2',       true,  false),
-    (priv_r,   r_owner, 'テスト非公開投稿',      false, false),
-    (closed_r, r_owner, 'コメント停止中の投稿',  true,  true, now() - interval '1 hour');
+  insert into public.recipes(id, owner_id, title, is_public, comments_disabled, created_at) values
+    (pub_r,    r_owner, 'テスト公開投稿',        true,  false, now() - interval '1 hour'),
+    (pub_r2,   r_owner, 'テスト公開投稿2',       true,  false, now() - interval '1 hour'),
+    (priv_r,   r_owner, 'テスト非公開投稿',      false, false, now() - interval '1 hour'),
+    (closed_r, r_owner, 'コメント停止中の投稿',  true,  true,  now() - interval '1 hour');
 
   -- 既存コメント（created_at を過去にして30秒連投制限に掛からないようにする）
   insert into public.comments(recipe_id, user_id, body, created_at)
@@ -239,6 +240,15 @@ begin
   perform tests.eq(a, '投稿者は自分の非公開投稿のコメントのいいねを読める', n, 1);
 
   perform tests.as_user(u4);
+  -- ★既知の製品側不具合（テストは正しい。緩めないこと）:
+  --   comment_likes_insert の with check が (user_id = auth.uid()) だけで、
+  --   「そのコメントが見えるか」を検査していない。comment_likes_select は
+  --   非公開投稿のコメントを隠しているのに、書き込みだけ素通りする非対称。
+  --   コメントIDは連番bigintのため、第三者が総当たりで非公開投稿のコメントに
+  --   いいねを付けられる（存在有無の探索にもなる）。
+  --   修正案: with check (user_id = auth.uid() and exists(
+  --             select 1 from public.comments c join public.recipes r on r.id = c.recipe_id
+  --             where c.id = comment_id and (r.is_public or r.owner_id = auth.uid())))
   perform tests.denied(a, '見えないはずの非公開投稿のコメントにいいねできない',
     format('insert into public.comment_likes(comment_id,user_id) values (%s,%L)', c_priv, u4),
     'row-level security');

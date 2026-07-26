@@ -95,7 +95,7 @@ begin
   -- ============ 1) 非公開投稿は10件まで ============
   perform tests.as_user(u_priv);
   perform tests.allowed(a,'非公開投稿は10件目までは作成できる',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'非公開10',false)$f$, u_priv), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'非公開10',false, now() - interval '1 hour')$f$, u_priv));
 
   -- 10件目が「今」作られたため、次は投稿間隔(20秒)に先に引っかかる。上限だけを見たいので過去日時へ寄せる
   perform tests.as_owner();
@@ -103,11 +103,11 @@ begin
 
   perform tests.as_user(u_priv);
   perform tests.denied(a,'非公開投稿が10件ある状態で11件目を作るとエラーになる',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'非公開11',false)$f$, u_priv),
-    'PRIVATE_LIMIT', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'非公開11',false, now() - interval '1 hour')$f$, u_priv),
+    'PRIVATE_LIMIT');
 
   perform tests.allowed(a,'非公開が上限でも公開投稿は作成できる（公開は無制限）',
-    format($f$insert into public.recipes(id,owner_id,title,is_public, created_at) values (%L,%L,'公開投稿',true)$f$, r_pub, u_priv), now() - interval '1 hour');
+    format($f$insert into public.recipes(id,owner_id,title,is_public,created_at) values (%L,%L,'公開投稿',true, now() - interval '1 hour')$f$, r_pub, u_priv));
 
   perform tests.denied(a,'非公開が上限のとき公開投稿を非公開に切り替えるとエラーになる',
     format($f$update public.recipes set is_public = false where id = %L$f$, r_pub),
@@ -118,12 +118,12 @@ begin
 
   perform tests.as_user(u_priv_other);
   perform tests.allowed(a,'非公開投稿の上限は利用者ごと（他人が上限でも自分は作成できる）',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'別人の非公開',false)$f$, u_priv_other), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'別人の非公開',false, now() - interval '1 hour')$f$, u_priv_other));
 
   -- ============ 2) プレミアムは上限を超えられる ============
   perform tests.as_user(u_prem);
   perform tests.allowed(a,'プレミアム利用者は非公開投稿の11件目を作成できる',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'P非公開11',false)$f$, u_prem), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'P非公開11',false, now() - interval '1 hour')$f$, u_prem));
 
   select count(*)::int into n from public.premium_users where user_id = u_prem;
   perform tests.eq(a,'プレミアム利用者は自分のプレミアム状態を読める', n, 1);
@@ -141,8 +141,8 @@ begin
 
   perform tests.as_user(u_prem);
   perform tests.denied(a,'プレミアムを外すと非公開投稿の上限が再び効く',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'P非公開12',false)$f$, u_prem),
-    'PRIVATE_LIMIT', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'P非公開12',false, now() - interval '1 hour')$f$, u_prem),
+    'PRIVATE_LIMIT');
 
   -- ============ 3) 下書きは5件まで ============
   perform tests.as_user(u_drf);
@@ -169,40 +169,40 @@ begin
   -- ============ 4) 投稿レート（20秒間隔／1日30件） ============
   perform tests.as_user(u_rate);
   perform tests.denied(a,'直前に投稿した直後（20秒以内）の公開投稿は拒否される',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'連投',true)$f$, u_rate),
-    '投稿の間隔が短すぎます', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public) values (%L,'連投',true)$f$, u_rate),
+    '投稿の間隔が短すぎます');
   perform tests.denied(a,'20秒以内の連続投稿は非公開投稿でも拒否される',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'連投(非公開)',false)$f$, u_rate),
-    '投稿の間隔が短すぎます', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public) values (%L,'連投(非公開)',false)$f$, u_rate),
+    '投稿の間隔が短すぎます');
   perform tests.denied(a,'created_atを過去に指定しても20秒間隔の制限は回避できない',
     format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'偽装連投',true, now() - interval '1 day')$f$, u_rate),
     '投稿の間隔が短すぎます');
 
   perform tests.as_user(u_rate_ok);
   perform tests.allowed(a,'前の投稿から20秒以上あいていれば投稿できる',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'21秒後の投稿',true)$f$, u_rate_ok), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'21秒後の投稿',true, now() - interval '1 hour')$f$, u_rate_ok));
 
   perform tests.as_user(u_day30);
   perform tests.denied(a,'24時間以内に30件投稿していると31件目は拒否される',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'31件目',true)$f$, u_day30),
-    '1日に投稿できる件数の上限', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'31件目',true, now() - interval '1 hour')$f$, u_day30),
+    '1日に投稿できる件数の上限');
 
   perform tests.as_user(u_day29);
   perform tests.allowed(a,'24時間以内が29件なら30件目は投稿できる',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'30件目',true)$f$, u_day29), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'30件目',true, now() - interval '1 hour')$f$, u_day29));
 
   perform tests.as_user(u_old30);
   perform tests.allowed(a,'24時間より前の投稿30件は日次カウントに入らない（投稿できる）',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'古い投稿の後',true)$f$, u_old30), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'古い投稿の後',true, now() - interval '1 hour')$f$, u_old30));
 
   perform tests.as_user(u_rate_other);
   perform tests.denied(a,'投稿間隔の制限は本人には効く（別人テストの前提確認）',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'別人の連投',true)$f$, u_rate_other),
-    '投稿の間隔が短すぎます', now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'別人の連投',true, now() - interval '1 hour')$f$, u_rate_other),
+    '投稿の間隔が短すぎます');
 
   perform tests.as_user(u_day_other);
   perform tests.allowed(a,'投稿レート制限は別の利用者には影響しない（他人が上限でも投稿できる）',
-    format($f$insert into public.recipes(owner_id,title,is_public, created_at) values (%L,'無関係な人の初投稿',true)$f$, u_day_other), now() - interval '1 hour');
+    format($f$insert into public.recipes(owner_id,title,is_public,created_at) values (%L,'無関係な人の初投稿',true, now() - interval '1 hour')$f$, u_day_other));
 
   -- ============ 5) コメントは30秒間隔 ============
   perform tests.as_user(u_cm);

@@ -7,7 +7,7 @@ declare
   uA uuid; uB uuid; uAdm uuid; uP uuid; uPP uuid;
   uD uuid; uD2 uuid; uDr uuid; uDel uuid; uTrg uuid; uOrp uuid;
   fakeu uuid := gen_random_uuid();
-  rD uuid; rV uuid; rS uuid; rT uuid; dS uuid;
+  rD uuid; rV uuid; rS uuid; rT uuid; dS uuid; rAn uuid;
   n int;
 begin
   perform tests.as_owner();
@@ -280,9 +280,15 @@ begin
     format('select public.delete_recipe_with_images(%L::uuid)', gen_random_uuid()),
     '投稿が見つかりません');
 
+  -- ※匿名の削除試行は「捨て駒の投稿」に対して行う（この検査が落ちても後続の検査を巻き込まないため）
+  perform tests.as_owner();
+  insert into public.recipes(owner_id, title, grid, cover_url, is_public, created_at)
+  values (uD2, '匿名削除テスト用', '{}'::jsonb, null, true, now() - interval '1 hour')
+  returning id into rAn;
+
   perform tests.as_anon();
   perform tests.denied(ar, '匿名は delete_recipe_with_images を実行できない',
-    format('select public.delete_recipe_with_images(%L::uuid)', rD), 'permission denied');
+    format('select public.delete_recipe_with_images(%L::uuid)', rAn), 'permission denied');
 
   perform tests.as_user(uD);
   perform tests.allowed(ar, '投稿者本人は自分の投稿を画像ごと削除できる',

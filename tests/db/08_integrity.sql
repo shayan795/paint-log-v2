@@ -338,6 +338,8 @@ begin
   begin
     perform tests.as_owner();
     delete from public.events where session_id like 'tstsess%' or session_id = repeat('z', 65);
+    -- clip_notified は profiles/recipes への外部キーが無く、利用者を消しても残るため個別に掃除する
+    delete from public.clip_notified where clipper_id = any(users);
     delete from public.notifications where created_at >= t0 and type in ('new_report','new_inquiry');
     delete from public.inquiries where user_id = any(users);
     delete from public.reports   where reporter_id = any(users);

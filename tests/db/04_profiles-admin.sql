@@ -5,9 +5,12 @@ declare
   u1   uuid; u2 uuid; u3 uuid; adm uuid; adm2 uuid;
   n1   text; n2 text;
   b    boolean; t timestamptz; s text; err text;
+  c0   int; c1 int;
 begin
   ---------------------------------------------------------------- 下準備
   perform tests.as_owner();
+  -- 後片付けが効いているかを最後に確かめるため、実行前のテスト用利用者数を控える
+  select count(*) into c0 from auth.users where email like 'test\_%@example.test';
   u1   := tests.make_user();          -- 一般利用者A（user_id設定済み）
   u2   := tests.make_user();          -- 一般利用者B（user_id未設定）
   u3   := tests.make_user();          -- プロフィール行が欠けている利用者
@@ -261,4 +264,10 @@ begin
     perform tests.cleanup_users(array[u1, u2, u3, adm, adm2]);
   exception when others then null;
   end;
+
+  -- 後片付けの検証: テスト用に作った利用者がdevに残り続けていないか
+  perform tests.as_owner();
+  select count(*) into c1 from auth.users where email like 'test\_%@example.test';
+  perform tests.ok(a, '後片付け(cleanup_users)でテスト用の利用者がDBに残らない',
+    c1 = c0, 'テスト用の利用者が残っています(実行前=' || c0 || ' / 実行後=' || c1 || ')');
 end $$;
