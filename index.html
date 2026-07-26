@@ -2376,10 +2376,17 @@ function loadTileCovers(){
       var cover = {};
       Object.keys(best).forEach(function(s){ cover[s] = best[s].cover_url; });
       var tiles = document.querySelectorAll("#catGrid .cat-tile");
+      // 投稿が少ないうちは全タグの代表写真が同じ1枚になり、同じ画像がタイルに並んでしまう。
+      // 同じ写真は最初の1タイルにだけ付け、以降は写真なし（文字だけのタイル）にする。
+      var usedCovers = {};
       for (var i=0;i<tiles.length;i++){
         var t = tiles[i], s = t.getAttribute("data-slug");
-        if (s && cover[s] && !t.querySelector("img")){
-          var img = document.createElement("img"); img.src = cover[s]; img.alt = "";
+        var cu = s ? cover[s] : null;
+        if (cu && !usedCovers[cu] && !t.querySelector("img")){
+          usedCovers[cu] = 1;
+          var img = document.createElement("img");
+          img.src = thumbUrl(cu); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+          img.onerror = function(){ if (!this.dataset.fb){ this.dataset.fb = 1; this.src = this.src.replace("/render/image/public/", "/object/public/").split("?")[0]; } };
           t.insertBefore(img, t.firstChild);
         }
       }
@@ -2420,7 +2427,7 @@ function makePaintCard(grid, opts){
   var thumb;
   if (opts.img){
     // その塗料を使った作例の写真を引用（色チップより魅力的）。色は左下に小さく重ねる
-    thumb = '<span class="pp-thumb"><img src="'+esc(opts.img)+'" alt="">' + rank + fire
+    thumb = '<span class="pp-thumb"><img src="'+esc(thumbUrl(opts.img))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'>' + rank + fire
       + (opts.hex ? '<span class="pp-swatch" style="background:'+esc(opts.hex)+'"></span>' : '')
       + '</span>';
   } else {
@@ -2448,7 +2455,15 @@ function renderPaints(){
     var rows = (res && !res.error && res.data) ? res.data : [];
     if (rows.length < 4){ showMock(); return; }   // データが薄い間は非表示
     grid.innerHTML = "";
-    rows.forEach(function(r){ makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:r.sample_cover, sampleId:r.sample_id, pid:r.pid }); });
+    // 投稿数が少ないうちは、どの塗料も「作例写真」が同じ1枚になり、同じ画像が12枚並んで
+    // 手抜きに見える。既に使った写真は2枚目以降を色チップ表示に切り替える（makePaintCardは
+    // img が無ければ色そのものを大きく見せる作りになっている）。
+    var usedCovers = {};
+    rows.forEach(function(r){
+      var img = r.sample_cover || null;
+      if (img && usedCovers[img]) img = null; else if (img) usedCovers[img] = 1;
+      makePaintCard(grid, { label:r.label, brand:r.brand, hex:r.hex, uses:r.uses, img:img, sampleId:img ? r.sample_id : null, pid:r.pid });
+    });
     if (sec) sec.style.display = "";
   }, showMock);
 }
