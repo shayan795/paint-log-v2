@@ -404,6 +404,16 @@ button{font-family:inherit}
 .auth-card{position:relative; background:#fff; border-radius:16px; padding:26px 22px; width:100%; max-width:380px}
 .auth-close{position:absolute; top:10px; right:12px; border:none; background:none; font-size:1.5rem; line-height:1; color:var(--sub); cursor:pointer}
 .auth-card h2{font-size:1.3rem; margin:0 0 18px; text-align:center}
+/* SNSアプリ内ブラウザ向けの案内（Googleログインが使えない旨） */
+.auth-inapp{display:flex;flex-direction:column;gap:6px;background:#FFF6E5;border:1px solid #F0C36D;border-radius:10px;padding:12px 14px;margin:0 0 12px}
+.auth-inapp b{font-size:.86rem;color:#7A4B00}
+.auth-inapp span{font-size:.78rem;line-height:1.6;color:#6B5220}
+.auth-inapp .auth-link{align-self:flex-start;font-size:.78rem;padding:0}
+.auth-inapp .auth-inapp-alt{font-size:.74rem;color:#7A6A45}
+[data-theme="dark"] .auth-inapp{background:#2A2312;border-color:#6B5220}
+[data-theme="dark"] .auth-inapp b{color:#F0C36D}
+[data-theme="dark"] .auth-inapp span{color:#D8C8A0}
+[data-theme="dark"] .auth-inapp .auth-inapp-alt{color:#B8A882}
 .auth-g{width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid var(--line-d); border-radius:10px; background:#fff; font:inherit; font-weight:700; font-size:.92rem; cursor:pointer}
 .auth-g:hover{background:var(--bp-bg)}
 .auth-or{display:flex; align-items:center; gap:10px; color:var(--sub); font-size:.74rem; margin:16px 0}
@@ -1557,11 +1567,49 @@ function authMessage(title, msg){
 }
 function requireLogin(fn){ if (currentUserId) fn(); else openAuth("login"); }
 
+// SNSアプリ内のブラウザ（X・Instagram・Facebook・LINE等）を判定する。
+// GoogleはこうしたブラウザでのOAuthを仕様として拒否する(403 disallowed_useragent)ため、
+// 「Googleでログイン」を押しても必ず失敗し、行き止まりになる。
+// 告知の主な流入元がSNSである以上、押させる前に案内する必要がある。
+function isInAppBrowser(){
+  var ua = navigator.userAgent || "";
+  if (/(FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TwitterAndroid|KAKAOTALK|Snapchat|Pinterest|MicroMessenger)/i.test(ua)) return true;
+  // iOSのアプリ内ブラウザはSafariを名乗らない（Safari本体は必ず "Safari/" を含む）
+  if (/iPhone|iPad|iPod/i.test(ua) && /AppleWebKit/i.test(ua) && !/Safari\//i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua)) return true;
+  return false;
+}
+// アプリ内ブラウザ向けの案内（外部ブラウザで開き直してもらう）
+function inAppNotice(){
+  if (!isInAppBrowser()) return "";
+  var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  return '<div class="auth-inapp">'
+    + '<b>アプリ内のブラウザでは Google ログインが使えません</b>'
+    + '<span>Google側の仕様による制限です。お手数ですが、'
+    + (isIOS ? '右下や右上の <b>共有ボタン</b> から「<b>Safariで開く</b>」' : '右上の <b>⋮</b> から「<b>ブラウザで開く</b>」')
+    + 'を選んでから、もう一度お試しください。</span>'
+    + '<button type="button" class="auth-link" id="aCopyUrl">このページのURLをコピー</button>'
+    + '<span class="auth-inapp-alt">※ 下の<b>メールアドレスでの登録</b>は、このままでもご利用いただけます。</span>'
+    + '</div>';
+}
+// 「URLをコピー」ボタンの動作を割り当てる（案内を出したときだけ存在する）
+function bindCopyUrl(){
+  var btn = $("aCopyUrl");
+  if (!btn) return;
+  btn.onclick = function(){
+    var url = location.origin + location.pathname;
+    var done = function(){ btn.textContent = "コピーしました"; setTimeout(function(){ btn.textContent = "このページのURLをコピー"; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function(){ prompt("このURLをコピーしてブラウザで開いてください", url); });
+    } else { prompt("このURLをコピーしてブラウザで開いてください", url); }
+  };
+}
+
 function renderAuth(mode){
   var b = $("authBody");
   if (mode === "register"){
     b.innerHTML =
       '<h2>新規登録</h2>'
+      + inAppNotice()
       + '<button class="auth-g" id="aG">Googleで登録</button>'
       + '<div class="auth-or">または</div>'
       + '<label class="auth-label">メールアドレス</label>'
@@ -1576,6 +1624,7 @@ function renderAuth(mode){
       + '<button class="auth-submit" id="aSubmit">登録する</button>'
       + '<div class="auth-foot">アカウントをお持ちの方は <button class="auth-link" id="aToLogin">ログイン</button></div>';
     $("aG").onclick = googleLogin;
+    bindCopyUrl();
     $("aToLogin").onclick = function(){ renderAuth("login"); };
     $("aSubmit").onclick = doRegister;
   } else if (mode === "newpw"){
@@ -1619,6 +1668,7 @@ function renderAuth(mode){
   } else {
     b.innerHTML =
       '<h2>ログイン</h2>'
+      + inAppNotice()
       + '<button class="auth-g" id="aG">Googleでログイン</button>'
       + '<div class="auth-or">または</div>'
       + '<label class="auth-label">メールアドレス</label>'
@@ -1630,6 +1680,7 @@ function renderAuth(mode){
       + '<div class="auth-foot"><button class="auth-link" id="aReset">パスワードを忘れた方</button></div>'
       + '<div class="auth-foot">アカウントが無い方は <button class="auth-link" id="aToReg">新規登録</button></div>';
     $("aG").onclick = googleLogin;
+    bindCopyUrl();
     $("aReset").onclick = function(){ renderAuth("reset"); };
     $("aToReg").onclick = function(){ renderAuth("register"); };
     $("aSubmit").onclick = doLogin;
