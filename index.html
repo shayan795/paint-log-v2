@@ -2102,7 +2102,7 @@ function openReportsAdmin(){
   fullviewBody.innerHTML = '<div class="stub"><p>読み込み中…</p></div>';
   fullview.hidden = false; setHash("reports");
   // status で絞らず全件取得（対応済みも残す）。未対応(open)を上に、各群は新しい順
-  sb.from("reports").select("id,reason,detail,status,created_at,recipe_id,recipes(title)")
+  sb.from("reports").select("id,reason,detail,status,created_at,recipe_id,recipes(title,owner_id,profiles!recipes_owner_id_fkey(user_id,display_name,banned_at))")
     .order("status", { ascending:true }).order("created_at", { ascending:false })
     .then(function(res){
       if (res && res.error){ fullviewBody.innerHTML = '<div class="stub"><p>読み込みに失敗しました：'+esc(res.error.message)+'</p></div>'; return; }
@@ -2122,7 +2122,36 @@ function openReportsAdmin(){
         var done = document.createElement("button"); done.className = "rep-btn";
         bindToggleDone(done, "reports", r.id, r.status, card);
         var del = makeDeleteBtn("reports", r.id, card);
-        act.appendChild(view); act.appendChild(del); act.appendChild(done); card.appendChild(act); wrap.appendChild(card);
+        act.appendChild(view); act.appendChild(del); act.appendChild(done);
+        // 投稿者の利用停止／解除（★自動ではなく、運営者が通報内容を見て手動で行う）
+        var rec = r.recipes || {}, prof = rec.profiles || {};
+        if (rec.owner_id){
+          var who = prof.display_name || (prof.user_id ? "@" + prof.user_id : "この投稿者");
+          var ban = document.createElement("button"); ban.className = "rep-btn";
+          var setLabel = function(isBanned){
+            ban.textContent = isBanned ? "停止を解除" : "投稿者を停止";
+            ban.style.color = isBanned ? "" : "var(--warn)";
+          };
+          setLabel(!!prof.banned_at);
+          ban.onclick = function(){
+            var isBanned = !!prof.banned_at;
+            var reason = null;
+            if (!isBanned){
+              reason = prompt(who + " の投稿・コメントを停止します。\n本人に通知される理由を入力してください（空欄可）:", "利用規約に違反する投稿のため");
+              if (reason === null) return;   // キャンセル
+            } else if (!confirm(who + " の停止を解除します。よろしいですか？")) return;
+            ban.disabled = true;
+            sb.rpc("set_user_ban", { target: rec.owner_id, ban: !isBanned, reason: reason }).then(function(res){
+              ban.disabled = false;
+              if (res && res.error){ alert("失敗しました：" + res.error.message); return; }
+              prof.banned_at = isBanned ? null : new Date().toISOString();
+              setLabel(!!prof.banned_at);
+              alert(isBanned ? "停止を解除しました。" : "停止しました。既存の投稿は残ります（必要なら個別に削除してください）。");
+            }, function(e){ ban.disabled = false; alert("失敗しました：" + (e && e.message ? e.message : e)); });
+          };
+          act.appendChild(ban);
+        }
+        card.appendChild(act); wrap.appendChild(card);
       });
       fullviewBody.innerHTML = ""; fullviewBody.appendChild(wrap);
     });
