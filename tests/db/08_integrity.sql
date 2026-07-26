@@ -119,13 +119,13 @@ begin
 
   perform tests.as_user(u_grid);
   perform tests.denied(a, 'recipes: 256KBを超えるgridはINSERTできない（DB容量の枯渇防止）',
-    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,jsonb_build_object(%L,%L),true)',
-           u_grid, '巨大grid', 'x', big), 'recipes_grid_size', now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,grid,is_public,created_at) values (%L,%L,jsonb_build_object(%L,%L),true,now() - interval ''1 hour'')',
+           u_grid, '巨大grid', 'x', big), 'recipes_grid_size');
 
   r_grid := gen_random_uuid();
   perform tests.allowed(a, 'recipes: 通常サイズのgridは問題なくINSERTできる（上限が正規利用を邪魔しない）',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
-           r_grid, u_grid, '通常サイズgrid', '{"procs":[{"id":"q1","name":"基本色"}],"rows":[]}'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
+           r_grid, u_grid, '通常サイズgrid', '{"procs":[{"id":"q1","name":"基本色"}],"rows":[]}'));
   perform tests.denied(a, 'recipes: 既存投稿のgridを256KB超にUPDATEすることもできない',
     format('update public.recipes set grid = jsonb_build_object(%L,%L) where id = %L', 'x', big, r_grid),
     'recipes_grid_size');
@@ -144,70 +144,70 @@ begin
   perform tests.as_owner();
 
   perform tests.allowed(a, 'grid: procs が配列でなくオブジェクト{}でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
-           gen_random_uuid(), u_g, '壊れたgrid procs', '{"procs":{},"rows":[]}'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
+           gen_random_uuid(), u_g, '壊れたgrid procs', '{"procs":{},"rows":[]}'));
 
   perform tests.allowed(a, 'grid: rows が配列でなく文字列でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
-           gen_random_uuid(), u_g, '壊れたgrid rows', '{"procs":[],"rows":"こわれています"}'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
+           gen_random_uuid(), u_g, '壊れたgrid rows', '{"procs":[],"rows":"こわれています"}'));
 
   perform tests.allowed(a, 'grid: cells がオブジェクトでなく配列でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            gen_random_uuid(), u_g, '壊れたgrid cells',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":[1,2]}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":[1,2]}]}'));
 
   perform tests.allowed(a, 'grid: セルの中身が文字列（オブジェクトでない）でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            gen_random_uuid(), u_g, '壊れたgrid cellvalue',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":"あ"}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":"あ"}}]}'));
 
   perform tests.allowed(a, 'grid: 最上位が配列[]でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
-           gen_random_uuid(), u_g, '壊れたgrid 配列', '[]'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
+           gen_random_uuid(), u_g, '壊れたgrid 配列', '[]'));
 
   perform tests.allowed(a, 'grid: 最上位がただの文字列でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
-           gen_random_uuid(), u_g, '壊れたgrid 文字列', '"こわれています"'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
+           gen_random_uuid(), u_g, '壊れたgrid 文字列', '"こわれています"'));
 
   perform tests.allowed(a, 'grid: procs の要素がオブジェクトでなく数値でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            gen_random_uuid(), u_g, '壊れたgrid procs要素',
-           '{"procs":[1,2,3],"rows":[{"cells":{"q1":{"c":"赤"}}}]}'), now() - interval '1 hour');
+           '{"procs":[1,2,3],"rows":[{"cells":{"q1":{"c":"赤"}}}]}'));
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: 塗料番号 c.i が数値でない文字列("abc")でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '不正なc.i',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":"abc"}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":"abc"}}}]}'));
   select count(*) into n from public.recipe_paints where recipe_id = rid;
   perform tests.eq(a, 'grid: 数値でない c.i は recipe_paints に展開されない（集計を汚さない）', n, 0);
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: 塗料番号 c.i が負の数(-5)でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '負のc.i',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":-5}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":-5}}}]}'));
   select count(*) into n from public.recipe_paints where recipe_id = rid;
   perform tests.eq(a, 'grid: 負の c.i は recipe_paints に展開されない', n, 0);
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: 塗料番号 c.i が小数(1.5)でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '小数のc.i',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":1.5}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":1.5}}}]}'));
   select count(*) into n from public.recipe_paints where recipe_id = rid;
   perform tests.eq(a, 'grid: 小数の c.i は recipe_paints に展開されない', n, 0);
 
   perform tests.allowed(a, 'grid: 塗料番号 c.i が桁あふれする巨大な数値でも投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            gen_random_uuid(), u_g, '巨大なc.i',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":99999999999999999999}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":99999999999999999999}}}]}'));
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: 自由入力の塗料名(c)を含む投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '自由入力塗料',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"c":"  自由テスト名  "}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"c":"  自由テスト名  "}}}]}'));
   select count(*) into n from public.recipe_paints where recipe_id = rid;
   perform tests.eq(a, 'grid: 自由入力の塗料は recipe_paints に1件だけ展開される', n, 1);
   select free_name, proc_name into v_txt, v_txt2 from public.recipe_paints where recipe_id = rid limit 1;
@@ -216,17 +216,17 @@ begin
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: 自由入力の塗料名が空白だけの投稿も保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '空白だけの自由入力',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"c":"   "}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"c":"   "}}}]}'));
   select count(*) into n from public.recipe_paints where recipe_id = rid;
   perform tests.eq(a, 'grid: 空白だけの塗料名は recipe_paints に展開されない', n, 0);
 
   rid := gen_random_uuid();
   perform tests.allowed(a, 'grid: procs に無い列IDのセルがあっても投稿を保存できる',
-    format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+    format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
            rid, u_g, '未知の列ID',
-           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"zz":{"c":"謎の塗料"}}}]}'), now() - interval '1 hour');
+           '{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"zz":{"c":"謎の塗料"}}}]}'));
   select proc_name into v_txt from public.recipe_paints where recipe_id = rid limit 1;
   perform tests.ok(a, 'grid: procs に無い列IDのセルは工程名なし(null)で展開される',
     v_txt is null, '実際のproc_name=' || coalesce(v_txt,'null'));
@@ -235,9 +235,9 @@ begin
   if v_sort is not null then
     rid := gen_random_uuid();
     perform tests.allowed(a, 'grid: 正しい塗料番号 c.i を含む投稿を保存できる',
-      format('insert into public.recipes(id,owner_id,title,grid,is_public, created_at) values (%L,%L,%L,%L::jsonb,true)',
+      format('insert into public.recipes(id,owner_id,title,grid,is_public,created_at) values (%L,%L,%L,%L::jsonb,true,now() - interval ''1 hour'')',
              rid, u_g, '正しいc.i',
-             format('{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":%s}}}]}', v_sort)), now() - interval '1 hour');
+             format('{"procs":[{"id":"q1","name":"基本色"}],"rows":[{"cells":{"q1":{"i":%s}}}]}', v_sort)));
     select count(*) into n from public.recipe_paints where recipe_id = rid;
     perform tests.eq(a, 'grid: 正しい塗料番号は recipe_paints に1件展開される', n, 1);
     select paint_id into v_pid from public.recipe_paints where recipe_id = rid limit 1;

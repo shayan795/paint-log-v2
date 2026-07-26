@@ -120,8 +120,8 @@ begin
   ------------------------------------------------------------------
   perform tests.as_user(uIns);
   perform tests.allowed(area,'新規投稿の作成そのものは view_count を指定しても成功する',
-    format('insert into public.recipes(id,owner_id,title,is_public,view_count, created_at) values (%L,%L,%L,true,9999)',
-           rIns, uIns, 'ZZ初期値水増し試行'), now() - interval '1 hour');
+    format('insert into public.recipes(id,owner_id,title,is_public,view_count,created_at) values (%L,%L,%L,true,9999,%L)',
+           rIns, uIns, 'ZZ初期値水増し試行', now() - interval '1 hour'));
   perform tests.as_owner();
   n := null; select view_count into n from public.recipes where id = rIns;
   perform tests.eq(area,'作成時に view_count=9999 を仕込んでも必ず0から始まる', n, 0);

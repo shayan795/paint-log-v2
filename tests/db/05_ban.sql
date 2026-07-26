@@ -43,8 +43,8 @@ begin
 
   perform tests.as_user(u2);
   perform tests.allowed(area_name, '停止されていない利用者はふつうに投稿できる（前提確認）',
-    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false)',
-           u2, '前提確認の投稿', '{}'), now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false, now() - interval ''1 hour'')',
+           u2, '前提確認の投稿', '{}'));
 
   -- ================= 2) 管理者による停止 =================
   perform tests.as_user(adm);
@@ -64,9 +64,9 @@ begin
 
   -- ================= 3) 停止中は新規作成ができない =================
   perform tests.denied(area_name, '停止中は新しい投稿(recipes)を作成できない',
-    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false)',
+    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false, now() - interval ''1 hour'')',
            u1, '停止中に作ろうとした投稿', '{}'),
-    'ご利用を停止しています', now() - interval '1 hour');
+    'ご利用を停止しています');
 
   perform tests.denied(area_name, '停止中は新しい下書き(drafts)を作成できない',
     format('insert into public.drafts(owner_id,title,grid) values (%L,%L,%L::jsonb)',
@@ -219,8 +219,8 @@ begin
   perform tests.eq(area_name, '解除すると本人あてに解除通知が届く', cnt, 1);
 
   perform tests.allowed(area_name, '解除後は再び投稿(recipes)できる',
-    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false)',
-           u1, '解除後の投稿', '{}'), now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,grid,is_public, created_at) values (%L,%L,%L::jsonb,false, now() - interval ''1 hour'')',
+           u1, '解除後の投稿', '{}'));
 
   perform tests.allowed(area_name, '解除後は再びコメントできる',
     format('insert into public.comments(recipe_id,user_id,body) values (%L,%L,%L)',
