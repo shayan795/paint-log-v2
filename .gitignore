@@ -12,3 +12,6 @@ site-bundle.txt
 
 # 利用者の写真バックアップ（GitHubに上げないこと）
 backups/
+
+# ローカル作業用（画像パス一覧）
+scripts/storage_paths.local.txt

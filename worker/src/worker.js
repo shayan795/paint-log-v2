@@ -274,6 +274,32 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // /healthz — 外部の死活監視用。★配信元とデータベースの両方を実際に確認する。
+    // トップページは静的なので「表示できる＝正常」とは限らず、DBが死んでいても200が返ってしまう。
+    // ここは本当に壊れたときだけ503を返すので、UptimeRobot等でここを監視すれば故障を検知できる。
+    // 副次効果: 定期的にSupabaseへ問い合わせるため、無料プランの「7日間アクセスが無いと
+    //          自動停止」も防げる（停止するとサイトが全断するため実質必須）。
+    if (path === "/healthz") {
+      const out = { ok: true, checks: {} };
+      try {
+        const r = await fetch(`${env.SUPABASE_URL}/rest/v1/paints?select=id&limit=1`, {
+          headers: { apikey: env.SUPABASE_ANON_KEY, authorization: `Bearer ${env.SUPABASE_ANON_KEY}` },
+          cf: { cacheTtl: 0 },
+        });
+        out.checks.database = r.ok ? "ok" : `ng(${r.status})`;
+        if (!r.ok) out.ok = false;
+      } catch (e) { out.checks.database = "ng(unreachable)"; out.ok = false; }
+      try {
+        const r = await fetch(`${env.ORIGIN}/index.html`, { cf: { cacheTtl: 0 } });
+        out.checks.origin = r.ok ? "ok" : `ng(${r.status})`;
+        if (!r.ok) out.ok = false;
+      } catch (e) { out.checks.origin = "ng(unreachable)"; out.ok = false; }
+      return new Response(JSON.stringify(out), {
+        status: out.ok ? 200 : 503,
+        headers: { ...SECURITY_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      });
+    }
+
     // /sitemap.xml — 公開投稿を動的列挙
     if (path === "/sitemap.xml") return serveSitemap(env);
 
