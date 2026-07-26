@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール</title>
-<link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-180.png">
+<link rel="icon" href="/favicon.ico?v=2" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-180.png?v=2">
 <!-- PWA:START -->
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#FAFAF7" media="(prefers-color-scheme: light)">
@@ -565,12 +565,12 @@ td.rowphoto{text-align:center;vertical-align:middle}
 .l-close{width:38px;height:38px;border-radius:50%;border:1px solid var(--line-d);background:#fff;color:var(--ink);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .l-topbar .l-title{margin-left:10px;font-weight:700;font-size:.95rem}
 /* BRANDPOLISH:START */
-.l-topbar .lt-brand-textword{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;line-height:1.05;color:#BE2A33;text-align:center;pointer-events:none}
+.l-topbar .lt-brand-textword{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;line-height:1.05;color:#E60012;text-align:center;pointer-events:none}
 .l-topbar .lt-brand-textword .b-title{font-size:1.4rem;font-weight:800;letter-spacing:.1em;text-shadow:0 1px 0 rgba(0,0,0,.04)}
 .l-topbar .lt-brand-textword .b-sub{font-size:.7rem;letter-spacing:.22em;margin-top:6px;font-weight:700;display:flex;align-items:center;gap:8px;opacity:.85}
 .l-topbar .lt-brand-textword .b-sub::before,
 .l-topbar .lt-brand-textword .b-sub::after{content:"";width:16px;height:1px;background:currentColor;opacity:.55;flex:none}
-[data-theme="dark"] .l-topbar .lt-brand-textword{color:#BE2A33}
+[data-theme="dark"] .l-topbar .lt-brand-textword{color:#E60012}
 [data-theme="dark"] .l-topbar .lt-brand-textword .b-title{text-shadow:0 1px 0 rgba(0,0,0,.4)}
 /* BRANDPOLISH:END */
 body{padding-top:60px}                        /* ❌バー分の余白（既存padding上書き） */
@@ -940,7 +940,7 @@ body{background-image:none}
 
 <!-- v2: PC左サイドバー（index.html と同じ。どの画面からもメインへ戻れる） -->
 <aside class="sidebar">
-  <a class="sb-logo" href="/index.html"><img class="sb-logo-img" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></a>
+  <a class="sb-logo" href="/index.html"><img class="sb-logo-img" src="/assets/logo-full.png?v=2" alt="塗装レシピ録 / Plamo-Paint"></a>
   <div class="sb-search">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     <input type="search" placeholder="探す">
@@ -964,7 +964,7 @@ body{background-image:none}
 <div class="nav-overlay" id="navOverlay"></div>
 <nav class="nav-drawer" id="navDrawer">
   <div class="nav-head">
-    <div class="nav-logo js-goview" title="閲覧ページ"><img class="nav-logo-img" src="/assets/logo-word.png" alt="塗装レシピ録 / Plamo-Paint"></div>
+    <div class="nav-logo js-goview" title="閲覧ページ"><img class="nav-logo-img" src="/assets/logo-word.png?v=2" alt="塗装レシピ録 / Plamo-Paint"></div>
     <button class="nav-close" id="navClose" aria-label="閉じる">×</button>
   </div>
   <div class="nav-list" id="navList"></div>
@@ -981,7 +981,7 @@ body{background-image:none}
     <button class="ab-bell" id="aboutBell" aria-label="通知"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button>
   </header>
   <div class="about-hero">
-    <img class="ah-logo-img" id="aboutLogo" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint" title="メインへ戻る">
+    <img class="ah-logo-img" id="aboutLogo" src="/assets/logo-full.png?v=2" alt="塗装レシピ録 / Plamo-Paint" title="メインへ戻る">
   </div>
   <p class="about-lead">使った塗料を、もう一度たどれる。<br>プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。</p>
   <div class="about-sec">
@@ -1053,7 +1053,7 @@ body{background-image:none}
 <!-- ============ 作成モード(本人が編集する画面) ============ -->
 <div id="editMode">
 <header>
-  <h1 class="js-goview" title="閲覧ページを見る"><img class="hd-logo" src="/assets/logo-full.png" alt="塗装レシピ録 / Plamo-Paint"></h1>
+  <h1 class="js-goview" title="閲覧ページを見る"><img class="hd-logo" src="/assets/logo-full.png?v=2" alt="塗装レシピ録 / Plamo-Paint"></h1>
 </header>
 <div class="modetabs">
   <button class="modetab" id="tabViewFromEdit">閲覧プレビュー</button>
@@ -3233,7 +3233,7 @@ const safePhoto = u => {
               ? '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません。<br>非公開の投稿か、削除された可能性があります。</p>'
               : '<div style="padding:48px 16px;text-align:center;color:var(--sub)">'
                 + '<p>この投稿は非公開の可能性があります。<br>投稿者ご本人は、ログインすると表示できます。</p>'
-                + '<a href="/index.html" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#BE2A33;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
+                + '<a href="/index.html" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#E60012;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
                 + '</div>';
           }, function(){
             vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
