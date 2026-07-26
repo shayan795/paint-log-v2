@@ -2093,7 +2093,9 @@ function makeRowPhotoControl(row){
     e.target.value = "";
   };
   if (row.photo){
-    const img = document.createElement("img"); img.className = "rowphoto-img"; img.src = row.photo; img.title = "タップで位置調整";
+    const img = document.createElement("img"); img.className = "rowphoto-img"; img.src = viewPhoto(row.photo, 256); img.loading = "lazy";
+    img.onerror = function(){ if(!this.dataset.fb){ this.dataset.fb=1; this.src=this.src.replace("/render/image/public/","/object/public/").split("?")[0]; } };
+    img.title = "タップで位置調整";
     // 既存写真タップ → クロップ位置の再調整
     img.onclick = () => {
       if (typeof window.openPhotoCropper === 'function'){
@@ -2332,7 +2334,7 @@ function renderPhoto(){
   prev.innerHTML = "";
   state.photos.forEach((src, i) => {
     const wrap = document.createElement("span"); wrap.className = "photo-thumb";
-    wrap.innerHTML = `<img src="${esc(safePhoto(src))}" alt="完成写真${i+1}">`;
+    wrap.innerHTML = `<img src="${esc(viewPhoto(src, 600))}" alt="完成写真${i+1}" loading="lazy"${PHOTO_FALLBACK}>`;
     const del = document.createElement("button"); del.className = "thumb-del"; del.textContent = "×"; del.title = "この写真を削除";
     del.onclick = () => { state.photos.splice(i,1); renderPhoto(); };
     wrap.appendChild(del); prev.appendChild(wrap);
@@ -2746,7 +2748,7 @@ function renderViewMode(){
     const vrMark = (row.photo_mark && typeof row.photo_mark.x==='number')
       ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${safeColor(row.photo_mark.c||'#E01E28')}"></div>`
       : "";
-    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${esc(safePhoto(row.photo))}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div>` : "";
+    const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${esc(viewPhoto(row.photo, 800))}" alt="${esc(row.part||'')}" loading="lazy"${PHOTO_FALLBACK}${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
     viewProcs.forEach(proc => {
       const c = row.cells[proc.id];
@@ -2767,7 +2769,7 @@ function renderViewMode(){
       } else html += `<td class="vrecipe-empty" data-label="${esc(proc.name)}">—</td>`;
     });
     // スマホ用: カード末尾(塗料の下)に色グループ写真。PCではCSSで非表示
-    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${esc(safePhoto(row.photo))}" alt="${esc(row.part||'')}"${vrPhotoStyle}>${vrMark}</div></td>`;
+    if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${esc(viewPhoto(row.photo, 800))}" alt="${esc(row.part||'')}" loading="lazy"${PHOTO_FALLBACK}${vrPhotoStyle}>${vrMark}</div></td>`;
     // 色グループのコメント(入力があるときだけ表示・スマホはカード内に取り込む)
     if (row.comment && row.comment.trim()){
       html += `<td class="vr-comment-cell"><div class="vr-comment">${esc(row.comment.trim())}</div></td>`;
@@ -2942,7 +2944,23 @@ var _aboutAvatar = document.getElementById("aboutAvatar"); if (_aboutAvatar) _ab
 var _aboutBell = document.getElementById("aboutBell");     if (_aboutBell)   _aboutBell.onclick   = () => location.href = "/index.html#notifications";
 var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _aboutGoto.onclick = () => showPage("edit");  // 下部CTA→編集へ
 // 編集/閲覧の上バー：ベル→スタブ（❌はinline onclickでexitEditor）
-var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => location.href = "/index.html#notifications";
+// 通知ベルも❌と同じく exitEditor を通す（従来は確認も保存もせず外へ飛び、書きかけが消えていた）
+var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => exitEditor("/index.html#notifications");
+
+// ★書きかけのレシピが無警告で消えるのを防ぐ。
+//   ブラウザの戻る／リロード／タブを閉じる／iOSのタブ破棄はJS側で止められないため、
+//   ブラウザ標準の確認ダイアログを出す（写真は保存操作までアップロードされず、消えると復元不能）。
+window.addEventListener("beforeunload", function(e){
+  try {
+    if (currentPage !== "edit") return;              // 編集中だけ
+    if (window.__publishing) return;                 // 投稿・保存の処理中は邪魔しない
+    var dirty = currentRecipeId
+      ? (window.__loadedSnapshot && JSON.stringify({ s: state, m: state.methods || [] }) !== window.__loadedSnapshot)
+      : editorHasContent();
+    if (!dirty) return;
+    e.preventDefault(); e.returnValue = "";
+  } catch (_) {}
+});
 
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
@@ -3060,6 +3078,21 @@ const safePos = v => {                                             // object-pos
 // 写真URLのサニタイズ（保存型XSS対策）：grid由来（ユーザー制御・#r=共有URLでも同経路）の
 // photos[] / rows[].photo を innerHTML の src 属性へ出す前に通す。https(Storage等)か data:image のみ許可し、
 // それ以外（相対や x" onerror=... の細工文字列）は空にして無害化する。属性値なので必ず esc() と併用する。
+// 表示用に縮小した画像URLを作る（帯域対策・最重要）。
+// レシピ1ページに写真が10枚以上載ることがあり、原寸(1枚あたり平均250KB)のままだと
+// 1閲覧で約2.6MB＝無料枠(転送5GB/月)を約1,900閲覧で使い切ってしまう。
+// 縮小版なら1枚あたり約27KBで、実効的な余力が約10倍になる。
+// ※width だけの指定は縦横比が崩れるため、height と resize=contain を必ず併用する。
+// ※変換が使えない環境に備え、img側の onerror で原寸に戻す（PHOTO_FALLBACK）。
+// ※canvasで共有カードを描く処理は原寸が必要なので、そちらでは使わない。
+const viewPhoto = (u, px) => {
+  const s = safePhoto(u);
+  if (!s || s.indexOf("/storage/v1/object/public/") < 0) return s;
+  const n = px || 800;
+  return s.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+        + "?width=" + n + "&height=" + n + "&resize=contain&quality=72";
+};
+const PHOTO_FALLBACK = ' onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=this.src.replace(\'/render/image/public/\',\'/object/public/\').split(\'?\')[0];}"';
 const safePhoto = u => {
   const s = String(u == null ? "" : u).trim();
   return (/^https:\/\//i.test(s) || /^data:image\//i.test(s)) ? s : "";

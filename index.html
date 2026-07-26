@@ -653,7 +653,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
       <div class="card-row" id="recoRow"></div>
       <div class="dots" id="recoDots"></div>
     </section>
-    <section class="block">
+    <section class="block" id="catSec" style="display:none">
       <h3>人気の塗装方法</h3>
       <div class="cat-grid" id="catGrid"></div>
       <button class="more-btn" id="catMore" style="display:none">もっと見る</button>
@@ -1573,6 +1573,11 @@ function requireLogin(fn){ if (currentUserId) fn(); else openAuth("login"); }
 // 告知の主な流入元がSNSである以上、押させる前に案内する必要がある。
 function isInAppBrowser(){
   var ua = navigator.userAgent || "";
+  // ★ホーム画面に追加したPWAはSafariを名乗らないため、除外しないとアプリ内ブラウザと誤判定される。
+  //   誤判定すると「Googleログインは使えません」と嘘の案内を出してPWA利用者を締め出してしまう。
+  var standalone = (navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (standalone) return false;
   if (/(FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TwitterAndroid|KAKAOTALK|Snapchat|Pinterest|MicroMessenger)/i.test(ua)) return true;
   // iOSのアプリ内ブラウザはSafariを名乗らない（Safari本体は必ず "Safari/" を含む）
   if (/iPhone|iPad|iPod/i.test(ua) && /AppleWebKit/i.test(ua) && !/Safari\//i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua)) return true;
@@ -2444,16 +2449,22 @@ function renderCategoryTiles(list){
   }
 }
 // 人気の塗装方法：実使用(popular_methods)が十分あれば使用数順（独自タグ含む）。薄ければプリセット一覧。
+// 人気の塗装方法。★実際に投稿があるタグだけを出す。
+// 以前は4件未満のときプリセット11件に差し替えていたが、投稿ゼロのタグが並び、
+// 押すと「この塗装方法の公開投稿はまだありません」に落ちる行き止まりになっていた。
+// 初見の人がファーストビューで最初に触る場所なので、空振りは出さない。
 function renderCategories(){
-  var presets = PAINT_METHODS.map(function(m){ return { slug:m.slug, label:m.label }; });
-  if (!sb || !sb.rpc){ renderCategoryTiles(presets); return; }
+  var sec = $("catSec");
+  var hide = function(){ if (sec) sec.style.display = "none"; };
+  if (!sb || !sb.rpc){ hide(); return; }
   sb.rpc("popular_methods", { limit_n: 20 }).then(function(res){
     var rows = (res && !res.error && res.data) ? res.data : [];
-    if (rows.length < 4){ renderCategoryTiles(presets); return; }
+    if (!rows.length){ hide(); return; }          // 1件も無ければセクションごと非表示
     renderCategoryTiles(rows.map(function(r){
       return { slug:r.method, label: METHOD_LABEL[r.method] || ("#"+r.method) };
     }));
-  }, function(){ renderCategoryTiles(presets); });
+    if (sec) sec.style.display = "";
+  }, hide);
 }
 // 人気の塗装方法タイルに代表画像（そのタグの人気＝トレンド最上位投稿のcover）を差し込む
 function loadTileCovers(){
