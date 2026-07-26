@@ -179,6 +179,14 @@ async function serveRecipePage(env, id) {
         "url": pageUrl,
         "inLanguage": "ja",
         "isPartOf": { "@type": "WebSite", "name": "塗装レシピ録 / Paint Log", "url": env.SITE },
+        // 発行元とロゴ。Googleが検索結果でサイトのアイコン/ロゴを認識するための正式な手がかり。
+        // ロゴ画像はファイル名にバージョンを付けて配信しているため、変更時はここも合わせる。
+        "publisher": {
+          "@type": "Organization",
+          "name": "塗装レシピ録 / Paint Log",
+          "url": env.SITE,
+          "logo": { "@type": "ImageObject", "url": `${env.SITE}/assets/favicon-512.png?v=2` },
+        },
       };
       if (image) ld.image = [image];
       if (authorLabel) ld.author = { "@type": "Person", "name": authorLabel };

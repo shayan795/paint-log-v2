@@ -24,6 +24,18 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=2">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png?v=2">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-180.png?v=2">
+<!-- 構造化データ：Googleがサイト名とロゴを認識するための手がかり。
+     検索結果に出るアイコン/ロゴの精度が上がる（反映はGoogleの再クロール次第で数日〜数週間）。
+     ロゴを差し替えたら、下のURLのバージョン(?v=)も合わせて上げること。 -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://plamo-paint.com/#org","name":"塗装レシピ録 / Paint Log",
+  "url":"https://plamo-paint.com/",
+  "logo":{"@type":"ImageObject","url":"https://plamo-paint.com/assets/favicon-512.png?v=2","width":512,"height":512}},
+ {"@type":"WebSite","@id":"https://plamo-paint.com/#site","name":"塗装レシピ録 / Paint Log",
+  "url":"https://plamo-paint.com/","inLanguage":"ja","publisher":{"@id":"https://plamo-paint.com/#org"}}
+]}
+</script>
 <!-- PWA:START — 戻すときはこの<link rel=manifest>＋apple/theme meta＋末尾のSW登録scriptを削除 -->
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#FAFAF7" media="(prefers-color-scheme: light)">
