@@ -199,7 +199,11 @@ async function serveRecipePage(env, id) {
       };
       if (image) ld.image = [image];
       if (authorLabel) ld.author = { "@type": "Person", "name": authorLabel };
-      ldBlock = `<script type="application/ld+json">${JSON.stringify(ld).replace(/<\/script/gi, "<\\/script")}</script>`;
+      // ★`</script` を潰すだけでは足りない。レシピtitleに `<!--<script>` を入れられると
+      //   HTMLパーサがscript内でコメント状態に入り、後続のページ本文を丸ごと飲み込んで
+      //   公開レシピページが崩壊する。`<` を全て \u003c にすれば構造上の脱出が不可能になる
+      //   （JSONとしての値は同じなので検索エンジンの読み取りには影響しない）。
+      ldBlock = `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`;
     } catch (_) { ldBlock = ""; }
 
     // ★replace の第2引数は必ず「関数」にすること（文字列だと $' `$&` 等が特殊置換として展開され、
@@ -273,6 +277,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // www は apex(plamo-paint.com) に寄せる。
+    // 両方で同じアプリを配信していたが、Supabaseのリダイレクト許可リストに www が
+    // 入っていないため、www 側から入った人はログイン後の戻り先が拒否されて認証が失敗する。
+    // ホストを1つに統一すれば、その経路自体が無くなる（SEOの重複対策にもなる）。
+    if (url.hostname === "www.plamo-paint.com") {
+      url.hostname = "plamo-paint.com";
+      return Response.redirect(url.toString(), 301);
+    }
 
     // /healthz — 外部の死活監視用。★配信元とデータベースの両方を実際に確認する。
     // トップページは静的なので「表示できる＝正常」とは限らず、DBが死んでいても200が返ってしまう。
