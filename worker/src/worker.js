@@ -127,7 +127,26 @@ async function fetchOrigin(env, pathname, search = "") {
 }
 
 // /r/:id または ?id=xxx を含むレシピ閲覧ページ：OGタグを差し込んだ legacy.html を返す
+// レシピIDがUUIDの形をしているか。形が違うものはSupabaseに問い合わせるまでもなく存在しない。
+// 検証しないと、任意の文字列で無制限に上流照会を発生させられる（無料枠の消費・障害の誘発）。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// 存在しないレシピURLの応答（検索結果に中身の無いページを残さないため 404 + noindex）
+function notFoundRecipe(env) {
+  return new Response(
+    "<!doctype html><meta charset=utf-8><meta name=\"robots\" content=\"noindex,follow\">"
+    + "<title>ページが見つかりません — 塗装レシピ録</title>"
+    + "<body style=\"font-family:-apple-system,sans-serif;padding:48px 24px;text-align:center;color:#555\">"
+    + "<h1 style=\"font-size:1.2rem;color:#1E2430\">このレシピは見つかりませんでした</h1>"
+    + "<p>削除されたか、非公開に変更された可能性があります。</p>"
+    + "<p><a href=\"" + esc(env.SITE) + "/\">トップへ戻る</a></p></body>",
+    { status: 404, headers: { "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store", ...SECURITY_HEADERS } });
+}
+
 async function serveRecipePage(env, id) {
+  // 形式が不正なIDは、上流に問い合わせず即座に404にする
+  if (!UUID_RE.test(String(id || ""))) return notFoundRecipe(env);
   let rec = await getRecipeFromSupabase(env, id);
   const fetchFailed = (rec === "error");
   if (fetchFailed) rec = null;
@@ -225,10 +244,20 @@ async function serveRecipePage(env, id) {
     // （200のままだと検索結果に中身の無いページが残り続ける）
     // ただし取得失敗(Supabase障害)のときは 404 にしない。正常な公開レシピを一時障害で
     // インデックスから落とさないため、200のまま返してクライアント側の再取得に委ねる。
+    // ★取得失敗(Supabase障害)は「存在しない」ではなく「今は応えられない」なので 503 を返す。
+    //   200 + noindex にすると、一時障害の間に来た検索エンジンが正常なレシピを
+    //   「インデックス不可」と受け取ってしまう。503 なら後で再訪してくれる。
+    if (fetchFailed) {
+      return new Response(
+        "<!doctype html><meta charset=utf-8><title>一時的に表示できません</title>"
+        + "<p>ただいま混み合っています。少し時間をおいて再読み込みしてください。",
+        { status: 503, headers: { "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store", "retry-after": "60", ...SECURITY_HEADERS } });
+    }
     html = html.replace(/<!--CANON_START-->[\s\S]*?<!--CANON_END-->/,
       () => `<!--CANON_START--><meta name="robots" content="noindex,follow"><!--CANON_END-->`);
     return new Response(html, {
-      status: fetchFailed ? 200 : 404,
+      status: 404,
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS },
     });
   }
