@@ -453,6 +453,18 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 .nav-item .ni-sub{font-size:.72rem;color:var(--sub);margin-top:2px}
 .nav-item.current{opacity:.55;border-style:dashed;border-color:var(--accent);cursor:default}
 .nav-item.current .ni-badge{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.1em;color:#fff;background:var(--accent);padding:1px 7px;margin-left:8px;vertical-align:middle}
+/* 共有リンクで来た人向けのフッター（規約・連絡先・アフィリエイト表記・登録導線） */
+.v-foot{margin:28px auto 40px;max-width:900px;padding:20px 16px 0;border-top:1px solid var(--line);
+  font-size:.78rem;color:var(--sub);text-align:center}
+.v-foot-cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin-bottom:14px}
+.v-foot-cta span{font-size:.86rem;color:var(--ink);font-weight:700}
+.v-foot-btn{display:inline-block;padding:9px 18px;border-radius:8px;background:var(--accent);
+  color:#fff;text-decoration:none;font-weight:700;font-size:.82rem}
+.v-foot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-bottom:10px}
+.v-foot-links a{color:var(--sub);text-decoration:none;border-bottom:1px solid transparent}
+.v-foot-links a:hover{color:var(--ink);border-bottom-color:var(--line-d)}
+.v-foot-note{margin:0;font-size:.7rem;line-height:1.7;color:var(--sub)}
+[data-theme="dark"] .v-foot-btn{color:#fff}
 .nav-foot{margin-top:auto;padding:16px 20px 10px;font-size:.68rem;color:var(--sub);border-top:1px solid var(--line)}
 .nav-founder{padding:6px 20px 18px;display:flex;flex-direction:column;gap:2px}
 .nav-founder .nf-label{font-family:"IBM Plex Mono",monospace;font-size:.6rem;font-weight:600;letter-spacing:.2em;color:var(--accent)}
@@ -1048,6 +1060,28 @@ body{background-image:none}
       </div>
     </div>
   </div>
+
+  <!-- 共有リンクで来た第三者向けのフッター。
+       これまで閲覧ページには規約・プライバシー・運営者連絡先への導線が一切なく、
+       アフィリエイト表記（Amazonアソシエイト規約の必須事項）も出ていなかった。
+       通報や権利侵害の申出もログイン必須で、未登録の権利者が連絡する手段が無かった。 -->
+  <footer class="v-foot">
+    <div class="v-foot-cta">
+      <span>あなたも塗装レシピを記録しませんか？</span>
+      <a class="v-foot-btn" href="/legacy.html#edit">無料で作ってみる</a>
+    </div>
+    <nav class="v-foot-links">
+      <a href="/index.html">塗装レシピ録トップ</a>
+      <a href="/legacy.html#about">このサイトについて</a>
+      <a href="/terms.html">利用規約</a>
+      <a href="/privacy.html">プライバシーポリシー</a>
+      <a href="mailto:paintlog.ops@gmail.com">お問い合わせ・権利侵害の申出</a>
+    </nav>
+    <p class="v-foot-note">
+      記載の商品名は各社の商標です。当サイトはAmazonアソシエイト・楽天アフィリエイト等の
+      アフィリエイトプログラムに参加しており、リンクから商品が購入された場合に紹介料を得ることがあります。
+    </p>
+  </footer>
 </div>
 
 <!-- ============ 作成モード(本人が編集する画面) ============ -->
