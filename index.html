@@ -862,6 +862,12 @@ var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); };
 // URLサニタイズ：http(s)のみ許可し javascript:/data: 等のスキームをブロック（保存型XSS対策）。
 // 無効なら空文字を返す（呼び出し側でリンク化せずプレーン表示する）。
+// 推測できないランダム文字列（画像パスに混ぜて、URLの総当たりを防ぐ）
+function randomToken(n){
+  var a = new Uint8Array(n || 16);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.prototype.map.call(a, function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
+}
 var safeUrl = function(u){ u = String(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
 // 一覧サムネ用に縮小版のURLを作る（カバーは1080x1080/約200KBで、一覧に何枚も並ぶと
 // 無料枠の転送量5GB/月をすぐ使い切るため）。Supabaseの画像変換で幅400・品質70にすると
@@ -1855,7 +1861,8 @@ function compressImage(file, maxEdge, quality){
 function uploadProfileBlob(kind, blob, statusEl, prevEl){
   if (!sb || !currentUserId || !blob) return;
   if (statusEl) statusEl.textContent = "アップロード中…";
-  var path = currentUserId + "/" + kind + "_" + Date.now() + ".jpg";
+  // パスに推測不可能な乱数を入れる（公開バケットはURLの推測困難性が実質的な防御のため）
+  var path = currentUserId + "/" + kind + "_" + Date.now() + "_" + randomToken(16) + ".jpg";
   sb.storage.from("profile").upload(path, blob, { contentType:"image/jpeg", upsert:true }).then(function(up){
     if (up.error) throw up.error;
     var url = sb.storage.from("profile").getPublicUrl(up.data.path).data.publicUrl;

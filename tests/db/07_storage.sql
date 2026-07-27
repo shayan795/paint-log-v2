@@ -397,10 +397,18 @@ begin
   select count(*)::int into n from storage.objects where name = uTrg::text||'/fresh2.jpg';
   perform tests.eq(ar, '自動掃除でもアップロード直後(5分前)の画像は消さない', n, 1);
 
+  -- 掃除は「写真が不要になり得る変更」のときだけ走る（017で grid / cover_url の更新時に限定）。
+  -- 題名だけの変更では画像の参照関係は変わらないので掃除は走らない＝走らないことが正しい。
+  -- （以前は閲覧数の+1でも毎回Storage全走査が起き、閲覧のたびに重い処理が発生していた）
   perform tests.put_object('recipes', uTrg::text||'/stale2.jpg', uTrg, '2 hours');
   update public.recipes set title = '編集後' where id = rT;
   select count(*)::int into n from storage.objects where name = uTrg::text||'/stale2.jpg';
-  perform tests.eq(ar, '投稿を編集したときも未参照画像の自動掃除が走る', n, 0);
+  perform tests.eq(ar, '題名だけの変更では画像の掃除は走らない（無駄な全走査を避ける）', n, 1);
+
+  -- 本文(grid)を変えたときは、参照が変わり得るので掃除が走る
+  update public.recipes set grid = jsonb_build_object('procs','[]'::jsonb,'rows','[]'::jsonb) where id = rT;
+  select count(*)::int into n from storage.objects where name = uTrg::text||'/stale2.jpg';
+  perform tests.eq(ar, '本文(grid)を変更したときは未参照画像の掃除が走る', n, 0);
 
   -- ================================================================
   -- H) purge_orphan_storage（009）— 退会済みUUIDフォルダの掃除

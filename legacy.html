@@ -3199,6 +3199,12 @@ const safePhoto = u => {
   }
   window.trackLegacy = trackLegacy;
 
+  // 推測できないランダム文字列（画像パスに混ぜて、URLの総当たりを防ぐ）
+  function randomToken(n){
+    var a = new Uint8Array(n || 16);
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    return Array.prototype.map.call(a, function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
+  }
   // 画像保存（Supabase Storage 'recipes' バケット）
   function uploadImage(uid, dataUrl, tag){
     return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
@@ -3207,7 +3213,12 @@ const safePhoto = u => {
       var ALLOWED = { "image/jpeg":"jpg", "image/png":"png", "image/webp":"webp" };
       var ctype = ALLOWED[blob.type] ? blob.type : "image/jpeg";
       var ext = ALLOWED[ctype];
-      var path = uid + "/" + Date.now() + "_" + tag + "." + ext;
+      // ★パスに推測不可能な乱数を入れる。
+      //   以前は「ユーザーID/時刻_タグ.jpg」だけで、ユーザーIDは公開情報・タグは固定・
+      //   時刻は総当たり可能なため、非公開投稿の画像URLを第三者が組み立てられた。
+      //   公開バケットは object/public/ 経由で権限判定を通らないため、URLの推測困難性が
+      //   実質的な唯一の防御になる。
+      var path = uid + "/" + Date.now() + "_" + randomToken(16) + "_" + tag + "." + ext;
       // ファイル名に時刻が入り実質不変なので、長めのキャッシュを指定して転送量を減らす
       // （既定は no-cache で、表示のたびにフル転送になり無料枠5GB/月を無駄に消費していた）
       return sb.storage.from("recipes").upload(path, blob, { contentType: ctype, upsert:true, cacheControl: "31536000" }).then(function(up){
