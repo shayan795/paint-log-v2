@@ -4323,10 +4323,14 @@ const safePhoto = u => {
     } else if (act === 'report'){
       var reason = prompt('通報の理由を選んでください（例: スパム / 不適切 / 権利侵害）', '不適切');
       if (!reason) return;
+      // ★target_comment_id を渡す。これが無いと「レシピの投稿者」への通報として扱われ、
+      //   運営が停止ボタンを押したときに無実の投稿者が停止されてしまう。
+      //   対象者(違反コメントの投稿者)と本文の控えはDB側(018)がサーバーで確定する。
       sb.from('reports').insert({
         recipe_id: c.recipe_id, reporter_id: meId,
+        target_comment_id: c.id,
         reason: 'コメント: '+reason,
-        detail: 'comment:'+c.id+' / body: '+c.body.slice(0,200)
+        detail: null
       }).then(function(r){
         if (r.error){ alert('通報に失敗：'+r.error.message); return; }
         alert('通報を受け付けました。運営が確認します。');
