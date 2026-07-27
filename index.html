@@ -226,6 +226,18 @@ button{font-family:inherit}
 .block > h3::before{content:""; width:4px; height:14px; background:var(--accent); flex:none; border-radius:1px}
 
 /* 検索欄 */
+/* 未ログインの初見向けヒーロー（何のサイトかの説明＋登録導線） */
+.hero{margin:0 0 18px;padding:20px 18px;border:1px solid var(--line-d);border-radius:14px;background:var(--bp-bg)}
+.hero-title{margin:0 0 8px;font-size:1.22rem;line-height:1.45;font-weight:800;color:var(--ink)}
+.hero-lead{margin:0 0 14px;font-size:.86rem;line-height:1.7;color:var(--ink)}
+.hero-steps{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.hero-steps li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:.8rem;color:var(--sub)}
+.hero-steps b{color:var(--accent);font-size:.82rem;min-width:5.2em}
+.hero-cta{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.hero-btn{padding:11px 22px;border:none;border-radius:9px;background:var(--accent);color:#fff;
+  font:inherit;font-weight:700;font-size:.9rem;cursor:pointer}
+.hero-link{font-size:.8rem;color:var(--sub);text-decoration:none;border-bottom:1px solid var(--line-d)}
+@media(min-width:900px){ .hero-steps{grid-template-columns:repeat(3,1fr)} .hero-steps li{flex-direction:column;gap:2px} }
 .searchbox{display:flex; align-items:center; gap:9px; border:1px solid var(--line); background:#fff; padding:11px 16px; margin-bottom:22px; margin-top:2px; border-radius:24px}
 .searchbox svg{width:19px; height:19px; stroke:var(--sub); fill:none; stroke-width:1.8; flex:none}
 .searchbox input{border:none; outline:none; font:inherit; width:100%; background:transparent; color:var(--ink)}
@@ -644,6 +656,22 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 
   <!-- 探す（起動時デフォルト） -->
   <main class="view" id="screen-discover">
+    <!-- 未ログインの初見向け。告知で来た人が最初に見る画面なのに、これまで
+         「何のサイトか」を説明する文字が1つも無く（可視テキストは見出しとボタン名だけ）、
+         登録・ログインの導線も画面上に出ていなかった。ログインすると自動的に隠れる。 -->
+    <section class="hero" id="guestHero" hidden>
+      <h1 class="hero-title">使った塗料を、もう一度たどれる。</h1>
+      <p class="hero-lead">プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる<b>無料</b>ツールです。</p>
+      <ul class="hero-steps">
+        <li><b>記録する</b><span>キット名・写真・色グループごとの工程と使った塗料を残す</span></li>
+        <li><b>見返す</b><span>次の制作で同じ色を再現できる</span></li>
+        <li><b>共有する</b><span>公開すればURL一つで作例を見せられる</span></li>
+      </ul>
+      <div class="hero-cta">
+        <button class="hero-btn" id="heroStart">無料ではじめる</button>
+        <a class="hero-link" href="/legacy.html#about">このサイトについて</a>
+      </div>
+    </section>
     <div class="searchbox">
       <svg id="searchIcon" viewBox="0 0 24 24" style="cursor:pointer"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="search" id="searchInput" placeholder="作品・塗料・塗装方法を探す" enterkeyhint="search">
@@ -1510,16 +1538,20 @@ function setAuthUI(session, profile){
     if (avBtn) avBtn.innerHTML = avatarMarkup(currentAvatar, ini);
     setSidebarAccount(ini, shown, currentAvatar);
     box.innerHTML = "";   // 上の認証欄は空（ログアウト/退会はメニュー一覧の最下部に出す）
+    var _hero = document.getElementById("guestHero"); if (_hero) _hero.hidden = true;   // ログイン中は説明を出さない
   } else {
     currentUserId = null; currentName = ""; currentAvatar = null;
     av.textContent = "ゲ"; n.textContent = "ゲスト"; s.textContent = "ログインしていません";
     if (avBtn) avBtn.textContent = "ゲ";
     setSidebarAccount("ゲ", "ゲスト", null);
+    var _hero2 = document.getElementById("guestHero"); if (_hero2) _hero2.hidden = false;   // 未ログインには説明と登録導線を出す
     box.innerHTML = sb
       ? '<button class="drawer-btn primary" id="loginBtn">ログイン</button>'
         + '<button class="drawer-btn" id="registerBtn" style="margin-top:8px">新規登録</button>'
       : '<p class="note">サーバー経由（URL）で開くとログインできます。</p>';
     if ($("loginBtn"))    $("loginBtn").onclick    = function(){ openAuth("login"); };
+    var _hs = document.getElementById("heroStart");
+    if (_hs) _hs.onclick = function(){ openAuth("register"); };
     if ($("registerBtn")) $("registerBtn").onclick = function(){ openAuth("register"); };
   }
   renderDrawer();   // ログイン状態に応じてメニュー最下部のログアウト/退会/切替を出し分け
