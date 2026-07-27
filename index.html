@@ -2787,6 +2787,13 @@ renderRising();
   if (h === "profile"){ showTab("discover", true); _pendingProfile = true; return; }   // 自分のプロフィールはセッション確定後に開く（誤ログイン表示を防ぐ）
   if (h === "notifications"){ showTab("discover", true); _pendingNotifications = true; return; }   // 通知一覧もセッション確定後に
   if (h === "reports" || h === "inquiries" || h === "analytics"){ showTab("discover", true); _pendingAdminView = h; return; }   // 運営画面は管理者確定後に
+  // #login = ログイン画面を開く。レシピページのコメント欄などから遷移してくる。
+  // これが無いと、未ログインの人が「ログイン」を押しても「探す」画面に落ちるだけで何も起きない。
+  if (h === "login" || h === "register"){
+    showTab("discover", true);
+    setTimeout(function(){ if (typeof openAuth === "function") openAuth(h === "register" ? "register" : "login"); }, 0);
+    return;
+  }
   showTab("discover", true);
 })();
 </script>

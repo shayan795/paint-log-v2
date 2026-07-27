@@ -1890,11 +1890,31 @@ function migrate(s){
     p.name = (typeof p.name === "string") ? p.name : "";
     return p;
   });
-  // 色グループ: オブジェクト以外を落とし、cells を必ずオブジェクトにする
-  s.rows = (Array.isArray(s.rows) ? s.rows : []).filter(r => r && typeof r === "object").map(r => {
+  // 色グループ: オブジェクト以外を落とし、中身を安全な型に揃える。
+  // ★part / comment は後段で .trim() を直接呼ぶため、文字列以外だと
+  //   「trim is not a function」で描画が止まり、公開レシピが閲覧不能になる。
+  //   直APIで {"part":{}} のような値を保存できてしまうので、必ずここで文字列にする。
+  const asStr = v => (typeof v === "string") ? v : (v == null ? "" : String(v));
+  s.rows = (Array.isArray(s.rows) ? s.rows : []).filter(r => r && typeof r === "object" && !Array.isArray(r)).map(r => {
     if (!r.cells || typeof r.cells !== "object" || Array.isArray(r.cells)) r.cells = {};
+    r.part    = asStr(r.part);
+    r.comment = asStr(r.comment);
+    if (r.photo != null && typeof r.photo !== "string") delete r.photo;
+    if (r.photo_pos != null && typeof r.photo_pos !== "string") delete r.photo_pos;
+    if (r.photo_mark && (typeof r.photo_mark !== "object" || Array.isArray(r.photo_mark)
+        || typeof r.photo_mark.x !== "number" || typeof r.photo_mark.y !== "number")) delete r.photo_mark;
+    // セルも形を揃える（塗料番号は数値、自由入力は文字列のみ）
+    Object.keys(r.cells).forEach(k => {
+      const c = r.cells[k];
+      if (!c || typeof c !== "object" || Array.isArray(c)){ delete r.cells[k]; return; }
+      if (c.i !== undefined && !(typeof c.i === "number" && isFinite(c.i) && c.i >= 0)) delete c.i;
+      if (c.c !== undefined && typeof c.c !== "string") c.c = asStr(c.c);
+      if (c.i === undefined && !c.c) delete r.cells[k];
+    });
     return r;
   });
+  // タイトル等のスカラーも文字列に揃える
+  ["kit","author","memo"].forEach(k => { if (s[k] != null) s[k] = asStr(s[k]); });
   // procSeqを既存idより先に進める
   s.procs.forEach(p => { const n = parseInt(String(p.id).slice(1),10); if (n >= procSeq) procSeq = n + 1; });
   // 追加工程フラグの後方互換(Codexレビュー#23): added 未定義の旧データは、既定5工程名以外を
@@ -2986,7 +3006,12 @@ var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.oncl
 //   ブラウザ標準の確認ダイアログを出す（写真は保存操作までアップロードされず、消えると復元不能）。
 window.addEventListener("beforeunload", function(e){
   try {
-    if (currentPage !== "edit") return;              // 編集中だけ
+    // ★「編集画面を開いているか」ではなく「未保存の変更を抱えているか」で判断する。
+    //   以前は currentPage === "edit" のときだけ警告していたため、
+    //   プレビュー（表示確認）に切り替えた瞬間に保護が外れ、そこでタブを閉じると
+    //   書きかけが無警告で消えていた。プレビューは編集の続きなので同じ扱いにする。
+    if (currentPage !== "edit" && currentPage !== "view") return;
+    if (currentPage === "view" && !window.__fromEditor) return;   // 他人の投稿を見ているだけなら対象外
     if (window.__publishing) return;                 // 投稿・保存の処理中は邪魔しない
     var dirty = currentRecipeId
       ? (window.__loadedSnapshot && JSON.stringify({ s: state, m: state.methods || [] }) !== window.__loadedSnapshot)
@@ -3087,6 +3112,9 @@ function exitEditor(target){
 
 /* ===================== 編集モードのタブ(閲覧プレビューへ) ===================== */
 document.getElementById("tabViewFromEdit").onclick = () => {
+  // 編集画面から来たプレビューであることを記録する。
+  // これが立っている間は、未保存の変更に対する離脱警告をプレビュー中も有効にする。
+  window.__fromEditor = true;
   showPage("view");
   showEditReturnBtn();   // プレビューから編集へ戻れるように「編集する」ボタンを表示
   var pc = document.getElementById("publishCard"); if (pc) pc.style.display = "";  // 編集→プレビューでは公開ボタン＋バナーを出す
@@ -3143,7 +3171,7 @@ const safePhoto = u => {
   const mr = hash.match(/#r=([\w\-]+)/);   // 旧・共有URL(後方互換: URL埋め込み)
   const me = hash.match(/#e=([\w\-]+)/);   // 旧・編集用URL(後方互換: 直接編集モード)
   if (mr){
-    try{ state = decodeState(mr[1]); currentPage = "view"; renderViewMode();
+    try{ window.__fromEditor = false; state = decodeState(mr[1]); currentPage = "view"; renderViewMode();
          document.getElementById("editMode").style.display = "none"; return; }catch(_){ }
   }
   if (me){
@@ -3322,6 +3350,8 @@ const safePhoto = u => {
       applyRecipe(res.data);
     });
     function applyRecipe(rec){
+      // 既存投稿の読み込み＝編集途中ではないので、離脱警告の対象から外す
+      window.__fromEditor = false;
       // migrate が失敗しても「生の(壊れた)grid」を入れない。入れると描画側で例外→白画面になり、
       // せっかくの正規化が無意味になる。安全な空stateに落とす。
       try { state = migrate(rec.grid || {}); } catch(_){ try { state = migrate({}); } catch(__){ state = newState(); } }

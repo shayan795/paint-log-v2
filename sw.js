@@ -12,8 +12,11 @@ self.addEventListener('fetch', function(event){
           '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>オフライン</title>'
           + '<body style="font-family:-apple-system,sans-serif;padding:48px 24px;text-align:center;color:#555;background:#FAFAF7">'
           + '<h1 style="font-size:1.2rem;color:#1E2430">オフラインです</h1>'
-          + '<p>インターネット接続を確認して、もう一度お試しください。</p></body>',
-          { headers: { 'content-type': 'text/html; charset=utf-8' } }
+          + '<p>インターネット接続を確認して、もう一度お試しください。</p>'
+          + '<p style="margin-top:20px"><button onclick="location.reload()" style="font:inherit;padding:10px 20px;border:1px solid #C9CFD9;border-radius:8px;background:#fff;cursor:pointer">再読み込み</button></p></body>',
+          // ★status を 503 にする。既定の 200 のままだと、ブラウザや診断処理が
+          //   「ページの取得に成功した」と誤解し、通信障害を正常状態として扱ってしまう。
+          { status: 503, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }
         );
       })
     );
