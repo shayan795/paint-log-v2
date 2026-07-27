@@ -1177,7 +1177,9 @@ function openEmailChange(currentEmail, hasPassword){
     btn.disabled = true; err.textContent = "送信中…";
     // パスワードがある場合は再認証して本人確認
     var preAuth = hasPassword
-      ? sb.auth.signInWithPassword({ email: currentEmail, password: pw })
+      ? getCaptchaToken().then(function(ct){
+          return sb.auth.signInWithPassword({ email: currentEmail, password: pw, options:{ captchaToken: ct } });
+        })
       : Promise.resolve({ data:{}, error:null });
     preAuth.then(function(pre){
       if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
@@ -1225,7 +1227,9 @@ function openPasswordChange(currentEmail){
     if (newPw !== newPw2){ err.textContent = "新しいパスワードが一致しません"; return; }
     if (newPw === oldPw){ err.textContent = "新しいパスワードが現在と同じです"; return; }
     btn.disabled = true; err.textContent = "変更中…";
-    sb.auth.signInWithPassword({ email: currentEmail, password: oldPw }).then(function(pre){
+    getCaptchaToken().then(function(ct){
+      return sb.auth.signInWithPassword({ email: currentEmail, password: oldPw, options:{ captchaToken: ct } });
+    }).then(function(pre){
       if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
       // ★returnして1本の鎖にする（returnしないと reject が拾えず「変更中…」で固まる）
       return sb.auth.updateUser({ password: newPw }).then(function(res){
@@ -1621,6 +1625,66 @@ var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // ★Supabaseは「戻り値の res.error」と「Promiseのreject（通信断など）」の2通りで失敗を知らせるため、
 //   どちらの形で来ても同じ関数に渡せるようにしている。以前は結果を見ずに成功表示していた箇所があり、
 //   実際にはメールが送れていないのに「送信しました」と出てしまっていた。
+/* ---------------- CAPTCHA（Cloudflare Turnstile） ----------------
+   何のためか: メールアドレスと登録・再送のボタンは、誰でも押せる場所にある。
+   放っておくと自動プログラムに連打され、メール送信の枠を使い切られて
+   「本物の利用者に確認メールが届かない」状態を作られてしまう。
+   CAPTCHAは「押しているのが人間か」をCloudflareに判定してもらう仕組み。
+
+   ★サイトキー(src/config.js の TURNSTILE_SITE_KEY)が未設定なら、この機能は
+     まるごと動かない。読み込みもしないし、合格証も付けない＝従来と同じ挙動。
+     Supabase側でCAPTCHAを有効にする前に、必ず先にサイトキーを入れて反映すること
+     （逆順にすると、合格証を送れずログインも登録も全部失敗する）。          */
+var _turnstileLoading = null;
+function loadTurnstile(){
+  if (window.turnstile) return Promise.resolve();
+  if (_turnstileLoading) return _turnstileLoading;
+  _turnstileLoading = new Promise(function(resolve, reject){
+    var sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    sc.async = true; sc.defer = true;
+    sc.onload = function(){ resolve(); };
+    // 読み込めなかったら、次に押したとき再挑戦できるように覚えを消す
+    sc.onerror = function(){ _turnstileLoading = null; reject(new Error("CAPTCHAを読み込めませんでした")); };
+    document.head.appendChild(sc);
+  });
+  return _turnstileLoading;
+}
+// 合格証(トークン)を1つ取る。未設定なら undefined を返す（＝何も付けない）。
+function getCaptchaToken(){
+  var key = (window.PAINTLOG_CONFIG || {}).TURNSTILE_SITE_KEY;
+  if (!key) return Promise.resolve(undefined);
+  return loadTurnstile().then(function(){
+    return new Promise(function(resolve, reject){
+      // 毎回この場で作って、終わったら消す。使い回すと前回の結果が残って
+      // 「2回目以降だけ通らない」といった分かりにくい不具合になりやすい。
+      var box = document.createElement("div");
+      box.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:99999";
+      document.body.appendChild(box);
+      var done = false, wid = null, timer = null;
+      function cleanup(){
+        if (timer) clearTimeout(timer);
+        try { if (wid !== null) window.turnstile.remove(wid); } catch(_){}
+        if (box.parentNode) box.parentNode.removeChild(box);
+      }
+      function ok(t){ if (done) return; done = true; cleanup(); resolve(t); }
+      function ng(){ if (done) return; done = true; cleanup(); reject(new Error("確認に失敗しました。もう一度お試しください。")); }
+      // Cloudflare側が無応答のまま固まると、ボタンが「送信中…」で止まったままになるので必ず打ち切る
+      timer = setTimeout(ng, 30000);
+      try {
+        wid = window.turnstile.render(box, {
+          sitekey: key,
+          // interaction-only = ふだんは何も出さず、疑わしいときだけ確認を出す
+          appearance: "interaction-only",
+          callback: ok,
+          "error-callback": ng,
+          "expired-callback": ng
+        });
+      } catch (e) { ng(); }
+    });
+  });
+}
+
 // 「送信上限に当たったか」だけを判定する。
 // ★失敗の種類で待たせ方を変えるため。通信断やパスワード形式の誤りで60秒ロックすると、
 //   直せばすぐ再送できるはずの人まで待たされて、登録を諦めてしまう。
@@ -1808,7 +1872,9 @@ function doRegister(){
   if (!agree){ err.textContent="利用規約・プライバシーポリシーへの同意が必要です"; return; }
   if (btn.disabled) return;   // 連打・二重送信の防止
   btn.disabled=true; err.textContent="登録中…";
-  sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname } }).then(function(r){
+  getCaptchaToken().then(function(ct){
+    return sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname, captchaToken: ct } });
+  }).then(function(r){
     if (r && r.error) throw r.error;
     // 同意時刻と has_password だけ立てておく（user_id/display_nameはonboardingで本人が決める）
     if (r.data && r.data.session){
@@ -1833,7 +1899,9 @@ function doLogin(){
   var email=$("aEmail").value.trim(), pw=$("aPw").value, err=$("aErr"), btn=$("aSubmit");
   if (!email || !pw){ err.textContent="メールとパスワードを入力してください"; return; }
   btn.disabled=true; err.textContent="ログイン中…";
-  sb.auth.signInWithPassword({ email:email, password:pw }).then(function(r){
+  getCaptchaToken().then(function(ct){
+    return sb.auth.signInWithPassword({ email:email, password:pw, options:{ captchaToken: ct } });
+  }).then(function(r){
     if (r.error){
       btn.disabled=false;
       // 原因を潰さず出し分ける。全部「パスワードが違います」にすると、実際は
@@ -1865,7 +1933,9 @@ function renderResend(err, email, msg){
   rb.onclick = function(){
     if (rb.disabled) return;
     rb.disabled = true; rb.textContent = "再送しています…";
-    sb.auth.resend({ type:"signup", email:email }).then(function(rr){
+    getCaptchaToken().then(function(ct){
+      return sb.auth.resend({ type:"signup", email:email, options:{ captchaToken: ct } });
+    }).then(function(rr){
       if (rr && rr.error) throw rr.error;
       startAuthCooldown("resend", 60);
       renderResend(err, email, "確認メールを再送しました。メールをご確認ください。届かない場合は迷惑メールフォルダもご確認ください。");
@@ -1883,7 +1953,9 @@ function doReset(){
   if (!EMAIL_RE.test(email)){ err.textContent="メールアドレスの形式が正しくありません"; return; }
   if (btn.disabled) return;   // 連打・二重送信の防止
   btn.disabled=true; err.textContent="送信中…";
-  sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname }).then(function(res){
+  getCaptchaToken().then(function(ct){
+    return sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname, captchaToken: ct });
+  }).then(function(res){
     if (res && res.error) throw res.error;   // ★以前はここを見ずに必ず成功表示していた
     startAuthCooldown("reset", 60);
     // ★未登録のアドレスでも文面を変えない。「そのアドレスは未登録です」と返すと、

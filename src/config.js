@@ -19,9 +19,20 @@
 //    → 本番が誤って別DB/空DBに繋ぐ経路を構造的に作らない。
 // ----------------------------------------------------------------------------
 (function () {
+  // ★TURNSTILE_SITE_KEY について
+  //   CAPTCHA（人間かどうかの確認）に Cloudflare Turnstile を使う。ここに入れるのは
+  //   「サイトキー」＝ブラウザに出してよい公開用の値（もう一方の「シークレットキー」は
+  //   Supabaseの管理画面にだけ貼る。ここには絶対に書かない）。
+  //   null の間はCAPTCHAの仕組み自体が動かない＝これまでと完全に同じ挙動になる。
+  //
+  //   ⚠️ 反映の順序を必ず守ること:
+  //     ①ここにサイトキーを入れて push（サイト側が合格証を送れる状態にする）
+  //     ②反映を確認してから、Supabase管理画面でCAPTCHAを有効にする
+  //   逆順にすると、合格証を送れないためログインも新規登録も全て失敗する。
   var PROD = {
     SUPABASE_URL: "https://zlkbaojclitlxshpxwpr.supabase.co",
     SUPABASE_ANON_KEY: "sb_publishable_ZMaz3JjPfU0q_pq7Y9QwSQ_QimbhfgX",
+    TURNSTILE_SITE_KEY: null,
   };
 
   // 開発用DB（2つ目の無料Supabase「plamo-paint-dev」）。localhostのみここに繋ぐ。
@@ -29,6 +40,9 @@
   var DEV = {
     SUPABASE_URL: "https://sazcssakhqiznochuprz.supabase.co",
     SUPABASE_ANON_KEY: "sb_publishable_AIm5N2YaD7PNKgJDpzTyFg_JIaxWvJP",
+    // 開発用。Turnstileの「常に合格する」テスト用サイトキー（Cloudflare公式が公開している値）。
+    // localhostで登録・ログインの動作確認をするときに使う。本物の鍵は要らない。
+    TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
   };
 
   var host = (location && location.hostname) || "";
