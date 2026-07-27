@@ -3157,7 +3157,21 @@ const viewPhoto = (u, px) => {
 const PHOTO_FALLBACK = ' onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=this.src.replace(\'/render/image/public/\',\'/object/public/\').split(\'?\')[0];}"';
 const safePhoto = u => {
   const s = String(u == null ? "" : u).trim();
-  return (/^https:\/\//i.test(s) || /^data:image\//i.test(s)) ? s : "";
+  // 編集中の未アップロード画像（canvas出力）はそのまま通す
+  if (/^data:image\//i.test(s)) return s;
+  if (!/^https:\/\//i.test(s)) return "";
+  // ★自分のStorage由来の画像だけを表示する。
+  //   以前は任意のHTTPS画像を通していたため、投稿者が直APIで自分のサーバーの画像URLを
+  //   設定すると、そのレシピを開いた閲覧者のIP・端末情報・時刻が第三者に送られていた
+  //   （審査後に中身を差し替えることもできた）。プライバシーポリシーの記載とも一致しない。
+  try {
+    const cfg = (window.PAINTLOG_CONFIG || {});
+    const origin = new URL(s).origin;
+    const allowed = [];
+    if (cfg.SUPABASE_URL) allowed.push(new URL(cfg.SUPABASE_URL).origin);
+    allowed.push(location.origin);
+    return allowed.indexOf(origin) >= 0 ? s : "";
+  } catch (_) { return ""; }
 };
 (function boot(){
   // 短縮URL /r/:id は V2 の loadById (Supabase経由) に任せるので、ここではスキップ

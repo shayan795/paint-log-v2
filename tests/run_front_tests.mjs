@@ -47,18 +47,25 @@ const escDef = legacy.match(/const esc = [\s\S]*?\[c\]\)\);/)[0];
 const safePhotoDef = legacy.match(/const safePhoto = [\s\S]*?\n};/)[0];
 const safeColorDef = legacy.match(/const safeColor = [\s\S]*?\n};/)[0];
 const safePosDef = legacy.match(/const safePos = [\s\S]*?\n};/)[0];
+// safePhoto は「自分のStorage由来か」を判定するため、設定と現在のオリジンを参照する。
+// テストでは本番と同じ条件を用意する。
+const SUPA = "https://zlkbaojclitlxshpxwpr.supabase.co";
 const { esc, safePhoto, safeColor, safePos } = new Function(
+  "window", "location", "URL",
   `${escDef}\n${safePhotoDef}\n${safeColorDef}\n${safePosDef}\nreturn { esc, safePhoto, safeColor, safePos };`
-)();
+)({ PAINTLOG_CONFIG: { SUPABASE_URL: SUPA } }, { origin: "https://plamo-paint.com" }, URL);
 
 // 写真URLの無害化（保存型XSS対策の要）
-const STORAGE = "https://abc.supabase.co/storage/v1/object/public/recipes/u/1_cover.jpg";
+const STORAGE = SUPA + "/storage/v1/object/public/recipes/u/1_cover.jpg";
 check("写真URLの無害化", "正規のStorage画像URLはそのまま通る", safePhoto(STORAGE), STORAGE);
 check("写真URLの無害化", "canvasで作った画像(data:image)は通る", safePhoto("data:image/png;base64,AAA"), "data:image/png;base64,AAA");
 check("写真URLの無害化", "属性を抜け出す細工は空になる", safePhoto('x" onerror="alert(1)'), "");
 check("写真URLの無害化", "javascript: は空になる", safePhoto("javascript:alert(1)"), "");
 check("写真URLの無害化", "JAVASCRIPT:（大文字）も空になる", safePhoto("JAVASCRIPT:alert(1)"), "");
 check("写真URLの無害化", "http(暗号化なし)は通さない", safePhoto("http://example.com/a.jpg"), "");
+check("写真URLの無害化", "外部サイトのHTTPS画像は通さない（閲覧者の追跡を防ぐ）", safePhoto("https://evil.example.com/track.jpg"), "");
+check("写真URLの無害化", "似せた別ドメインも通さない", safePhoto("https://zlkbaojclitlxshpxwpr.supabase.co.evil.com/a.jpg"), "");
+check("写真URLの無害化", "自サイト配信の画像は通る", safePhoto("https://plamo-paint.com/assets/logo-mark.png"), "https://plamo-paint.com/assets/logo-mark.png");
 check("写真URLの無害化", "相対パスは通さない", safePhoto("/uid/1.png"), "");
 check("写真URLの無害化", "data:text/html は通さない", safePhoto("data:text/html,<script>alert(1)</script>"), "");
 check("写真URLの無害化", "空・null・数値でも壊れない", [safePhoto(""), safePhoto(null), safePhoto(undefined), safePhoto(123)], ["", "", "", ""]);
