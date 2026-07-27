@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>塗装レシピ録 — Paint Log｜プラモデル・模型の塗装レシピ記録ツール</title>
-<meta name="description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を色グループごとに記録して、URL一つで共有できる無料ツール。部位ごとの色分け・塗装手順を残せます。">
+<meta name="description" content="使った塗料を、もう一度たどれる。プラモデル・模型の塗装レシピを色グループごとに記録して、公開・共有できる無料ツール。部位ごとの色分け・塗装手順を残せます。">
 <!-- OGP / Twitter Card --><!--OG_START-->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="塗装レシピ録 / Paint Log">
 <meta property="og:title" content="塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール">
-<meta property="og:description" content="使った塗料を、もう一度たどれる。プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる無料ツールです。">
+<meta property="og:description" content="使った塗料を、もう一度たどれる。プラモデル・模型の塗装レシピを記録して、公開・共有できる無料ツールです。">
 <meta property="og:url" content="https://plamo-paint.com/">
 <meta property="og:image" content="https://plamo-paint.com/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -17,7 +17,7 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール">
-<meta name="twitter:description" content="使った塗料を、もう一度たどれる。「塗装レシピ」を記録してURL一つで共有できる無料ツール。">
+<meta name="twitter:description" content="使った塗料を、もう一度たどれる。塗装レシピを記録して、公開・共有できる無料ツール。">
 <meta name="twitter:image" content="https://plamo-paint.com/og-image.png"><!--OG_END-->
 <link rel="canonical" href="https://plamo-paint.com/">
 <link rel="icon" href="/favicon.ico?v=2" sizes="any">
@@ -227,6 +227,9 @@ button{font-family:inherit}
 
 /* 検索欄 */
 /* 未ログインの初見向けヒーロー（何のサイトかの説明＋登録導線） */
+.tag-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 16px}
+.tag-empty p{margin:0}
+.tag-empty-sub{font-size:.8rem;color:var(--sub)}
 .hero{margin:0 0 18px;padding:20px 18px;border:1px solid var(--line-d);border-radius:14px;background:var(--bp-bg)}
 .hero-title{margin:0 0 8px;font-size:1.22rem;line-height:1.45;font-weight:800;color:var(--ink)}
 .hero-lead{margin:0 0 14px;font-size:.86rem;line-height:1.7;color:var(--ink)}
@@ -661,7 +664,7 @@ textarea.pf-field{resize:vertical; line-height:1.6}
          登録・ログインの導線も画面上に出ていなかった。ログインすると自動的に隠れる。 -->
     <section class="hero" id="guestHero" hidden>
       <h1 class="hero-title">使った塗料を、もう一度たどれる。</h1>
-      <p class="hero-lead">プラモデル・模型の「塗装レシピ」を記録して、URL一つで共有できる<b>無料</b>ツールです。</p>
+      <p class="hero-lead">プラモデル・模型の塗装レシピを記録して、公開・共有できる<b>無料</b>ツールです。</p>
       <ul class="hero-steps">
         <li><b>記録する</b><span>キット名・写真・色グループごとの工程と使った塗料を残す</span></li>
         <li><b>見返す</b><span>次の制作で同じ色を再現できる</span></li>
@@ -1270,7 +1273,17 @@ function openTagResults(slug, label){
     .then(function(res){
       if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
       var rows = res.data || [];
-      if (!rows.length){ list.innerHTML = '<p class="pf-empty">この塗装方法の公開投稿はまだありません。</p>'; return; }
+      if (!rows.length){
+        // 行き止まりにしない。まだ誰も投稿していないタグは「最初の1件になれる」入口として見せる。
+        list.innerHTML = '<div class="pf-empty tag-empty">'
+          + '<p>この塗装方法の投稿は、まだありません。</p>'
+          + '<p class="tag-empty-sub">あなたの作例が最初の1件になります。</p>'
+          + '<button class="hero-btn" id="tagEmptyStart">この塗装方法で投稿する</button>'
+          + '</div>';
+        var _tes = document.getElementById("tagEmptyStart");
+        if (_tes) _tes.onclick = function(){ location.href = "/legacy.html#edit"; };
+        return;
+      }
       // 上部おすすめ＝画像のある投稿を人気（トレンド）順で横スクロール（最大8件）
       var withCover = rows.filter(function(r){ return r.cover_url; }).sort(byTrending).slice(0, 8);
       if (withCover.length){
@@ -1924,8 +1937,36 @@ function openImageCropper(file, opts, onDone){
 // 退会＝アカウント＋全データ完全削除（サーバの delete_user 関数を呼ぶ。cascadeで投稿等も消える）
 function deleteAccount(){
   if (!sb || !currentUserId) return;
-  if (!confirm("本当に退会しますか？\nアカウント・プロフィール・投稿など、あなたのデータはすべて完全に削除され、元に戻せません。")) return;
-  if (!confirm("最終確認：すべてのデータを削除します。よろしいですか？")) return;
+  // ★3段階の確認。退会は取り消しが効かず、写真も完全に消えるため、
+  //   「はい」を2回押すだけでは誤操作で到達しうる。最後に文字入力を挟んで意図を確かめる。
+  //   （退会そのものは今の場所・今の手軽さのまま残す。すぐ辞められる安心感が使い始めの心理的な壁を下げるため）
+
+  // 1段階目: 何が消えるかを具体的に示す
+  if (!confirm(
+      "退会すると、次のデータがすべて削除されます。\n\n" +
+      "・アカウントとプロフィール\n" +
+      "・投稿したレシピ（公開・非公開とも）\n" +
+      "・アップロードした写真\n" +
+      "・下書き、保存した投稿、コメント\n\n" +
+      "続けますか？")) return;
+
+  // 2段階目: 取り消せないことを明示
+  if (!confirm(
+      "この操作は取り消せません。\n\n" +
+      "削除したデータは運営側でも復元できません。\n" +
+      "写真は撮り直しがきかないものが含まれているかもしれません。\n\n" +
+      "本当に退会しますか？")) return;
+
+  // 3段階目: 文字入力（誤タップ・誤クリックでは絶対に通らない）
+  var typed = prompt(
+      "最終確認です。\n\n" +
+      "退会を実行するには、下の欄に「退会する」と入力してください。\n" +
+      "（やめる場合はキャンセルを押してください）", "");
+  if (typed === null) return;
+  if (typed.trim() !== "退会する"){
+    alert("入力が一致しなかったため、退会を中止しました。\nデータはそのまま残っています。");
+    return;
+  }
   var uid = currentUserId;
   // 画像はStorage API経由で先に削除（DBからの直接削除は禁止のため）→ その後アカウント削除
   sb.storage.from("profile").list(uid).then(function(res){
@@ -2491,12 +2532,23 @@ function renderCategories(){
   if (!sb || !sb.rpc){ hide(); return; }
   sb.rpc("popular_methods", { limit_n: 20 }).then(function(res){
     var rows = (res && !res.error && res.data) ? res.data : [];
-    if (!rows.length){ hide(); return; }          // 1件も無ければセクションごと非表示
-    renderCategoryTiles(rows.map(function(r){
+    // 投稿があるタグを先頭に、その後ろにまだ投稿の無いプリセットを並べる。
+    // 「賑わい」と「実際に中身がある順」を両立させ、空のタグを押しても
+    // 行き止まりではなく投稿の入口になるようにしてある。
+    var used = {};
+    var tiles = rows.map(function(r){
+      used[r.method] = 1;
       return { slug:r.method, label: METHOD_LABEL[r.method] || ("#"+r.method) };
-    }));
+    });
+    PAINT_METHODS.forEach(function(m){ if (!used[m.slug]) tiles.push({ slug:m.slug, label:m.label }); });
+    if (!tiles.length){ hide(); return; }
+    renderCategoryTiles(tiles);
     if (sec) sec.style.display = "";
-  }, hide);
+  }, function(){
+    // 集計が取れないときはプリセットだけでも出す（セクションごと消すより自然）
+    renderCategoryTiles(PAINT_METHODS.map(function(m){ return { slug:m.slug, label:m.label }; }));
+    if (sec) sec.style.display = "";
+  });
 }
 // 人気の塗装方法タイルに代表画像（そのタグの人気＝トレンド最上位投稿のcover）を差し込む
 function loadTileCovers(){
