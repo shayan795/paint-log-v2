@@ -1181,7 +1181,9 @@ function openEmailChange(currentEmail, hasPassword){
       : Promise.resolve({ data:{}, error:null });
     preAuth.then(function(pre){
       if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
-      sb.auth.updateUser({ email: newEm }).then(function(res){
+      // ★returnして1本の鎖にする。returnしないと updateUser の reject（通信断など）が
+      //   どこにも届かず、「送信中…」のまま永久に固まる。
+      return sb.auth.updateUser({ email: newEm }).then(function(res){
         if (res.error){ btn.disabled = false; err.textContent = "送信に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_email_change_failed", { reason: res.error.message.slice(0,80) }); return; }
         if (typeof track === "function") track("settings_email_change_requested", {});
         notifySelf("email_changed", "メールアドレス変更を申請しました", "新しいメールアドレス: "+newEm+"（確認リンクをクリックすると変更が完了します）", "index.html#settings");
@@ -1191,6 +1193,9 @@ function openEmailChange(currentEmail, hasPassword){
           + '<button class="auth-submit" id="emOk">閉じる</button>';
         $("emOk").onclick = closeAuth;
       });
+    }).catch(function(e){
+      btn.disabled = false;
+      err.textContent = authErrText(e, "送信に失敗しました");
     });
   };
 }
@@ -1222,7 +1227,8 @@ function openPasswordChange(currentEmail){
     btn.disabled = true; err.textContent = "変更中…";
     sb.auth.signInWithPassword({ email: currentEmail, password: oldPw }).then(function(pre){
       if (pre.error){ btn.disabled = false; err.textContent = "現在のパスワードが違います"; return; }
-      sb.auth.updateUser({ password: newPw }).then(function(res){
+      // ★returnして1本の鎖にする（returnしないと reject が拾えず「変更中…」で固まる）
+      return sb.auth.updateUser({ password: newPw }).then(function(res){
         if (res.error){ btn.disabled = false; err.textContent = "変更に失敗しました：" + res.error.message; if (typeof track==="function") track("settings_password_change_failed", { reason: res.error.message.slice(0,80) }); return; }
         // パスワードを実際に設定したので has_password=true を立てる（次回設定画面で「変更する」が出る）
         sb.from("profiles").update({ has_password: true }).eq("id", currentUserId).then(function(){});
@@ -1231,6 +1237,9 @@ function openPasswordChange(currentEmail){
         closeAuth();
         if (typeof toast === "function") toast("パスワードを変更しました");
       });
+    }).catch(function(e){
+      btn.disabled = false;
+      err.textContent = authErrText(e, "変更に失敗しました");
     });
   };
 }
@@ -1607,6 +1616,47 @@ function doLogout(){
 
 /* ============ ログイン / 新規登録 / パスワード再設定 ============ */
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// 認証系の失敗を日本語にする。
+// ★Supabaseは「戻り値の res.error」と「Promiseのreject（通信断など）」の2通りで失敗を知らせるため、
+//   どちらの形で来ても同じ関数に渡せるようにしている。以前は結果を見ずに成功表示していた箇所があり、
+//   実際にはメールが送れていないのに「送信しました」と出てしまっていた。
+// 「送信上限に当たったか」だけを判定する。
+// ★失敗の種類で待たせ方を変えるため。通信断やパスワード形式の誤りで60秒ロックすると、
+//   直せばすぐ再送できるはずの人まで待たされて、登録を諦めてしまう。
+function isRateLimited(e){
+  var m = ((e && (e.message || e.error_description || e.msg)) || "") + " " +
+          ((e && (e.code || e.name)) || "") + " " + ((e && e.status) || "");
+  return /rate limit|rate_limit|too many|429|only request this after/i.test(m);
+}
+function authErrText(e, fallback){
+  var m = ((e && (e.message || e.error_description || e.msg)) || "") + " " +
+          ((e && (e.code || e.name)) || "") + " " + ((e && e.status) || "");
+  // 送信上限（Supabaseの over_email_send_rate_limit / HTTP 429）は原因も対処も違うので必ず区別する
+  // Supabaseは "For security purposes, you can only request this after N seconds" とだけ返すこともあるので拾う
+  if (/rate limit|rate_limit|too many|429|only request this after/i.test(m)) return "短時間に送りすぎです。数分おいてからお試しください。";
+  if (/failed to fetch|networkerror|load failed|network/i.test(m)) return "通信に失敗しました。電波の良い場所でもう一度お試しください。";
+  return fallback + ((e && e.message) ? "：" + e.message : "。時間をおいてお試しください。");
+}
+
+// メール送信の連打防止。60秒はボタンを押せなくし、残り秒数を表示する。
+// ★解除時刻をグローバルに持つのは、画面（authBody）を作り直してもボタンが復活しないようにするため。
+//   送信上限に当たった状態で叩き続けると、解除がさらに遠のく。
+var authCooldownUntil = {};   // { 用途キー: 解除される時刻(ms) }
+function startAuthCooldown(key, sec){ authCooldownUntil[key] = Date.now() + (sec || 60) * 1000; }
+function applyAuthCooldown(btn, key, label){
+  if (!btn) return;
+  var timer = setInterval(tick, 500);
+  tick();
+  function tick(){
+    // 画面が作り直されてボタンがDOMから消えたらタイマーを止める（放置するとメモリを食う）
+    if (!document.body.contains(btn)){ clearInterval(timer); return; }
+    var left = Math.ceil(((authCooldownUntil[key] || 0) - Date.now()) / 1000);
+    if (left > 0){ btn.disabled = true; btn.textContent = label + "（あと" + left + "秒）"; }
+    else { btn.disabled = false; btn.textContent = label; clearInterval(timer); }
+  }
+}
+
 function openAuth(mode){
   if (!sb){ alert("ログインはサーバー経由（URL）で開いたときに利用できます。"); return; }
   closeDrawer(); $("authOverlay").hidden = false; renderAuth(mode || "login");
@@ -1684,6 +1734,7 @@ function renderAuth(mode){
     bindCopyUrl();
     $("aToLogin").onclick = function(){ renderAuth("login"); };
     $("aSubmit").onclick = doRegister;
+    applyAuthCooldown($("aSubmit"), "signup", "登録する");   // 直前に送信していれば残り秒数を出して押させない
   } else if (mode === "newpw"){
     // 再設定メールのリンクから戻ってきた直後（PASSWORD_RECOVERY）に出す画面。
     // このセッションは「本人がメールを受け取れた」ことで認証済みなので、現在のパスワードは要求しない
@@ -1709,6 +1760,9 @@ function renderAuth(mode){
         if (uid) sb.from("profiles").update({ has_password: true }).eq("id", uid).then(function(){}, function(){});
         try { history.replaceState(null, "", location.pathname); } catch(_){}   // URLの復旧トークンを消す
         authMessage("設定しました", "新しいパスワードでログインできます。");
+      }).catch(function(e){
+        // 通信断などの reject もここで拾う（拾わないと「設定中…」のまま固まる）
+        btn.disabled = false; err.textContent = authErrText(e, "設定に失敗しました");
       });
     };
   } else if (mode === "reset"){
@@ -1722,6 +1776,7 @@ function renderAuth(mode){
       + '<div class="auth-foot"><button class="auth-link" id="aToLogin">ログインに戻る</button></div>';
     $("aToLogin").onclick = function(){ renderAuth("login"); };
     $("aSubmit").onclick = doReset;
+    applyAuthCooldown($("aSubmit"), "reset", "再設定メールを送る");   // 直前に送信していれば残り秒数を出して押させない
   } else {
     b.innerHTML =
       '<h2>ログイン</h2>'
@@ -1751,16 +1806,27 @@ function doRegister(){
   if (pw.length < 6){ err.textContent="パスワードは6文字以上にしてください"; return; }
   if (pw !== pw2){ err.textContent="パスワードが一致しません"; return; }
   if (!agree){ err.textContent="利用規約・プライバシーポリシーへの同意が必要です"; return; }
+  if (btn.disabled) return;   // 連打・二重送信の防止
   btn.disabled=true; err.textContent="登録中…";
   sb.auth.signUp({ email:email, password:pw, options:{ emailRedirectTo: location.origin+location.pathname } }).then(function(r){
-    if (r.error){ err.textContent="登録に失敗：" + r.error.message; btn.disabled=false; return; }
+    if (r && r.error) throw r.error;
     // 同意時刻と has_password だけ立てておく（user_id/display_nameはonboardingで本人が決める）
     if (r.data && r.data.session){
       currentUserId = r.data.user.id;   // 即ログイン（確認メールOFF時）→ onboardingが自動で出る
       saveProfile({ terms_agreed_at: new Date().toISOString(), has_password: true }, function(){ closeAuth(); });
     } else {
-      authMessage("確認メールを送信しました", "メール内のリンクを開くと登録が完了します。\nリンクを開いた後、ユーザーID・ニックネームを設定してください。");
+      startAuthCooldown("signup", 60);
+      // ★既に登録済みのアドレスでもSupabaseは同じ成功を返す（=会員かどうかを漏らさない）ので、文面もそれに合わせる
+      authMessage("確認メールを送信しました",
+        "メール内のリンクを開くと登録が完了します。\n" +
+        "リンクを開いた後、ユーザーID・ニックネームを設定してください。\n" +
+        "届かない場合は迷惑メールフォルダもご確認ください。");
     }
+  }).catch(function(e){
+    // ★res.error だけでなく通信断などの reject もここで受ける（以前は握りつぶされていた）
+    err.textContent = authErrText(e, "登録に失敗しました");
+    if (isRateLimited(e)){ startAuthCooldown("signup", 60); applyAuthCooldown(btn, "signup", "登録する"); }
+    else { btn.disabled = false; btn.textContent = "登録する"; }   // 直せばすぐ再挑戦できる失敗は待たせない
   });
 }
 function doLogin(){
@@ -1774,15 +1840,7 @@ function doLogin(){
       // 「メール確認がまだ」の人が延々パスワード再設定に流れて詰む。
       var m = (r.error.message || "") + " " + (r.error.code || "");
       if (/not confirmed|not_confirmed/i.test(m)){
-        err.innerHTML = 'メールアドレスの確認がまだ完了していません。届いている確認メールのリンクを開いてください。'
-                      + ' <button type="button" class="auth-link" id="aResend">確認メールを再送する</button>';
-        var rb = $("aResend");
-        if (rb) rb.onclick = function(){
-          rb.disabled = true; err.textContent = "再送しています…";
-          sb.auth.resend({ type:"signup", email:email }).then(function(rr){
-            err.textContent = (rr && rr.error) ? ("再送に失敗しました：" + rr.error.message) : "確認メールを再送しました。メールをご確認ください。";
-          }, function(){ err.textContent = "再送に失敗しました。時間をおいてお試しください。"; });
-        };
+        renderResend(err, email, "メールアドレスの確認がまだ完了していません。届いている確認メールのリンクを開いてください。");
         return;
       }
       if (/rate limit|too many/i.test(m)){ err.textContent="試行回数が多すぎます。しばらく待ってからお試しください。"; return; }
@@ -1790,14 +1848,54 @@ function doLogin(){
       return;
     }
     closeAuth();   // onAuthStateChange がUIを更新
+  }).catch(function(e){
+    // ★通信断などで reject された場合。以前はここが無く、ボタンが押せないまま
+    //   「ログイン中…」で固まっていた（何も起きていないように見える）。
+    btn.disabled=false;
+    err.textContent = authErrText(e, "ログインに失敗しました");
   });
 }
+// 「確認メールを再送」のメッセージ＋ボタンをまとめて描き直す。
+// ★ボタンがメッセージ欄(#aErr)の中にあるため、err.textContent で文言だけ書き換えると
+//   ボタンごと消えてしまい、カウントダウンも失われる。そこで毎回セットで描き直す。
+function renderResend(err, email, msg){
+  err.innerHTML = esc(msg) + ' <button type="button" class="auth-link" id="aResend">確認メールを再送する</button>';
+  var rb = $("aResend"); if (!rb) return;
+  applyAuthCooldown(rb, "resend", "確認メールを再送する");
+  rb.onclick = function(){
+    if (rb.disabled) return;
+    rb.disabled = true; rb.textContent = "再送しています…";
+    sb.auth.resend({ type:"signup", email:email }).then(function(rr){
+      if (rr && rr.error) throw rr.error;
+      startAuthCooldown("resend", 60);
+      renderResend(err, email, "確認メールを再送しました。メールをご確認ください。届かない場合は迷惑メールフォルダもご確認ください。");
+    }).catch(function(e){
+      // 送信上限のときだけ連打を止める（叩き続けると解除が遠のくため）。
+      // 通信断などは直せばすぐ再送できるので待たせない。
+      if (isRateLimited(e)) startAuthCooldown("resend", 60);
+      renderResend(err, email, authErrText(e, "再送に失敗しました"));
+    });
+  };
+}
+
 function doReset(){
   var email=$("aEmail").value.trim(), err=$("aErr"), btn=$("aSubmit");
   if (!EMAIL_RE.test(email)){ err.textContent="メールアドレスの形式が正しくありません"; return; }
+  if (btn.disabled) return;   // 連打・二重送信の防止
   btn.disabled=true; err.textContent="送信中…";
-  sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname }).then(function(){
-    authMessage("送信しました", "パスワード再設定メールを送りました。メール内のリンクから再設定してください。");
+  sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname }).then(function(res){
+    if (res && res.error) throw res.error;   // ★以前はここを見ずに必ず成功表示していた
+    startAuthCooldown("reset", 60);
+    // ★未登録のアドレスでも文面を変えない。「そのアドレスは未登録です」と返すと、
+    //   誰が会員かを外部から総当たりで調べられてしまうため（アカウント列挙）。
+    authMessage("送信しました",
+      "ご登録があれば、パスワード再設定メールをお送りしました。\n" +
+      "メール内のリンクから再設定してください。\n" +
+      "届かない場合は迷惑メールフォルダもご確認ください。");
+  }).catch(function(e){
+    err.textContent = authErrText(e, "送信に失敗しました");
+    if (isRateLimited(e)){ startAuthCooldown("reset", 60); applyAuthCooldown(btn, "reset", "再設定メールを送る"); }
+    else { btn.disabled = false; btn.textContent = "再設定メールを送る"; }
   });
 }
 
@@ -1977,10 +2075,27 @@ function deleteAccount(){
   }
   var uid = currentUserId;
   // 画像はStorage API経由で先に削除（DBからの直接削除は禁止のため）→ その後アカウント削除
-  sb.storage.from("profile").list(uid).then(function(res){
+  // ★以前は list / remove の error を見ずに次へ進んでいたため、画像が消せていないのに
+  //   アカウントだけ消え、誰のものか分からない画像がサーバーに残り続ける恐れがあった。
+  //   ただし「画像が消せない＝退会できない」では利用者が辞められず最悪なので、
+  //   本人に事実を伝えたうえで続行するか選んでもらう形にする。
+  var removeImages = sb.storage.from("profile").list(uid).then(function(res){
+    if (res && res.error) throw res.error;
     var files = ((res && res.data) || []).map(function(f){ return uid + "/" + f.name; });
-    return files.length ? sb.storage.from("profile").remove(files) : Promise.resolve();
-  }).then(function(){
+    if (!files.length) return;
+    return sb.storage.from("profile").remove(files).then(function(rm){
+      if (rm && rm.error) throw rm.error;
+    });
+  }).catch(function(e){
+    var ok = confirm(
+      "プロフィール画像の削除に失敗しました。\n（理由: " + ((e && e.message) || "不明") + "）\n\n" +
+      "このまま退会すると、画像がサーバーに残る可能性があります。\n" +
+      "退会を続けますか？\n\n" +
+      "※「キャンセル」を選ぶと退会を中止します。通信状況を確かめて、あとでもう一度お試しください。");
+    if (!ok) throw { cancelled: true };   // 下のcatchで「中止」として扱う印
+  });
+
+  removeImages.then(function(){
     return sb.rpc("delete_user");
   }).then(function(res){
     if (res && res.error) throw res.error;
@@ -1988,7 +2103,10 @@ function deleteAccount(){
   }).then(function(){
     // 認証を一切初期化しない静的ページへ（自動再ログインが起きない）
     location.href = "goodbye.html";
-  }).catch(function(e){ alert("退会に失敗しました：" + (e.message || e)); });
+  }).catch(function(e){
+    if (e && e.cancelled){ alert("退会を中止しました。\nデータはそのまま残っています。"); return; }
+    alert("退会に失敗しました：" + ((e && e.message) || e));
+  });
 }
 
 // 自分の投稿一覧（段2で実投稿が入るまでは空状態）

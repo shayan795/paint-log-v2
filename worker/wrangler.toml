@@ -8,6 +8,16 @@ routes = [
   { pattern = "www.plamo-paint.com/*", zone_name = "plamo-paint.com" },
 ]
 
+# ログの保持（Workers Logs）。
+# これが無いと console.error の出力はどこにも残らず、障害が起きても「何が起きたか」を
+# 後から調べる手段が一切ない（Cloudflareの画面でリアルタイムに見ている時だけ見える）。
+# 有効にすると Cloudflare 側に一定期間ログが保存され、事後調査ができるようになる。
+# head_sampling_rate = 1 は「全リクエストを記録する」の意味。個人規模のアクセス量なので
+# 間引かず全部残す（無料枠に収まる範囲）。
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 # 公開して問題ない値（anon publishable key も含む）
 [vars]
 # 配信元。GitHub Pages を使う（raw.githubusercontent.com はCDN用途を想定しておらず、

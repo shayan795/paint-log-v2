@@ -51,7 +51,7 @@ Supabase（認証・PostgreSQL・Storage・RLS・RPC・トリガー）
 | `worker/wrangler.toml` | Worker設定（ルート・環境変数） |
 | `supabase/schema.sql` | **DBの正本**：全テーブル・RLS・RPC・トリガー・インデックス |
 | `supabase/seed_paints_realigned.sql` | 塗料マスターの整列seed |
-| `migrations/00X_*.sql` | schema.sql以降に足した追加SQL（検索RPC・events保護・NGワード等） |
+| `migrations/0XX_*.sql` | schema.sql以降に足した追加SQL（検索RPC・events保護・NGワード・Storageポリシー・BAN等）。**連番順に全部実行が必須**（§5） |
 | `manifest.webmanifest` `sw.js` | PWA（ホーム画面追加・オフライン最小対応） |
 | `robots.txt` | （Workerが動的返却するが静的も同梱） |
 | `BOMBS.md` | **時限爆弾台帳**（「今は動くが前提が崩れると壊れる」箇所の記録・§7） |
@@ -97,13 +97,51 @@ python3 -m http.server 4173
   - ロジック：**`localhost` かつ `DEV` 設定済みのときだけ DEV**。それ以外（本番ドメイン含む）は**必ず PROD**（フェイルセーフ＝本番が誤って別DBに繋ぐ経路を作らない）。
 
 ### 開発用DBを用意する手順（dev環境を"稼働"させる）
+
+⚠️ **順番が重要**。下の①〜⑦をこの順で実行しないと本番と同じ状態にならない。
+特に **Storageバケットを migrations より前に作る**こと（`migrations/010`・`016` はバケットが
+既に存在している前提で、そのポリシーと容量上限を書き換えるため。先に作っていないと
+`update storage.buckets` が **0行更新（＝エラーも出ずに無視）** され、
+1ファイル10MB制限やMIME制限が**付かないまま**になる）。
+
 1. Supabaseで**2つ目の無料プロジェクト**を作成（無料枠は2プロジェクトまで）。
-2. そのプロジェクトの SQL Editor で **`supabase/schema.sql` → `supabase/seed_paints_realigned.sql` → `migrations/001`〜`007`（連番順）** を実行。
+2. SQL Editor で **`supabase/schema.sql`** を実行（テーブル・RLS・RPCの土台）。
+3. **【2026年5月以降に作成したプロジェクトのみ】Data API用のGRANTを付ける。**
+   新しいSupabaseプロジェクトでは `anon` / `authenticated` にテーブル・シーケンスの権限が
+   **既定で付かなくなった**。付けないと画面が `permission denied for table recipes` 等で
+   何も表示できない（本番プロジェクトはそれ以前に作ったので既に付いている）。
+   **必ず migrations より前に1回だけ**実行する:
+   ```sql
+   grant usage on schema public to anon, authenticated;
+   grant all on all tables    in schema public to anon, authenticated;
+   grant all on all sequences in schema public to anon, authenticated;
+   -- migrations で後から作られるテーブルにも自動で付くようにしておく
+   alter default privileges in schema public grant all on tables    to anon, authenticated;
+   alter default privileges in schema public grant all on sequences to anon, authenticated;
+   ```
+   - 権限を広く付けても安全なのは**防御の本体がRLS**だから（Supabase標準の設計と同じ）。
+   - 🚫 **migrations実行後にこのGRANTをやり直してはいけない。**
+     `004`/`007`/`016` が意図的に外している権限（例: プロフィールの内部列を匿名から隠す
+     `revoke select on public.profiles from anon`）まで復活し、**脆弱な状態に戻る**。
+   - Dashboard → Settings → API の **Exposed schemas に `public` が入っている**ことも確認する。
+4. **`supabase/seed_paints_realigned.sql`** を実行（塗料マスター512色）。
    - ⚠️ 塗料seedは **`seed_paints_realigned.sql` が正本**（`seed_paints.sql` は並び順がズレた旧ファイル・使用禁止）。
-   - ⚠️ migrations を飛ばすと**修正前の脆弱な定義**のままになる（schema.sqlは初期設計、以降の修正はmigrations側）。
-3. `src/config.js` の `DEV` に、devプロジェクトの `SUPABASE_URL` と anonキーを貼る。
-4. `python3 -m http.server 4173` で localhost を開くと**自動でdev DBに接続**（本番は無影響）。
-5. Storageバケット（`recipes` / `profile`）とそのポリシー（`owner = auth.uid()`）もdev側に作成する。
+5. **Storageバケットを作る**（Dashboard → Storage → New bucket）。
+   - `recipes` … Public bucket
+   - `profile` … Public bucket
+   - ポリシーはこの時点では未設定でよい（次の `migrations/010` が正しい定義を入れる）。
+6. **`migrations/001` 〜 `019` を連番順に全部**実行する（`migrations/` フォルダにある連番SQLを
+   飛ばさず順番に。現時点の最新は `019`）。
+   - ⚠️ **migrations を飛ばすと、修正前の脆弱な定義のままになる。**
+     `schema.sql` は初期設計であり、**その後のセキュリティ修正はすべて migrations 側にある**
+     （匿名でのStorage一覧、内部列の露出、削除時の画像残り、BAN、上限など）。
+     `007` までで止めると `008`〜`019` の修正が丸ごと欠落する。
+   - すべて冪等（何度実行しても安全）に書いてあるので、途中で失敗したら直して再実行してよい。
+7. （任意）DBテストを入れる場合は `tests/db/00_harness.sql` → `01`〜`10_*.sql` を実行（§6.5）。
+
+最後に:
+- `src/config.js` の `DEV` に、devプロジェクトの `SUPABASE_URL` と anonキーを貼る。
+- `python3 -m http.server 4173` で localhost を開くと**自動でdev DBに接続**（本番は無影響）。
 
 ### Worker: `worker/wrangler.toml` の `[vars]`
 - `ORIGIN` … GitHub raw のベースURL（配信元）
@@ -120,20 +158,32 @@ python3 -m http.server 4173
 - **セキュリティの要はRLS**：非公開投稿・メール等は本人のみ。他人のデータは更新/削除不可。`is_admin()` はDB側判定＋自己昇格防止トリガー。CSS/画像出力は `safeColor()`/`safeUrl()`/`esc()` でサニタイズ。
 - **バックアップ**：別リポジトリ **`shayan795/plamo-paint-backups`**（Private）でGitHub Actions cronが毎日 pg_dump → 最新7個ローテ保存。
   - ⚠️ **pg_dump はデータベースの中身だけ。利用者がアップロードした写真（Storage）は対象外**。
-    写真は `bash scripts/backup_storage.sh` で別途取得する（手順はスクリプト冒頭のコメント）。保存先 `backups/` はGit管理外。
+    写真は `bash scripts/backup_storage.sh` で別途取得する。保存先 `backups/storage/<YYYYMMDD>/` はGit管理外。
+    - このスクリプトは**直近7世代だけ残して古いものを自動削除**し、取得したファイルの一覧とサイズを
+      各世代の `manifest.txt` に記録する。**1件でも取得に失敗すると終了コード1で異常終了**する
+      （cron等に載せたときに黙って壊れないようにするため）。
+    - ⚠️ **既定では「公開レシピ・公開プロフィールが参照している画像」しか取れない**（匿名キーのため）。
+      非公開投稿・下書き・孤児ファイルまで含めた**完全版**にするには、SQL Editorで
+      `select bucket_id || '/' || name from storage.objects where bucket_id in ('recipes','profile') order by 1;`
+      の結果を `scripts/storage_paths.local.txt` に貼ってから実行する（詳細はスクリプト冒頭のコメント）。
   - ⚠️ **GitHub Actions の cron は、リポジトリに60日間操作が無いと自動停止する**。停止すると通知は出ないため、
     月に一度は当該リポジトリで実行履歴を確認するか、`workflow_dispatch` で手動実行して活動を維持すること。
 
 ---
 
-## 6.5 自動テスト（632本）
+## 6.5 自動テスト（DB 604本 ＋ 画面 31本 ＋ Worker）
 
 変更後に「他が壊れていないか」を機械的に確かめる。詳細は **`tests/README.md`**。
 
 | 対象 | 本数 | 実行方法 |
 |---|---:|---|
 | データベース（RLS・トリガー・RPC・Storage） | 604 | 開発用プロジェクトの SQL Editor で `select * from public.test_report();` |
-| 画面まわり（XSS・CSS注入・サムネイル） | 28 | `node tests/run_front_tests.mjs` |
+| 画面まわり（XSS・CSS注入・サムネイル） | 31 | `node tests/run_front_tests.mjs` |
+| Worker（OGP/JSON-LD注入・プロキシ・cover_url検証） | 実行時に表示 | `node tests/run_worker_tests.mjs` |
+
+- **`node` のテストはビルド不要・数秒**で終わる。DBを触らないので本番にも影響しない。
+- Worker（`worker/src/worker.js`）を触ったら `run_worker_tests.mjs` を、
+  `index.html` / `legacy.html` を触ったら `run_front_tests.mjs` を必ず実行する。
 
 - **必ず開発用DB(dev)で実行する。** 本番には `tests` スキーマを入れていない。
 - テストは実際に**本番稼働中のCritical脆弱性を含む実バグ16件を発見**した実績がある

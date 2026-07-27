@@ -61,26 +61,30 @@ begin
 
   -- ============ 2. INSERT（作成）============
   perform tests.as_user(uc);
+  -- なぜcreated_atを書かないか: 列は4つなのに値が3つで、しかも余った now()-interval が
+  -- allowed()/denied() の引数にはみ出していた（allowedは3引数・deniedは最大4引数＝第4はtext）。
+  -- そもそも migrations/007 の guard_created_at により、なりすまし中(auth.uid()あり)の
+  -- INSERT では created_at が now() に強制上書きされるので、指定しても意味が無い。
   perform tests.allowed('RLS:投稿','本人名義（owner_id=自分）の投稿は作成できる',
-    format('insert into public.recipes(owner_id,title,is_public, created_at) values (%L,%L,false)', uc, '自分名義の投稿'), now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,is_public) values (%L,%L,false)', uc, '自分名義の投稿'));
 
   perform tests.as_user(ud);
   perform tests.denied('RLS:投稿','owner_idを他人に偽装した投稿は作成できない',
-    format('insert into public.recipes(owner_id,title,is_public, created_at) values (%L,%L,false)', ua, '他人になりすました投稿'),
-    'row-level security', now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,is_public) values (%L,%L,false)', ua, '他人になりすました投稿'),
+    'row-level security');
 
   perform tests.denied('RLS:投稿','owner_idを他人に偽装した「公開」投稿も作成できない',
-    format('insert into public.recipes(owner_id,title,is_public, created_at) values (%L,%L,true)', ub, '他人名義の公開投稿'),
-    'row-level security', now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,is_public) values (%L,%L,true)', ub, '他人名義の公開投稿'),
+    'row-level security');
 
   perform tests.as_user(adm);
   perform tests.denied('RLS:投稿','管理者でも他人名義の投稿は作成できない',
-    format('insert into public.recipes(owner_id,title,is_public, created_at) values (%L,%L,false)', ua, '管理者による他人名義投稿'),
-    'row-level security', now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,is_public) values (%L,%L,false)', ua, '管理者による他人名義投稿'),
+    'row-level security');
 
   perform tests.as_anon();
   perform tests.denied('RLS:投稿','未ログインでは投稿を作成できない',
-    format('insert into public.recipes(owner_id,title,is_public, created_at) values (%L,%L,true)', ua, '匿名からの投稿'), now() - interval '1 hour');
+    format('insert into public.recipes(owner_id,title,is_public) values (%L,%L,true)', ua, '匿名からの投稿'));
 
   -- ============ 3. UPDATE（更新）============
   perform tests.as_user(ua);

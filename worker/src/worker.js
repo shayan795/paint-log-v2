@@ -28,6 +28,8 @@ function isBlockedPath(p) {
   //   デコードしないと /%2Egithub/ や /BOMBS%2Emd のような書き方で遮断をすり抜けられる。
   let s = p;
   for (let i = 0; i < 3; i++) {            // 二重・三重エンコードにも対応
+    // ここの catch は意図的に無言。壊れた%エンコードは攻撃・タイプミスで日常的に飛んでくるため、
+    // ログに出すと本当の障害が埋もれる（デコードを諦めた時点の文字列で判定を続ければ安全側）。
     try { const d = decodeURIComponent(s); if (d === s) break; s = d; } catch (_) { break; }
   }
   s = s.toLowerCase().replace(/\\/g, "/").replace(/\/{2,}/g, "/");
@@ -51,7 +53,11 @@ function isAllowedImageOrigin(u, env) {
   try {
     const o = new URL(String(u || "")).origin;
     return o === new URL(env.SUPABASE_URL).origin || o === new URL(env.SITE).origin;
-  } catch (_) { return false; }
+  } catch (_) {
+    // 意図的に無言。cover_url が空・相対URL・不正値なのは「よくある通常ケース」で、
+    // ここでログを出すと正常運用のノイズになる（不許可=false に倒すだけで安全）。
+    return false;
+  }
 }
 
 // Supabase REST API から1件レシピを取得
@@ -72,11 +78,16 @@ async function getRecipeFromSupabase(env, id) {
   // 取得失敗(Supabase障害等)は null ではなく "error" を返す。
   // null(=本当に存在しない/非公開)と区別しないと、一時障害の間だけ正常な公開レシピにも
   // 404 を返してしまい検索インデックスから外れる。
-  if (!res.ok) return "error";
+  if (!res.ok) {
+    // 何番のレシピで、Supabaseが何のステータスを返したのかを残す（後から原因を特定するため）
+    console.error("getRecipeFromSupabase: 応答が異常", res.status, id);
+    return "error";
+  }
   try {
     const arr = await res.json();
     return arr && arr[0] ? arr[0] : null;
-  } catch (_) {
+  } catch (e) {
+    console.error("getRecipeFromSupabase: JSON解析に失敗", id, e);
     return "error";
   }
 }
@@ -157,7 +168,8 @@ async function serveRecipePage(env, id) {
     originRes = await fetchOrigin(env, "/legacy.html");
     if (!originRes || !originRes.ok) throw new Error("origin " + (originRes && originRes.status));
     html = await originRes.text();
-  } catch (_) {
+  } catch (e) {
+    console.error("serveRecipePage: 配信元(legacy.html)の取得に失敗", id, e);
     return new Response("<!doctype html><meta charset=utf-8><title>一時的にアクセスできません</title><p>ただいま混み合っています。しばらくしてからお試しください。",
       { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   }
@@ -223,7 +235,11 @@ async function serveRecipePage(env, id) {
       //   公開レシピページが崩壊する。`<` を全て \u003c にすれば構造上の脱出が不可能になる
       //   （JSONとしての値は同じなので検索エンジンの読み取りには影響しない）。
       ldBlock = `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>`;
-    } catch (_) { ldBlock = ""; }
+    } catch (e) {
+      // JSON-LDは「あれば嬉しい」もの。失敗してもページは出すが、原因は残す
+      console.error("serveRecipePage: JSON-LDの生成に失敗", id, e);
+      ldBlock = "";
+    }
 
     // ★replace の第2引数は必ず「関数」にすること（文字列だと $' `$&` 等が特殊置換として展開され、
     //   レシピtitle等のユーザー入力から本文が複製され、注入scriptが早期終了して保存型XSSになる）。
@@ -277,15 +293,31 @@ async function serveSitemap(env) {
     { loc: SITE + "/privacy.html",priority: "0.2", changefreq: "yearly"  },
   ];
 
-  let recipes = [];
+  // ★取得に失敗したときは「レシピ0件のsitemap」を返してはいけない。
+  //   Googleはsitemapを"サイトの全体像"として読むため、一時障害の間に空同然のものを渡すと
+  //   既に登録済みの全レシピを「もう存在しないページ」と誤解しかねない。
+  //   失敗時は503（＝今は答えられない、後で来て）にして、後日クロールし直してもらう。
+  let recipes = null;
   try {
     const u = `${env.SUPABASE_URL}/rest/v1/recipes?is_public=eq.true&select=id,created_at&order=created_at.desc&limit=5000`;
     const res = await fetch(u, {
       headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`, Accept: "application/json" },
       cf: { cacheTtl: 600 },
     });
-    if (res.ok) recipes = await res.json();
-  } catch (_) {}
+    if (!res.ok) console.error("serveSitemap: Supabaseの応答が異常", res.status);
+    else recipes = await res.json();
+  } catch (e) {
+    console.error("serveSitemap: レシピ一覧の取得に失敗", e);
+  }
+  // 配列でない（＝取得失敗・想定外の形）ときだけ503。0件の配列は「まだ公開投稿が無い」という
+  // 正常な状態なので、固定ページだけのsitemapを普通に返す。
+  if (!Array.isArray(recipes)) {
+    return new Response("sitemap temporarily unavailable", {
+      status: 503,
+      headers: { ...SECURITY_HEADERS, "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store", "retry-after": "600" },
+    });
+  }
 
   const urls = [];
   for (const p of staticPages) {
@@ -298,9 +330,18 @@ async function serveSitemap(env) {
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;
   return new Response(xml, {
-    headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+    headers: { ...SECURITY_HEADERS, "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
   });
 }
+
+// /healthz の直近の結果を60秒だけ覚えておく入れ物。
+// 理由: /healthz は認証なしで誰でも叩けるうえ、1回ごとに Supabase と配信元へ実際に問い合わせる。
+//       連打されるとその回数だけ上流を叩くことになり、無料枠を他人に消費させられてしまう。
+//       監視サービスの間隔は通常1分以上なので、60秒使い回しても故障検知は遅れない。
+// 注意: Cloudflare Workerは実行環境（isolate）が複数あり、この変数はその1つの中だけで共有される。
+//       完全な抑制ではないが「1つの環境で秒間何十回」という一番効く形の連打は確実に抑えられる。
+const HEALTH_CACHE_MS = 60000;
+let healthCache = null;   // { at: 時刻(ms), body: 文字列, status: 数値 }
 
 export default {
   async fetch(request, env) {
@@ -322,6 +363,15 @@ export default {
     // 副次効果: 定期的にSupabaseへ問い合わせるため、無料プランの「7日間アクセスが無いと
     //          自動停止」も防げる（停止するとサイトが全断するため実質必須）。
     if (path === "/healthz") {
+      const now = Date.now();
+      // 60秒以内に調べた結果があれば、上流を叩かずそれをそのまま返す（連打対策）
+      if (healthCache && (now - healthCache.at) < HEALTH_CACHE_MS) {
+        return new Response(healthCache.body, {
+          status: healthCache.status,
+          headers: { ...SECURITY_HEADERS, "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store", "x-health-cache": "hit" },
+        });
+      }
       const out = { ok: true, checks: {} };
       try {
         const r = await fetch(`${env.SUPABASE_URL}/rest/v1/paints?select=id&limit=1`, {
@@ -329,16 +379,26 @@ export default {
           cf: { cacheTtl: 0 },
         });
         out.checks.database = r.ok ? "ok" : `ng(${r.status})`;
-        if (!r.ok) out.ok = false;
-      } catch (e) { out.checks.database = "ng(unreachable)"; out.ok = false; }
+        if (!r.ok) { out.ok = false; console.error("healthz: データベースの応答が異常", r.status); }
+      } catch (e) {
+        out.checks.database = "ng(unreachable)"; out.ok = false;
+        console.error("healthz: データベースに到達できない", e);
+      }
       try {
         const r = await fetch(`${env.ORIGIN}/index.html`, { cf: { cacheTtl: 0 } });
         out.checks.origin = r.ok ? "ok" : `ng(${r.status})`;
-        if (!r.ok) out.ok = false;
-      } catch (e) { out.checks.origin = "ng(unreachable)"; out.ok = false; }
-      return new Response(JSON.stringify(out), {
-        status: out.ok ? 200 : 503,
-        headers: { ...SECURITY_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+        if (!r.ok) { out.ok = false; console.error("healthz: 配信元の応答が異常", r.status); }
+      } catch (e) {
+        out.checks.origin = "ng(unreachable)"; out.ok = false;
+        console.error("healthz: 配信元に到達できない", e);
+      }
+      const body = JSON.stringify(out);
+      const status = out.ok ? 200 : 503;
+      healthCache = { at: now, body, status };
+      return new Response(body, {
+        status,
+        headers: { ...SECURITY_HEADERS, "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store", "x-health-cache": "miss" },
       });
     }
 
@@ -366,12 +426,25 @@ export default {
     // 内部ファイル（DB定義・migration・脆弱性台帳・設定ファイル等）は配信しない
     if (isBlockedPath(path)) return new Response("Not found", { status: 404, headers: SECURITY_HEADERS });
 
+    // ここから先は「静的ファイルをそのまま配る」だけの経路。
+    // 読み取り(GET)と見出しだけ取得(HEAD)以外の用事は存在しないので、POST/PUT/DELETE等は
+    // 上流に一切通さず405で断る（無駄な経路を閉じ、上流への書き込み風リクエストを届かせない）。
+    // ※/healthz・/sitemap.xml・/robots.txt・/r/:id は上で処理済みなので、この制限の影響を受けない。
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        // Allowヘッダは「ではどの方法なら良いのか」を相手に伝えるHTTPの作法（405では必須）
+        headers: { ...SECURITY_HEADERS, allow: "GET, HEAD", "cache-control": "no-store" },
+      });
+    }
+
     // それ以外は GitHub Pages の中身を配信（raw は text/plain で返るので拡張子から content-type を再設定）
     const reqPath = path === "/" ? "/index.html" : path;
     let originRes;
     try {
       originRes = await fetchOrigin(env, reqPath, url.search);
-    } catch (_) {
+    } catch (e) {
+      console.error("static proxy: 配信元の取得に失敗", reqPath, e);
       return new Response("Service Unavailable", { status: 503, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
     }
     if (originRes.status === 404) return new Response("Not found", { status: 404, headers: SECURITY_HEADERS });
@@ -380,6 +453,7 @@ export default {
     // これをそのまま max-age=300 で返すと「バズった瞬間にGitHubのエラー文が5分間貼り付く」ため、
     // 必ず 503 + no-store にしてリロードで復帰できるようにする。
     if (originRes.status >= 400) {
+      console.error("static proxy: 配信元の応答が異常", originRes.status, reqPath);
       return new Response("<!doctype html><meta charset=utf-8><title>一時的にアクセスできません</title><p>ただいま混み合っています。少し時間をおいて再読み込みしてください。",
         { status: 503, headers: { ...SECURITY_HEADERS, "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
     }

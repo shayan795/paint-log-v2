@@ -2271,9 +2271,12 @@ document.getElementById("pickerClose").onclick = closePicker;
 overlay.onclick = e => { if (e.target === overlay) closePicker(); };
 
 /* ===================== 使用塗料一覧(アフィリンク) ===================== */
-function usedPaints(){
+// st を渡すと「その時点のstateのコピー(スナップショット)」から集計する。
+// 省略時は今まで通りライブの state を見る（保存中に state が変わっても結果がぶれないようにするため）。
+function usedPaints(st){
+  st = st || state;
   const seen = new Set(), list = [];
-  state.rows.forEach(r => Object.values(r.cells).forEach(c => {
+  (st.rows || []).forEach(r => Object.values(r.cells).forEach(c => {
     const key = c.i !== undefined ? "i"+c.i : "c"+c.c;
     if (!seen.has(key)){ seen.add(key); list.push(c); }
   }));
@@ -2428,18 +2431,20 @@ function isFinishProc(name){
 }
 // カード用: 各色グループの「メイン塗料」を1つ取り出す。
 // ルール: スミ入れ・トップコート列を除外し、塗料が入っている中で一番右の列の塗料を採用。
-function colorGroups(){
+// usedPaints と同じく、st を渡せばスナップショットから集計できる（省略時はライブの state）
+function colorGroups(st){
+  st = st || state;
   const groups = [];
-  state.rows.forEach(row => {
+  (st.rows || []).forEach(row => {
     // メイン候補: 仕上げ列を除いた工程で、塗料が入っているものを列順に
     let main = null;
-    state.procs.forEach(proc => {
+    (st.procs || []).forEach(proc => {
       const c = row.cells[proc.id];
       if (c && !isFinishProc(proc.name)) main = c;  // 後勝ち=一番右
     });
     // 仕上げ列しか無い場合の保険: 仕上げ含めて一番右
     if (!main){
-      state.procs.forEach(proc => { const c = row.cells[proc.id]; if (c) main = c; });
+      (st.procs || []).forEach(proc => { const c = row.cells[proc.id]; if (c) main = c; });
     }
     if (!main) return;  // 塗料が1つも無い行はカードに出さない
     const p = main.i !== undefined ? PAINTS[main.i] : null;
@@ -2585,6 +2590,10 @@ function drawDots(x, cx, cy, cols, r, gap, centered){
 function generateCardUrl(theme, cb, opts) {
   opts = opts || {};
   const noTitle = !!opts.noTitle;   // サムネ用＝中央の「塗装レシピ」文字を描かない
+  // 描画元のデータ。opts.state（保存開始時に固定したスナップショット）があればそれを使う。
+  // カード生成は画像読み込みで数秒かかるため、その間に利用者が写真やキット名を編集すると
+  // 「本文は押した瞬間の内容／カバー画像は編集後の内容」というズレが起きていた。
+  const st = opts.state || state;
   const W = 1080, H = 1080;
   const layout = "X";
   const draw = (imgs) => {
@@ -2594,11 +2603,11 @@ function generateCardUrl(theme, cb, opts) {
     const barBg   = dark ? "#0E1014" : "#FFFFFF";
     const titleCol= dark ? "#FFFFFF" : "#15181E";
     const subCol  = dark ? "#8A93A0" : "#9AA3B2";
-    const groups = colorGroups();
+    const groups = colorGroups(st);
     let dotCols = groups.slice(0,7).map(g => g.color);
     if (!dotCols.length){
       // 色グループが空でも、使った塗料の色からドットを作る
-      dotCols = usedPaints().slice(0,7).map(c => (c.i !== undefined ? PAINTS[c.i][3] : "#cccccc"));
+      dotCols = usedPaints(st).slice(0,7).map(c => (c.i !== undefined ? PAINTS[c.i][3] : "#cccccc"));
     }
 
     // 背景(下欄テーマ色)を全面に
@@ -2629,19 +2638,19 @@ function generateCardUrl(theme, cb, opts) {
       // 中央に大きく「塗装レシピ」(誘導の主役)。サムネ用は描かない
       if (!noTitle) drawCenterTitle(x, W/2, photoH/2);
       // 左上ID
-      if (state.author){
-        x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(state.author.slice(0,20)).width;
+      if (st.author){
+        x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(st.author.slice(0,20)).width;
         roundRectPath(x, 28, 24, tw+24, 34, 16); x.fillStyle = "rgba(0,0,0,0.42)"; x.fill();
-        x.fillStyle = "rgba(255,255,255,0.88)"; x.textBaseline="middle"; x.fillText(state.author.slice(0,20), 40, 41); x.textBaseline="alphabetic";
+        x.fillStyle = "rgba(255,255,255,0.88)"; x.textBaseline="middle"; x.fillText(st.author.slice(0,20), 40, 41); x.textBaseline="alphabetic";
       }
       // 下帯(PaintLogは入れない。キット名+制作者名のみ)
       const cy = photoH + (H - photoH)/2;
       x.textBaseline = "middle";
       x.fillStyle = titleCol; x.font = "700 30px 'Zen Kaku Gothic New',sans-serif";
-      x.fillText((state.kit || "無題のレシピ").slice(0,20), 44, cy-12);
-      if (state.author){
+      x.fillText((st.kit || "無題のレシピ").slice(0,20), 44, cy-12);
+      if (st.author){
         x.fillStyle = subCol; x.font = "400 16px 'Zen Kaku Gothic New',sans-serif";
-        x.fillText(state.author.slice(0,30), 44, cy+20);
+        x.fillText(st.author.slice(0,30), 44, cy+20);
       }
       if (dotCols.length) drawDots(x, W-130, cy, dotCols, 8, 22, true);
       x.textBaseline = "alphabetic";
@@ -2669,15 +2678,15 @@ function generateCardUrl(theme, cb, opts) {
       }
       // 中央に大きく「塗装レシピ」。サムネ用は描かない
       if (!noTitle) drawCenterTitle(x, W/2, photoH/2);
-      if (state.author){
-        x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(state.author.slice(0,20)).width;
+      if (st.author){
+        x.font = "700 18px 'IBM Plex Mono',monospace"; const tw = x.measureText(st.author.slice(0,20)).width;
         roundRectPath(x, 28, 24, tw+24, 34, 16); x.fillStyle = "rgba(0,0,0,0.42)"; x.fill();
-        x.fillStyle = "rgba(255,255,255,0.88)"; x.textBaseline="middle"; x.fillText(state.author.slice(0,20), 40, 41); x.textBaseline="alphabetic";
+        x.fillStyle = "rgba(255,255,255,0.88)"; x.textBaseline="middle"; x.fillText(st.author.slice(0,20), 40, 41); x.textBaseline="alphabetic";
       }
       const cy = photoH + (H - photoH)/2;
       x.textAlign = "center"; x.textBaseline = "middle";
       x.fillStyle = titleCol; x.font = "700 32px 'Zen Kaku Gothic New',sans-serif";
-      x.fillText((state.kit || "無題のレシピ").slice(0,20), W/2, cy-16);
+      x.fillText((st.kit || "無題のレシピ").slice(0,20), W/2, cy-16);
       if (dotCols.length) drawDots(x, W/2, cy+18, dotCols, 7, 22, true);
       x.textAlign = "left"; x.textBaseline = "alphabetic";
     }
@@ -2686,7 +2695,7 @@ function generateCardUrl(theme, cb, opts) {
     // 背景を全面塗りしているので透明部分は無く、JPEG化で破綻しない。文字も1080pxなら品質0.88で劣化は見えない。
     cb(cv.toDataURL("image/jpeg", 0.88));
   };
-  const srcs = (state.photos || []).slice(0,2);
+  const srcs = (st.photos || []).slice(0,2);
   if (!srcs.length){ draw([]); return; }
   let loaded = 0; const imgs = [];
   srcs.forEach((src, idx) => {
@@ -3214,6 +3223,7 @@ const safePhoto = u => {
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
   /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
   var currentDraftId = null;   // 編集中の下書きID（下書きから開いた場合にセット。投稿成功で削除）
+  var currentCoverUrl = null;  // 表示中の投稿のカバー画像URL（削除時にStorageからも消すため控える）
 
   // 段7-3.6: イベント計測（fire-and-forget。index.htmlと同じ仕様）
   function getLegacySessionId(){
@@ -3274,6 +3284,61 @@ const safePhoto = u => {
     var m = String(url || "").match(/\/object\/public\/recipes\/(.+)$/);
     return m ? decodeURIComponent(m[1]) : null;
   }
+  // grid(またはstate)とカバーURLから、その投稿/下書きが持つ画像URLを全部集める
+  function imageUrlsOf(grid, coverUrl){
+    var out = [];
+    if (coverUrl) out.push(coverUrl);
+    if (grid){
+      (grid.photos || []).forEach(function(p){ if (p) out.push(p); });
+      (grid.rows || []).forEach(function(r){ if (r && r.photo) out.push(r.photo); });
+    }
+    return out;
+  }
+  // 削除しようとしている画像のうち、「他の投稿・下書きから参照されていないと確認できた」ものだけを
+  // Storageパスにして返す。
+  // ※なぜ必要か: 削除RPC(SQL)は storage.objects の行を直接消すだけで Storage API を通らないため、
+  //   CDN上のキャッシュが破棄されず、削除後もURLを知っていれば画像が取れてしまう。
+  //   そこで削除の前に Storage API(remove) も呼ぶ。ただしRPC側は「他の投稿/下書きがまだ使っている
+  //   画像は残す」判定をしているので、クライアントが無条件に消すと他の投稿の写真まで消えてしまう。
+  //   判定できない・共有ありのときは何もしない＝従来どおりRPCだけに任せる（安全側）。
+  function unusedStoragePaths(urls, exceptRecipeId, exceptDraftId){
+    if (!sb) return Promise.resolve([]);
+    var list = [], seen = {};
+    (urls || []).forEach(function(u){
+      var p = toStoragePath(u);
+      if (!p || seen[u]) return;
+      seen[u] = 1; list.push({ url:u, path:p });
+    });
+    if (!list.length) return Promise.resolve([]);
+    // or条件はURLクエリに載るので、長くなりすぎると通信が失敗する。多い時は諦めてRPCに任せる
+    var conds = list.map(function(it){
+      return 'cover_url.eq.' + it.url
+        + ',grid.cs.{"photos":["' + it.url + '"]}'
+        + ',grid.cs.{"rows":[{"photo":"' + it.url + '"}]}';
+    }).join(",");
+    if (conds.length > 1800) return Promise.resolve([]);
+    var qr = sb.from("recipes").select("id", { count:"exact", head:true }).or(conds);
+    if (exceptRecipeId) qr = qr.neq("id", exceptRecipeId);
+    var qd = sb.from("drafts").select("id", { count:"exact", head:true }).or(conds);
+    if (exceptDraftId) qd = qd.neq("id", exceptDraftId);
+    return Promise.all([qr, qd]).then(function(rs){
+      for (var i=0;i<rs.length;i++){
+        var r = rs[i];
+        if (!r || r.error) return [];        // 判定できない → 消さない
+        if ((r.count || 0) > 0) return [];   // 1件でも他が使っている → 消さない
+      }
+      return list.map(function(it){ return it.path; });
+    }, function(){ return []; });
+  }
+  // Storage APIで実ファイルを削除（CDNキャッシュの破棄はこのAPI経由でしか走らない）。
+  // 失敗しても本文の削除は続行する。とくに「管理者が他人の投稿を消す」場合、他人のフォルダへの
+  // 削除権限は無いので必ず失敗する（その場合はRPC側のDB削除だけが効き、CDNは期限切れを待つ）。
+  function purgeStorage(paths){
+    if (!sb || !paths || !paths.length) return Promise.resolve();
+    return sb.storage.from("recipes").remove(paths).then(function(res){
+      if (res && res.error) console.warn("画像の先行削除に失敗（本文の削除は続行します）:", res.error.message || res.error);
+    }, function(e){ console.warn("画像の先行削除に失敗（本文の削除は続行します）:", (e && e.message) || e); });
+  }
   // base64(data:)だけアップロードしURL化。既にURLならそのまま
   function ensureUrl(uid, src, tag){
     if (!src) return Promise.resolve(null);
@@ -3282,11 +3347,14 @@ const safePhoto = u => {
   }
   // カバー画像（閲覧ページのヒーローと同じ「塗装レシピ／PAINT RECIPE」文字付き）を生成→アップロード
   // この cover_url は サイト内サムネ・OGP（X等）の両方で使われるので、両者で見た目を統一する
-  function makeCover(uid){
-    var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
+  // snap（保存開始時に固定した state のコピー）を渡すこと。
+  // 渡さない場合だけライブの state を見る（保存中の編集でカバー画像だけ内容がずれるのを防ぐため）。
+  function makeCover(uid, snap){
+    var st = snap || state;
+    var has = (st.photos||[]).filter(Boolean).length || (st.rows||[]).some(function(r){ return r.photo; });
     if (!has) return Promise.resolve(null);
     return new Promise(function(res){
-      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); });
+      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); }, { state: st });
     });
   }
   // 旧フォーマット（中央の「塗装レシピ」文字なし）で保存された既存投稿向け。
@@ -3297,10 +3365,13 @@ const safePhoto = u => {
     try { if (localStorage.getItem("ct2_" + recipeId) === "1") return; } catch(_){}
     var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
     if (!has) return;
-    makeCover(uid).then(function(url){
+    // ここも「今表示している内容」を固定してから作る（生成中に編集タブへ移って触られてもズレない）
+    var snap; try { snap = JSON.parse(JSON.stringify(state)); } catch(_){ snap = state; }
+    makeCover(uid, snap).then(function(url){
       if (!url){ return; }
       sb.from("recipes").update({ cover_url: url }).eq("id", recipeId).then(function(r){
         if (!r || r.error) return;
+        if (recipeId === currentRecipeId) currentCoverUrl = url;   // 差し替えた新カバーを削除時の対象にする
         try { localStorage.setItem("ct2_" + recipeId, "1"); } catch(_){}
         var oldPath = toStoragePath(oldCoverUrl), newPath = toStoragePath(url);
         if (oldPath && newPath && oldPath !== newPath){ sb.storage.from("recipes").remove([oldPath]).then(function(){}, function(){}); }
@@ -3371,6 +3442,7 @@ const safePhoto = u => {
       try { state = migrate(rec.grid || {}); } catch(_){ try { state = migrate({}); } catch(__){ state = newState(); } }
       state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
+      currentCoverUrl = rec.cover_url || null;   // 削除時にカバー画像もStorageから消すため
       // 既存投稿の編集：ボタンは「更新する」のみ（下書き保存は隠す）
       var pbs = document.querySelectorAll(".js-publish");
       for (var k=0;k<pbs.length;k++) pbs[k].textContent = "更新する";
@@ -3566,10 +3638,16 @@ const safePhoto = u => {
       // 旧実装はクライアントから「画像→本文」の順に消していたため、(a)管理者が他人の投稿を
       // 消すと画像だけ公開URLに残る(書き込み権限が所有者限定・失敗も無視していた)、
       // (b)本文の削除に失敗すると画像だけ永久に消える、という2つの問題があった。
-      sb.rpc("delete_recipe_with_images", { rid: currentRecipeId }).then(function(res){
-        if (res && res.error){ alert("削除に失敗しました：" + res.error.message); return; }
-        location.href = "/index.html#records";
-      }, function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
+      // ★ただしRPCだけだと Storage API を通らずCDNの複製が残るので、先に Storage API でも消す。
+      //   共有中の画像は消さない・失敗しても本文削除は続行（詳細は unusedStoragePaths / purgeStorage）。
+      var rid = currentRecipeId;
+      unusedStoragePaths(imageUrlsOf(state, currentCoverUrl), rid, null)
+        .then(purgeStorage)
+        .then(function(){ return sb.rpc("delete_recipe_with_images", { rid: rid }); })
+        .then(function(res){
+          if (res && res.error){ alert("削除に失敗しました：" + res.error.message); return; }
+          location.href = "/index.html#records";
+        }, function(e){ alert("削除に失敗しました：" + (e && e.message ? e.message : e)); });
     };
     var bar = vBar();
     if (edit && edit.parentNode !== bar){ edit.style.position = "static"; bar.appendChild(edit); }
@@ -3595,6 +3673,11 @@ const safePhoto = u => {
         if (typeof addCustomTag === "function") addCustomTag(pendingInput.value);
         pendingInput.value = "";
       }
+      // ★「押した瞬間」の内容をここで丸ごと固定する（以降の処理は snap だけを見る）。
+      //   ログイン確認・件数チェック・写真アップロード・カバー生成で数秒かかるため、
+      //   その間に行の追加/削除や写真の差し替えをされると、本文とカバー画像で内容が食い違ったり
+      //   添字がずれて写真が別の行に付いたりしていた。
+      var snap; try { snap = JSON.parse(JSON.stringify(state)); } catch(_){ snap = state; }
       btn.disabled = true; var orig = btn.textContent; btn.textContent = "保存中…";
       sb.auth.getSession().then(function(r){
         var session = r && r.data && r.data.session;
@@ -3617,10 +3700,7 @@ const safePhoto = u => {
             return;
           }
         // 1) 写真をStorageへ（data:のみアップ。既存URLは流用）
-        // ★保存開始時点の state を丸ごと固定(スナップショット)して以降はこれだけを使う。
-        //   アップロード中(数秒)に行の削除・並べ替えをすると、添字がずれて写真が別の色グループに
-        //   付いたり消えたりするため、保存対象は「押した瞬間の内容」に固定する。
-        var snap = JSON.parse(JSON.stringify(state));
+        //    使うのはクリック直後に固定した snap（上で作成）。ライブの state は一切見ない。
         var photosSrc = (snap.photos || []).slice();
         var photoUrls = photosSrc.slice();
         var rowPhotos = (snap.rows || []).map(function(r){ return r.photo || null; });
@@ -3629,7 +3709,8 @@ const safePhoto = u => {
         photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
         rowPhotos.forEach(function(p, ri){ if (p) jobs.push(ensureUrl(uid, p, "r"+ri).then(function(u){ rowUrls[ri] = u; })); });
         return Promise.all(jobs).then(function(){
-          return makeCover(uid).then(function(cover){
+          // カバー画像も snap から描く（ライブの state を読ませない＝本文と必ず同じ内容になる）
+          return makeCover(uid, snap).then(function(cover){
             // 2) URL化したgridを作る（base64は保存しない）
             // ライブの state ではなくスナップショットから作る（上記の添字ズレ防止）
             var g = JSON.parse(JSON.stringify(snap));
@@ -3651,10 +3732,19 @@ const safePhoto = u => {
             return q.select("id").single().then(function(res){
               if (res.error) throw res.error;
               if (typeof clearDraft === "function") clearDraft();   // 旧localStorage下書きの後始末
-              // この投稿が下書きから来ていたら、その下書きを消す（公開できたので不要）
-              if (currentDraftId){ sb.from("drafts").delete().eq("id", currentDraftId).then(function(){}, function(){}); currentDraftId = null; }
-              alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
-              location.href = "/index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
+              // この投稿が下書きから来ていたら、その下書きを消す（公開できたので不要）。
+              // ★削除の完了を待ってから画面を移す。投げっぱなしだと、遷移でページが破棄された時点で
+              //   通信が中断され、公開できたのに下書きが残る（＝下書き上限5件を無駄に埋める）ことがあった。
+              var _drop = Promise.resolve();
+              if (currentDraftId){
+                var _did = currentDraftId; currentDraftId = null;
+                // 第2引数true＝画像はいま作った投稿が使っているので消さない
+                _drop = deleteDraftEverywhere(_did, true).catch(function(){});   // 失敗しても投稿自体は成功なので進む
+              }
+              return _drop.then(function(){
+                alert((currentRecipeId ? "更新しました" : "投稿しました") + "（" + (isPublic ? "公開" : "非公開") + "）。");
+                location.href = "/index.html#profile";   // 投稿後は自分のプロフィールへ（記録より自然）
+              });
             });
           });
         });
@@ -3671,9 +3761,25 @@ const safePhoto = u => {
 
   /* ===================== v2: 下書き（サーバー保存・複数・写真込み） ===================== */
   var DRAFT_MAX = 5;
+  // 実行中の下書き保存(Promise)。連打や「保存ボタン＋離脱時の自動保存」が重なると、
+  // まだ currentDraftId が決まっていないうちに2回INSERTされて下書きが二重にできたり、
+  // 古い内容が後から上書きしたりしていた。実行中は同じPromiseを返して1本にまとめる(single-flight)。
+  var _draftInFlight = null;
   // 現在の編集内容を写真込みでサーバーに保存（新規=INSERT / 既存下書き=UPDATE）。Promiseで結果{ok}を返す
   function saveDraftServer(){
     if (!sb){ legacyToast("下書き保存はサーバー経由（URL）で開いたときに使えます"); return Promise.resolve({ ok:false }); }
+    if (_draftInFlight) return _draftInFlight;   // 実行中なら、その保存の結果をそのまま返す
+    // finally相当（古い端末でも動くよう then の2引数で書く）。成功でも失敗でも必ずフラグを解除する
+    _draftInFlight = saveDraftServerInner().then(
+      function(r){ _draftInFlight = null; return r; },
+      function(e){ _draftInFlight = null; throw e; }
+    );
+    return _draftInFlight;
+  }
+  function saveDraftServerInner(){
+    // ★保存開始時点の内容を丸ごと固定して、以降はこれだけを使う（公開保存と同じ理由。
+    //   写真アップロード中に行を消す/並べ替えると、添字がずれて写真が別の行に付いていた）
+    var snap; try { snap = JSON.parse(JSON.stringify(state)); } catch(_){ snap = state; }
     return sb.auth.getSession().then(function(r){
       var session = r && r.data && r.data.session;
       if (!session){ legacyToast("下書き保存にはログインが必要です"); return { ok:false, msg:"ログインが必要です" }; }
@@ -3687,19 +3793,19 @@ const safePhoto = u => {
           return { ok:false, msg:"上限" };
         }
         legacyToast("下書きを保存中…");
-        var photosSrc = (state.photos || []).slice();
+        var photosSrc = (snap.photos || []).slice();
         var photoUrls = photosSrc.slice();
-        var rowPhotos = (state.rows || []).map(function(x){ return x.photo || null; });
+        var rowPhotos = (snap.rows || []).map(function(x){ return x.photo || null; });
         var rowUrls = rowPhotos.slice();
         var jobs = [];
         photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
         rowPhotos.forEach(function(p, ri){ if (p) jobs.push(ensureUrl(uid, p, "r"+ri).then(function(u){ rowUrls[ri] = u; })); });
         return Promise.all(jobs).then(function(){
-          var g = JSON.parse(JSON.stringify(state));
+          var g = JSON.parse(JSON.stringify(snap));
           g.photos = photoUrls.filter(Boolean);
           if (g.rows) g.rows.forEach(function(x, ri){ if (rowUrls[ri]) x.photo = rowUrls[ri]; else delete x.photo; });
           var thumb = photoUrls.filter(Boolean)[0] || null;
-          var payload = { owner_id: uid, title: (state.kit || "").trim() || null, grid: g, cover_url: thumb, updated_at: new Date().toISOString() };
+          var payload = { owner_id: uid, title: (snap.kit || "").trim() || null, grid: g, cover_url: thumb, updated_at: new Date().toISOString() };
           var q = currentDraftId
             ? sb.from("drafts").update(payload).eq("id", currentDraftId)
             : sb.from("drafts").insert(payload);
@@ -3769,20 +3875,40 @@ const safePhoto = u => {
       legacyToast("下書きを開きました");
     });
   }
+  // 下書きの削除（一覧の削除ボタンと、公開へ昇格したあとの後始末で共用）。
+  // 下書き行だけでなく、その下書きが持つ画像もまとめて消す（Storageに残さない）。
+  // 投稿として公開済みの画像とURLを共有している場合は、その画像は残す仕組み(RPC側で判定)。
+  // ★RPCだけだと Storage API を通らずCDNの複製が残るので、先に Storage API でも消す。
+  //   共有中と判定できた画像には触らない（昇格直後は投稿側が同じ画像を使っているので何もしない）。
+  // imagesInUse=true は「公開へ昇格した直後」用。画像は新しい投稿が使っているので絶対に消さず、
+  // 無駄な問い合わせ（gridの再取得）も省く。
+  function deleteDraftEverywhere(id, imagesInUse){
+    if (!sb || !id) return Promise.resolve({ ok:false });
+    var pre = imagesInUse
+      ? Promise.resolve([])
+      : sb.from("drafts").select("cover_url,grid").eq("id", id).single().then(function(r){
+          var d = (r && !r.error && r.data) ? r.data : null;
+          return unusedStoragePaths(d ? imageUrlsOf(d.grid, d.cover_url) : [], null, id);
+        }, function(){ return []; });
+    return pre
+      .then(purgeStorage)
+      .then(function(){ return sb.rpc("delete_draft_with_images", { did: id }); })
+      .then(function(res){
+        if (res && res.error) throw res.error;
+        if (currentDraftId === id) currentDraftId = null;
+        return { ok:true };
+      });
+  }
   function deleteDraftRow(id, rowEl){
     if (!confirm("この下書きを削除します。よろしいですか？")) return;
-    // 下書き行だけでなく、その下書きが持つ画像もサーバー側でまとめて消す（Storageに残さない）。
-    // 投稿として公開済みの画像とURLを共有している場合は、その画像は残す仕組み(RPC側で判定)。
-    sb.rpc("delete_draft_with_images", { did: id }).then(function(res){
-      if (res && res.error){ legacyToast("削除に失敗しました"); return; }
+    deleteDraftEverywhere(id).then(function(){
       if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
-      if (currentDraftId === id) currentDraftId = null;
       var body = document.getElementById("draftListBody"), hint = document.getElementById("draftHint");
       var n = body ? body.querySelectorAll(".draft-item").length : 0;
       if (body && !n) body.innerHTML = '<p class="note" style="text-align:center">下書きはまだありません。</p>';
       if (hint) hint.textContent = n + " / " + DRAFT_MAX + " 件";
       legacyToast("下書きを削除しました");
-    });
+    }, function(){ legacyToast("削除に失敗しました"); });
   }
   var _btnDraftList = document.getElementById("btnDraftList"); if (_btnDraftList) _btnDraftList.onclick = openDraftList;
   var _draftClose = document.getElementById("draftClose"); if (_draftClose) _draftClose.onclick = function(){ var ov=document.getElementById("draftOverlay"); if(ov) ov.classList.remove("show"); };
