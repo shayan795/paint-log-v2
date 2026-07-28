@@ -18,3 +18,9 @@ scripts/storage_paths.local.txt
 
 # 配信用の生成物（scripts/build_public.mjs が作る）
 /public/
+
+# 公開したくない開発資料は ../塗装レシピ録-大型-private/ へ移動済み
+BOMBS.md
+claude-code-prompt.md
+CLAUDE引き継ぎ.md
+docs/codex-review-brief.md
