@@ -83,7 +83,9 @@ python3 -m http.server 4173
 | **`worker/src/worker.js`** | **`cd worker && npx wrangler deploy`**（git pushでは反映されない） |
 
 - Worker変更後は必ず `curl -sI https://plamo-paint.com/r/<id>` 等で壊れていないか検証すること。
-- 静的側の反映はGitHub raw 5分キャッシュ + Worker cacheTtl 300秒により**デプロイ直後5〜10分は旧新混成**があり得る（BOMBS.md B-003）。
+- **`src/config.js` か `src/methods.js` を変えたら、push前に必ず `node scripts/bump_asset_version.mjs` を実行する**（HTMLが読むURLの `?v=` を更新し、デプロイ直後に古いJSが使われるのを防ぐ／確認だけなら `--check`）。
+- 静的側の反映はGitHub Pages 10分キャッシュ + Worker cacheTtl 300秒により**デプロイ直後5〜10分は旧新混成**があり得る（BOMBS.md B-003）。
+  上の `?v=` でブラウザとCloudflareの層は解消済み。残るGitHub Pages層のズレは、画面側の `version_skew` 検出（console.error＋eventsテーブル）で気づけるようにしてある。
 
 ---
 

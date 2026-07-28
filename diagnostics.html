@@ -50,7 +50,32 @@
   <div class="muted">この画面はSupabase接続の診断用。アプリ本体は <a href="index.html">index.html</a>。</div>
 </div>
 
-<script src="src/config.js"></script>
+<!-- ASSETVER — ?v=<版> でデプロイ直後の「古いJSが使われる時間帯」を無くす（BOMBS B-003）。
+     このページは診断用なので config.js だけを読む（methods は使わない）。
+     詳しい経緯は index.html の同じブロック。版の更新は node scripts/bump_asset_version.mjs -->
+<script src="src/config.js?v=3e1a7c81"></script>
+<!-- ASSETVER:START — 自動生成。手で編集しない（node scripts/bump_asset_version.mjs で更新される） -->
+<script>
+window.PAINTLOG_ASSET_EXPECT = {
+  version: "3e1a7c81",
+  config:  "SUPABASE_ANON_KEY,SUPABASE_URL,TURNSTILE_SITE_KEY",
+  methods: ""
+};
+</script>
+<!-- ASSETVER:END -->
+<script>
+/* 版ズレの検出（診断ページ版）。config.js しか読まないので config だけ見る。 */
+(function(){
+  try{
+    var E = window.PAINTLOG_ASSET_EXPECT || {};
+    var got = "";
+    try{ got = Object.keys(window.PAINTLOG_CONFIG || {}).sort().join(","); }catch(_){}
+    if (!E.config || got === E.config) return;
+    console.error("[version_skew] HTMLと読み込まれた src/config.js が食い違っています。デプロイ直後なら数分で解消します。",
+      { expected_version: E.version || null, expected_config: E.config, actual_config: got, page: location.pathname });
+  }catch(_){}
+})();
+</script>
 <script type="module">
 // 自前配信のSupabaseライブラリ(UMD形式)を読み込む。読み込み済みなら何もしない。
 function loadSupabaseLib(src){

@@ -117,6 +117,258 @@ function buildDescription(rec, authorLabel) {
   return bits.join(" / ") + " — 塗装レシピ録で記録・共有";
 }
 
+// ============================================================================
+// SSR（サーバー側でレシピ本文をHTMLにして返す）
+//
+// なぜ必要か:
+//   /r/:id は今まで legacy.html に OGP と JSON-LD を差し込むだけで、レシピ本文
+//   （部位・工程・塗料名）は全部ブラウザのJavaScriptが描いていた。つまり生のHTMLには
+//   文字が1つも無く、検索エンジンから見ると「中身の無いページ」に近かった。
+//   集客の核なので、ここでサーバー側でも本文を組み立てて生HTMLに入れる。
+//
+// 壊さないための約束:
+//   ・失敗したら本文を入れずに今までどおり返す（SSRの失敗でページが白くならないこと最優先）
+//   ・出力は必ず esc() を通す。replace の第2引数には絶対に文字列を渡さない（$& 等が展開されるため）
+//   ・legacy.html のJSが描く #viewMode / #viewTable には一切触らない。独立した
+//     #__ssr_recipe というdivに入れ、JSが閲覧画面を出した瞬間に自分で消える。
+// ============================================================================
+
+// 本文HTMLの上限（文字数）。長大なレシピでレスポンスが膨らむのを防ぐ。
+// 20000文字＝日本語でも十分な分量で、これを超える分は打ち切って「続きはページ内で」に任せる。
+const SSR_MAX_CHARS = 20000;
+
+// grid の各マスから「マスタ塗料への参照」を集める。
+//   c.id … 安定ID(pt_xxxx)。2026-07以降の正しい指し方
+//   c.i  … 塗料リストの並び順(paints.sort_order と同じ)。旧データ互換
+// 形の違う値は無視する（直APIで任意のJSONを保存できるため、信用せず門番を置く）。
+function collectPaintRefs(grid) {
+  const out = { ids: [], idxs: [] };
+  try {
+    const g = (grid && typeof grid === "object" && !Array.isArray(grid)) ? grid : {};
+    const rows = Array.isArray(g.rows) ? g.rows : [];
+    const seenId = Object.create(null), seenIdx = Object.create(null);
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      const cells = (row.cells && typeof row.cells === "object" && !Array.isArray(row.cells)) ? row.cells : {};
+      for (const k of Object.keys(cells)) {
+        const c = cells[k];
+        if (!c || typeof c !== "object" || Array.isArray(c)) continue;
+        // 安定IDは pt_ + 16進。この形だけを通すので、URLに混ぜても細工にならない
+        if (typeof c.id === "string" && /^pt_[0-9a-f]{6,32}$/.test(c.id) && !seenId[c.id]) {
+          seenId[c.id] = 1; out.ids.push(c.id);
+        }
+        // 並び順は 0以上の整数のみ。小数・負数・NaN・文字列は捨てる
+        if (typeof c.i === "number" && isFinite(c.i) && c.i >= 0 && c.i === Math.floor(c.i) && !seenIdx[c.i]) {
+          seenIdx[c.i] = 1; out.idxs.push(c.i);
+        }
+      }
+    }
+  } catch (_) {
+    // 意図的に無言。gridは利用者が直APIで任意の形に保存できるため、想定外の形は「よくあること」。
+    // ここで例外を上げるとページ全体が出せなくなるので、集められた分だけで先へ進む。
+  }
+  return out;
+}
+
+// Supabase の paints 応答（配列）を、引きやすい2つの辞書に変換する
+function buildPaintMaps(rows) {
+  const maps = { byId: Object.create(null), byIdx: Object.create(null) };
+  const list = Array.isArray(rows) ? rows : [];
+  for (const p of list) {
+    if (!p || typeof p !== "object" || Array.isArray(p)) continue;
+    const item = {
+      brand: p.brand == null ? "" : String(p.brand),
+      code: p.code == null ? "" : String(p.code),
+      name: p.name == null ? "" : String(p.name),
+    };
+    if (p.id != null) maps.byId[String(p.id)] = item;
+    if (typeof p.sort_order === "number") maps.byIdx[String(p.sort_order)] = item;
+  }
+  return maps;
+}
+
+// 1マス → 画面に出す塗料名。マスタに無ければ手入力(c.c)を使う。どちらも無ければ空文字。
+function paintLabel(cell, maps) {
+  if (!cell || typeof cell !== "object" || Array.isArray(cell)) return "";
+  const m = maps || {};
+  const byId = m.byId || {};
+  const byIdx = m.byIdx || {};
+  let hit = null;
+  if (typeof cell.id === "string") hit = byId[cell.id] || null;
+  if (!hit && typeof cell.i === "number") hit = byIdx[String(cell.i)] || null;
+  if (hit) {
+    // 「ブランド 型番 名称」を1つの文字列に。空欄があっても二重スペースにならないよう畳む。
+    // ★replaceの第2引数は関数にする（文字列だと $& 等が特殊置換として解釈される決まりにそろえる）
+    const s = (hit.brand + " " + hit.code + " " + hit.name).replace(/\s+/g, () => " ");
+    if (s.trim()) return s.trim();
+  }
+  return typeof cell.c === "string" ? cell.c.trim() : "";
+}
+
+// レシピ1件 → 生HTMLに入れる本文ブロック。中身が何も無ければ空文字を返す（＝注入しない）。
+// maps は fetchPaintMaps() の戻り値。maxChars は本文の文字数上限。
+function buildRecipeBodyHtml(rec, maps, maxChars) {
+  const LIMIT = (typeof maxChars === "number" && maxChars > 0) ? maxChars : 20000;
+  const r = (rec && typeof rec === "object" && !Array.isArray(rec)) ? rec : {};
+  const g = (r.grid && typeof r.grid === "object" && !Array.isArray(r.grid)) ? r.grid : {};
+  const asStr = v => (v == null ? "" : String(v));
+  // 1つの項目だけで応答が肥大化しないよう、項目ごとにも長さの上限を置く。
+  // （grid は利用者が直APIで保存できるため、コメント1つに何MBも入れることが理論上できる。
+  //   行数の上限だけでは1行で超過してしまうので、ここで先に刈り取る）
+  const clip = (s, n) => (s.length > n ? s.slice(0, n) + "…" : s);
+  // 表示名は「gridの値」を優先する。閲覧画面(renderViewMode)が state=grid を見て描くので、
+  // ここを合わせないとサーバーが出した文とJSが出す文が食い違う。
+  const kit = clip(asStr(g.kit).trim() || asStr(r.title).trim(), 200);
+  const author = clip(asStr(g.author).trim() || asStr(r.author_label).trim(), 100);
+  const memo = clip(asStr(g.memo).trim() || asStr(r.memo).trim(), 2000);
+
+  const procs = (Array.isArray(g.procs) ? g.procs : [])
+    .filter(p => p && typeof p === "object" && !Array.isArray(p))
+    .map(p => ({ id: asStr(p.id), name: clip(asStr(p.name).trim(), 60) }));
+  const rows = (Array.isArray(g.rows) ? g.rows : [])
+    .filter(x => x && typeof x === "object" && !Array.isArray(x));
+
+  const cellOf = (row, pid) => {
+    const cells = (row.cells && typeof row.cells === "object" && !Array.isArray(row.cells)) ? row.cells : {};
+    const c = cells[pid];
+    return (c && typeof c === "object" && !Array.isArray(c)) ? c : null;
+  };
+  // 空の工程列（どの部位にも塗料が入っていない工程）は出さない。閲覧画面と同じ考え方。
+  const usedProcs = procs.filter(p => rows.some(row => !!paintLabel(cellOf(row, p.id), maps)));
+
+  // 本文を組み立てる。長さを数えながら足していき、上限に達したら行を打ち切る。
+  const seg = [];
+  let used = 0;
+  const push = s => { seg.push(s); used += s.length; };
+
+  const usedPaints = [];
+  const seenPaint = Object.create(null);
+  let bodyRows = 0;
+  let truncated = false;
+
+  for (const row of rows) {
+    const part = clip(asStr(row.part).trim(), 200);
+    const comment = clip(asStr(row.comment).trim(), 2000);
+    const cellHtml = [];
+    let rowHasPaint = false;
+    for (const p of usedProcs) {
+      const label = clip(paintLabel(cellOf(row, p.id), maps), 200);
+      if (label) {
+        rowHasPaint = true;
+        if (!seenPaint[label]) { seenPaint[label] = 1; usedPaints.push(label); }
+      }
+      cellHtml.push(`<td>${label ? esc(label) : "—"}</td>`);
+    }
+    if (!part && !comment && !rowHasPaint) continue;   // 完全に空の行は出さない
+    if (used > LIMIT) { truncated = true; break; }
+    let tr = `<tr><th scope="row">${esc(part || "—")}</th>${cellHtml.join("")}</tr>`;
+    if (comment) {
+      tr += `<tr><td colspan="${usedProcs.length + 1}">${esc(comment)}</td></tr>`;
+    }
+    push(tr);
+    bodyRows++;
+  }
+
+  // 見出しも本文も無い＝出すものが無い。無理に空の枠だけ出すと逆に品質の低いページになる。
+  if (!bodyRows && !kit && !memo) return "";
+
+  const head = usedProcs.map(p => `<th scope="col">${esc(p.name || "工程")}</th>`).join("");
+  const tableHtml = bodyRows
+    ? `<div class="ssr-scroll"><table><caption class="ssr-cap">部位ごとの塗装手順と使用塗料</caption>`
+      + `<thead><tr><th scope="col">部位 / グループ</th>${head}</tr></thead>`
+      + `<tbody>${seg.join("")}</tbody></table></div>`
+      + (truncated ? `<p class="ssr-more">※ 表示しきれない行があります。ページ内で全体をご覧いただけます。</p>` : "")
+    : "";
+
+  // 使用塗料の一覧。塗料名で検索して来た人に当たるよう、表とは別にテキストでも並べる。
+  let paintListHtml = "";
+  if (usedPaints.length) {
+    const items = [];
+    let n = 0;
+    for (const nm of usedPaints) {
+      if (n > 300) break;                       // 常識的な上限（極端なデータでの肥大化防止）
+      items.push(`<li>${esc(nm)}</li>`);
+      n++;
+    }
+    paintListHtml = `<h2>使用塗料</h2><ul class="ssr-paints">${items.join("")}</ul>`;
+  }
+
+  const titleText = kit ? kit + "｜塗装レシピ" : "塗装レシピ";
+  const metaHtml =
+    (author ? `<p class="ssr-author">制作者: ${esc(author)}</p>` : "")
+    + (memo ? `<p class="ssr-memo">${esc(memo)}</p>` : "");
+
+  // 見た目は最小限。万一このブロックが消えずに残っても崩れて見えないようにする。
+  // ★CSSは1行で書くこと（行頭に } を置くと tests/run_worker_tests.mjs の関数抽出が途中で切れる）
+  const css = "#__ssr_recipe{max-width:960px;margin:0 auto;padding:16px 14px;"
+    + "font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;color:#1E2430;line-height:1.7}"
+    + "#__ssr_recipe h1{font-size:1.25rem;margin:0 0 10px}"
+    + "#__ssr_recipe h2{font-size:1.05rem;margin:22px 0 8px}"
+    + "#__ssr_recipe .ssr-author,#__ssr_recipe .ssr-memo{margin:0 0 8px;color:#555}"
+    + "#__ssr_recipe .ssr-scroll{overflow-x:auto}"
+    + "#__ssr_recipe table{border-collapse:collapse;width:100%;font-size:.92rem}"
+    + "#__ssr_recipe th,#__ssr_recipe td{border:1px solid #DDE1E6;padding:6px 8px;text-align:left;vertical-align:top}"
+    + "#__ssr_recipe .ssr-cap{text-align:left;font-size:.8rem;color:#777;padding-bottom:6px}"
+    + "#__ssr_recipe .ssr-paints{margin:0;padding-left:1.2em}"
+    // JSが動く環境では下の編集画面が一瞬見えるのを防ぐ（JSが閲覧画面を出したらこのブロックごと消える）。
+    // 通常のCSS規則なので、JS側が要素に直接 style を書けばそちらが勝つ＝編集操作は今までどおり動く。
+    + "#editMode{display:none}";
+
+  // JSが閲覧画面(#viewMode)を表示した瞬間に、このブロックを自分で取り除く仕掛け。
+  // 検索エンジンはJSを待たずに生HTMLを読むので、消える前の中身が index される。
+  // 逆にJSが失敗した場合はこのブロックが残るため、人にも中身が見える（今までは空の編集画面だった）。
+  const takeover = "<script>(function(){"
+    + "var b=document.getElementById('__ssr_recipe');if(!b)return;var mo=null;"
+    + "var done=function(){if(b&&b.parentNode)b.parentNode.removeChild(b);b=null;if(mo){try{mo.disconnect()}catch(e){}mo=null}};"
+    + "var shown=function(){var v=document.getElementById('viewMode');"
+    + "return !!(v&&v.style&&v.style.display&&v.style.display!=='none')};"
+    + "try{mo=new MutationObserver(function(){if(shown())done()});"
+    + "mo.observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['style']})}catch(e){}"
+    + "document.addEventListener('DOMContentLoaded',function(){if(shown())done()});"
+    + "window.addEventListener('load',function(){if(shown())done()});"
+    + "})();<\/script>";
+
+  return `<div id="__ssr_recipe"><style>${css}</style>`
+    + `<article><h1>${esc(titleText)}</h1>${metaHtml}`
+    + (tableHtml ? `<h2>塗装レシピ</h2>${tableHtml}` : "")
+    + `${paintListHtml}</article></div>${takeover}`;
+}
+
+// レシピで使われている塗料をまとめて1回で引く。
+// 安定ID(id)と旧方式の並び順(sort_order)の両方を or= でまとめ、往復を1回に抑える。
+// 取得に失敗したら null を返す（呼び出し側はSSRを諦め、今までどおりのページを返す）。
+async function fetchPaintMaps(env, refs) {
+  const ids = (refs && Array.isArray(refs.ids) ? refs.ids : []).slice(0, 500);
+  const idxs = (refs && Array.isArray(refs.idxs) ? refs.idxs : []).slice(0, 500);
+  if (!ids.length && !idxs.length) return { byId: Object.create(null), byIdx: Object.create(null) };
+  // ids は pt_[0-9a-f]{6,32}、idxs は0以上の整数だけを collectPaintRefs が通しているので、
+  // ここでURLに埋めても細工（クエリの追加・条件の書き換え）は成立しない。
+  const conds = [];
+  if (ids.length) conds.push(`id.in.(${ids.join(",")})`);
+  if (idxs.length) conds.push(`sort_order.in.(${idxs.join(",")})`);
+  const u = `${env.SUPABASE_URL}/rest/v1/paints`
+    + `?select=id,brand,code,name,sort_order&or=(${conds.join(",")})&limit=2000`;
+  try {
+    const res = await fetch(u, {
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
+      },
+      // 塗料マスタは滅多に変わらない読み取り専用データなので、1時間キャッシュして往復を減らす
+      cf: { cacheTtl: 3600 },
+    });
+    if (!res.ok) {
+      console.error("fetchPaintMaps: 塗料マスタの応答が異常", res.status);
+      return null;
+    }
+    return buildPaintMaps(await res.json());
+  } catch (e) {
+    console.error("fetchPaintMaps: 塗料マスタの取得に失敗", e);
+    return null;
+  }
+}
+
 const CT_BY_EXT = {
   html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8", json: "application/json; charset=utf-8",
@@ -245,6 +497,16 @@ async function serveRecipePage(env, id) {
     //   レシピtitle等のユーザー入力から本文が複製され、注入scriptが早期終了して保存型XSSになる）。
     html = html.replace(/<!--OG_START-->[\s\S]*?<!--OG_END-->/, () => `<!--OG_START-->${block}${ldBlock}<!--OG_END-->`);
 
+    // <title> をこのレシピ専用にする。
+    // ★ここを直さないとSEOの効果が大きく削がれる。検索結果に出る青い見出しは <title> であり、
+    //   全レシピが「塗装レシピ録 — プラモデル・模型の塗装レシピ記録ツール」という同じ文字列だと、
+    //   利用者から見て中身が区別できず、検索エンジンからも重複扱いされやすい。
+    //   （JSが後から書き換えてはいるが、検索エンジンはJSを待たずに読むことがあるため手遅れになる）
+    // ★replaceの第2引数は必ず関数（文字列だとレシピ名の $& 等が特殊置換として展開される）。
+    if (rec.title && rec.title.trim()) {
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${esc(title)}</title>`);
+    }
+
     // クライアント側の Supabase ラウンドトリップを消すため、レシピ本体を script タグに埋め込む
     // legacy.html の loadById がこれを優先的に使う
     // < を < に落として script の早期終了自体を封じる（</script 対策の上位互換・JSONとしては同値）
@@ -255,6 +517,24 @@ async function serveRecipePage(env, id) {
     // 全レシピページが「重複」と判定されて検索インデックスから消える。
     html = html.replace(/<!--CANON_START-->[\s\S]*?<!--CANON_END-->/,
       () => `<!--CANON_START--><link rel="canonical" href="${esc(pageUrl)}"><!--CANON_END-->`);
+
+    // --- 本文のSSR（検索エンジンに中身を届けるための要）---
+    // ここで失敗しても「本文なしの今までどおりのページ」を返す。SSRのために
+    // レシピが表示できなくなるのは本末転倒なので、全体を try で包む。
+    try {
+      const refs = collectPaintRefs(rec.grid);
+      const maps = await fetchPaintMaps(env, refs);
+      // maps が null＝塗料マスタを引けなかった。塗料名が全部空の表を出すくらいなら
+      // 本文を入れずに返す（中身の薄いページを検索エンジンに見せない）。
+      if (maps) {
+        const bodyHtml = buildRecipeBodyHtml(rec, maps, SSR_MAX_CHARS);
+        // ★replaceの第2引数は必ず関数。文字列にすると本文中の $& 等が特殊置換として
+        //   展開され、利用者の入力から本文が複製される（過去のXSS事故と同じ経路）。
+        if (bodyHtml) html = html.replace(/<body[^>]*>/i, m => m + bodyHtml);
+      }
+    } catch (e) {
+      console.error("serveRecipePage: 本文のSSRに失敗（本文なしで続行）", id, e);
+    }
   } else {
     // 非公開化・削除済み・不正IDのレシピURL：ソフト404を避け、404 + noindex を返す
     // （200のままだと検索結果に中身の無いページが残り続ける）

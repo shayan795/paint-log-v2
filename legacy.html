@@ -921,8 +921,51 @@ body{background-image:none}
      自前配信にすることで、その2つを構造的に無くしている。
      更新方法: node scripts/check_deps.mjs で新版を確認 → README §4.5 の手順 -->
 <script src="/vendor/supabase-js-2.110.9.js"></script>
-<script src="/src/config.js"></script>
-<script src="/src/methods.js"></script>
+<!-- ASSETVER — 「新しいHTML＋古いJS」のズレ対策（BOMBS B-003）。
+     URLに ?v=<版> を付けることで、中身が変われば別URLになり、ブラウザとCloudflareは
+     必ず新しいJSを取りに行く（＝デプロイ直後に古いJSが使われる時間帯を無くす）。
+     ファイル名を変える方式ではなく ?v= にした理由、および残る限界（GitHub Pagesは
+     キャッシュの見分けに ?v= を使わない）は index.html の同じ場所に詳しく書いてある。
+     版の更新は手作業にせず必ず: node scripts/bump_asset_version.mjs -->
+<script src="/src/config.js?v=3e1a7c81"></script>
+<script src="/src/methods.js?v=3e1a7c81"></script>
+<!-- ASSETVER:START — 自動生成。手で編集しない（node scripts/bump_asset_version.mjs で更新される） -->
+<script>
+window.PAINTLOG_ASSET_EXPECT = {
+  version: "3e1a7c81",
+  config:  "SUPABASE_ANON_KEY,SUPABASE_URL,TURNSTILE_SITE_KEY",
+  methods: "grad,candy,candy_red,candy_blue,wrap,marble,weather,brush,metal,matte,mask"
+};
+</script>
+<!-- ASSETVER:END -->
+<script>
+/* 版ズレの検出。詳しい意図は index.html の同じブロックのコメントを参照。
+   ★レシピが表示できなくなるのが最悪なので、全体を try で包んで絶対に例外を投げない。 */
+(function(){
+  try{
+    var E = window.PAINTLOG_ASSET_EXPECT || {};
+    var got = { config: "", methods: "" };
+    try{ got.config  = Object.keys(window.PAINTLOG_CONFIG || {}).sort().join(","); }catch(_){}
+    try{ got.methods = (window.PAINT_METHODS || []).map(function(m){ return m && m.slug; }).join(","); }catch(_){}
+    var bad = [];
+    if (E.config  && got.config  !== E.config ) bad.push("config");
+    if (E.methods && got.methods !== E.methods) bad.push("methods");
+    if (!bad.length) return;
+    var detail = {
+      expected_version: E.version || null, mismatched: bad.join(","),
+      expected_config: E.config || null,  actual_config: got.config,
+      expected_methods: E.methods || null, actual_methods: got.methods,
+      page: location.pathname
+    };
+    console.error("[version_skew] HTMLと読み込まれたJSが食い違っています。デプロイ直後なら数分で解消します。続くならキャッシュ（またはJSの読み込み失敗）を疑ってください。", detail);
+    var n = 0, timer = setInterval(function(){
+      var t = window.track || window.trackLegacy;
+      if (typeof t === "function"){ clearInterval(timer); try{ t("version_skew", detail); }catch(_){} }
+      else if (++n > 20){ clearInterval(timer); }
+    }, 1000);
+  }catch(_){ /* 検出処理そのものでページを壊さない */ }
+})();
+</script>
 </head>
 <body>
 

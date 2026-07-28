@@ -52,6 +52,11 @@ const PATTERNS = {
   isAllowedImageOrigin: /^function isAllowedImageOrigin[\s\S]*?^\}/m,
   buildDescription:     /^function buildDescription[\s\S]*?^\}/m,
   UUID_RE:              /^const UUID_RE = .*$/m,
+  // 本文SSR（レシピ本文をサーバー側でHTML化する部分）
+  collectPaintRefs:     /^function collectPaintRefs[\s\S]*?^\}/m,
+  buildPaintMaps:       /^function buildPaintMaps[\s\S]*?^\}/m,
+  paintLabel:           /^function paintLabel[\s\S]*?^\}/m,
+  buildRecipeBodyHtml:  /^function buildRecipeBodyHtml[\s\S]*?^\}/m,
 };
 const defs = [];
 for (const [name, re] of Object.entries(PATTERNS)) {
@@ -63,8 +68,10 @@ for (const [name, re] of Object.entries(PATTERNS)) {
   }
   defs.push(m[0]);
 }
-const { isBlockedPath, esc, isAllowedImageOrigin, buildDescription, UUID_RE } =
-  new Function(`${defs.join("\n")}\nreturn { isBlockedPath, esc, isAllowedImageOrigin, buildDescription, UUID_RE };`)();
+const {
+  isBlockedPath, esc, isAllowedImageOrigin, buildDescription, UUID_RE,
+  collectPaintRefs, buildPaintMaps, paintLabel, buildRecipeBodyHtml,
+} = new Function(`${defs.join("\n")}\nreturn { isBlockedPath, esc, isAllowedImageOrigin, buildDescription, UUID_RE, collectPaintRefs, buildPaintMaps, paintLabel, buildRecipeBodyHtml };`)();
 
 // ---------------------------------------------------------- 内部ファイルの遮断
 // GitHub Pages はリポジトリ全体を公開してしまうため、入口のWorkerで落とすのが唯一の防波堤。
@@ -160,6 +167,123 @@ check("レシピIDの検証", "前後に文字を足したものは通さない"
 check("レシピIDの検証", "改行を足したものは通さない（$のすり抜け防止）", UUID_RE.test("11111111-2222-3333-4444-555555555555\n"), false);
 check("レシピIDの検証", "SQL/URLの細工を混ぜたものは通さない", UUID_RE.test("11111111-2222-3333-4444-555555555555&select=*"), false);
 check("レシピIDの検証", "空文字は通さない", UUID_RE.test(""), false);
+
+// ================================================================ 本文のSSR
+// /r/:id はレシピ本文をサーバー側でHTMLにして生HTMLに入れる（入れないと検索エンジンから
+// 見て「中身の無いページ」になる）。ここが緩むと、レシピ名や塗料名に細工を書いた投稿だけで
+// 閲覧ページにHTMLを注入できてしまう＝過去に事故を起こした経路そのもの。
+
+// --- 参照の収集（どの塗料を引けばよいか） ---
+const ssrGrid = {
+  kit: "RX-78-2 ガンダム",
+  author: "テスト太郎",
+  memo: "缶スプレーで塗装",
+  procs: [{ id: "q1", name: "サフ" }, { id: "q2", name: "本塗装" }, { id: "q3", name: "空の工程" }],
+  rows: [
+    { part: "本体", cells: { q1: { id: "pt_aaaaaa111111", i: 0 }, q2: { i: 1 } }, comment: "2回塗り" },
+    { part: "武器", cells: { q2: { c: "自作グレー" } } },
+    { part: "",     cells: {} },                                  // 完全に空の行は出さない
+  ],
+};
+check("本文SSR/参照の収集", "安定IDと並び順の両方を集める（重複は1回だけ）",
+  collectPaintRefs(ssrGrid), { ids: ["pt_aaaaaa111111"], idxs: [0, 1] });
+check("本文SSR/参照の収集", "形の違う値は信用せず捨てる（細工をURLに混ぜさせない）",
+  collectPaintRefs({ rows: [{ cells: {
+    a: { id: "pt_ZZZ" },                    // 16進以外
+    b: { id: "pt_aaa" },                    // 短すぎる
+    c: { id: "pt_aaaaaa,999" },             // クエリを割るための細工
+    d: { i: -1 }, e: { i: 1.5 }, f: { i: "3" }, g: { i: NaN },
+  } }] }), { ids: [], idxs: [] });
+truthy("本文SSR/参照の収集", "gridが壊れていても例外を投げない",
+  ["こわれた値", null, [], { rows: "x" }, { rows: [null, { cells: null }, { cells: [1, 2] }] }]
+    .every(g => { try { collectPaintRefs(g); return true; } catch (_) { return false; } }));
+
+// --- 塗料マスタの引き当て ---
+const ssrMaps = buildPaintMaps([
+  { id: "pt_aaaaaa111111", brand: "GSIクレオス Mr.カラー", code: "C1", name: "ホワイト", sort_order: 0 },
+  { id: "pt_bbbbbb222222", brand: "タミヤ アクリル", code: "",   name: "フラットブラック", sort_order: 1 },
+  { id: "pt_cccccc333333", brand: "細工", code: '"><script>alert(1)</script>', name: "$&", sort_order: 2 },
+]);
+check("本文SSR/塗料の引き当て", "安定IDで引ける（ブランド 型番 名称）",
+  paintLabel({ id: "pt_aaaaaa111111" }, ssrMaps), "GSIクレオス Mr.カラー C1 ホワイト");
+check("本文SSR/塗料の引き当て", "型番が空でも空白が二重にならない",
+  paintLabel({ id: "pt_bbbbbb222222" }, ssrMaps), "タミヤ アクリル フラットブラック");
+check("本文SSR/塗料の引き当て", "旧方式(並び順)でも引ける",
+  paintLabel({ i: 1 }, ssrMaps), "タミヤ アクリル フラットブラック");
+check("本文SSR/塗料の引き当て", "マスタに無ければ手入力の名前を使う",
+  paintLabel({ id: "pt_ffffff999999", c: " 自作グレー " }, ssrMaps), "自作グレー");
+check("本文SSR/塗料の引き当て", "何も指していなければ空文字（例外を投げない）",
+  [paintLabel(null, ssrMaps), paintLabel({}, ssrMaps), paintLabel({ i: 999 }, null)], ["", "", ""]);
+
+// --- 本文HTMLの組み立て ---
+const ssrHtml = buildRecipeBodyHtml({ title: "旧タイトル", grid: ssrGrid }, ssrMaps, 20000);
+truthy("本文SSR/本文の組み立て", "キット名が本文に出る", ssrHtml.includes("RX-78-2 ガンダム"));
+truthy("本文SSR/本文の組み立て", "制作者名が本文に出る", ssrHtml.includes("テスト太郎"));
+truthy("本文SSR/本文の組み立て", "メモが本文に出る", ssrHtml.includes("缶スプレーで塗装"));
+truthy("本文SSR/本文の組み立て", "部位名が本文に出る", ssrHtml.includes("本体") && ssrHtml.includes("武器"));
+truthy("本文SSR/本文の組み立て", "工程名が本文に出る", ssrHtml.includes("サフ") && ssrHtml.includes("本塗装"));
+truthy("本文SSR/本文の組み立て", "マスタ塗料の名前が本文に出る", ssrHtml.includes("GSIクレオス Mr.カラー C1 ホワイト"));
+truthy("本文SSR/本文の組み立て", "手入力の塗料名も本文に出る", ssrHtml.includes("自作グレー"));
+truthy("本文SSR/本文の組み立て", "色グループのコメントも本文に出る", ssrHtml.includes("2回塗り"));
+truthy("本文SSR/本文の組み立て", "どの部位にも塗料が無い工程の列は出さない", !ssrHtml.includes("空の工程"));
+truthy("本文SSR/本文の組み立て", "JSが触る #viewMode / #viewTable には入れない（二重描画の防止）",
+  !ssrHtml.includes('id="viewMode"') && !ssrHtml.includes('id="viewTable"'));
+truthy("本文SSR/本文の組み立て", "自前のブロック(#__ssr_recipe)に入れ、JS起動後に自分で消える仕掛けがある",
+  ssrHtml.includes('id="__ssr_recipe"') && ssrHtml.includes("removeChild"));
+
+// --- 悪意ある入力（ここが過去に事故を起こした経路） ---
+const evilGrid = {
+  kit: '<script>alert(1)</script>',
+  author: '"><img src=x onerror=alert(1)>',
+  memo: "$&$'$`",
+  procs: [{ id: "q1", name: '</table><script>alert(2)</script>' }],
+  rows: [{ part: '<svg onload=alert(3)>', cells: { q1: { id: "pt_cccccc333333" } }, comment: '</div><script>x</script>' }],
+};
+const evilHtml = buildRecipeBodyHtml({ grid: evilGrid }, ssrMaps, 20000);
+truthy("本文SSR/エスケープ", "レシピ名のscriptタグが生のまま出ない", !evilHtml.includes("<script>alert(1)"));
+truthy("本文SSR/エスケープ", "工程名のscriptタグが生のまま出ない", !evilHtml.includes("<script>alert(2)"));
+truthy("本文SSR/エスケープ", "部位名のタグが生のまま出ない", !evilHtml.includes("<svg onload"));
+truthy("本文SSR/エスケープ", "コメントのタグが生のまま出ない", !evilHtml.includes("<script>x"));
+truthy("本文SSR/エスケープ", "塗料名(マスタ側)のタグが生のまま出ない", !evilHtml.includes("<script>alert(1)</script>"));
+truthy("本文SSR/エスケープ", "属性を閉じる細工(\")が生のまま出ない",
+  !evilHtml.includes('"><img') && !evilHtml.includes('"><script'));
+truthy("本文SSR/エスケープ", "エスケープ後も本文の入れ物(div/table)は壊れていない",
+  evilHtml.startsWith('<div id="__ssr_recipe">') && evilHtml.includes("<table>"));
+// ★注入は必ず replace の第2引数を「関数」にすること。文字列だと $& $' $` が特殊置換として
+//   展開され、利用者の入力からページ本文が複製される（保存型XSSの入口）。
+const fakePage = "<html><head></head><body><div id=app>APP</div></body></html>";
+const injectedOk = fakePage.replace(/<body[^>]*>/i, m => m + evilHtml);
+truthy("本文SSR/注入", "$&等を含む本文でも元のページが複製されない",
+  injectedOk.split("APP").length === 2 && injectedOk.split("<body>").length === 2);
+truthy("本文SSR/注入", "$&は文字として残る（特殊置換に化けない）", injectedOk.includes("$&amp;"));
+truthy("本文SSR/注入", "本文はbodyの直後に入る", injectedOk.includes('<body><div id="__ssr_recipe">'));
+
+// --- 壊れた入力・上限 ---
+check("本文SSR/安全側の動作", "中身が何も無ければ本文を作らない（空の枠を出さない）",
+  buildRecipeBodyHtml({ grid: {} }, ssrMaps, 20000), "");
+check("本文SSR/安全側の動作", "recipeがnull/壊れた形でも例外を投げず空文字",
+  [buildRecipeBodyHtml(null, null, 20000), buildRecipeBodyHtml({ grid: "こわれた値" }, ssrMaps, 20000),
+   buildRecipeBodyHtml({ grid: { rows: "x", procs: 3 } }, ssrMaps, 20000)], ["", "", ""]);
+truthy("本文SSR/安全側の動作", "rows/cellsにnullや配列が混ざっていても落ちない",
+  typeof buildRecipeBodyHtml({ grid: { kit: "K", procs: [null, "x", { id: "q1", name: "サフ" }],
+    rows: [null, [1], { cells: null }, { cells: [1] }, { part: "本体", cells: { q1: null } }] } }, ssrMaps, 20000) === "string");
+const bigGrid = { kit: "大きなレシピ", procs: [{ id: "q1", name: "本塗装" }],
+  rows: Array.from({ length: 400 }, (_, n) => ({ part: "部位" + n, cells: { q1: { id: "pt_aaaaaa111111" } } })) };
+const bigHtml = buildRecipeBodyHtml({ grid: bigGrid }, ssrMaps, 2000);
+truthy("本文SSR/安全側の動作", "上限を超える本文は打ち切る（応答が肥大化しない）", bigHtml.length < 12000);
+truthy("本文SSR/安全側の動作", "打ち切っても表が閉じていて本文として成立する",
+  bigHtml.includes("</tbody></table>") && bigHtml.includes("</article></div>"));
+truthy("本文SSR/安全側の動作", "上限が十分なら全行が出る",
+  buildRecipeBodyHtml({ grid: bigGrid }, ssrMaps, 200000).includes("部位399"));
+// ★行数の上限だけでは足りない。gridは直APIで保存できるため、コメント1つに何MBも入れられる。
+//   項目ごとの上限が外れると、1行のレシピで応答が数MBに膨らむ。
+const hugeGrid = { kit: "あ".repeat(100000), author: "い".repeat(100000), memo: "う".repeat(100000),
+  procs: [{ id: "q1", name: "え".repeat(100000) }],
+  rows: [{ part: "お".repeat(100000), cells: { q1: { c: "か".repeat(100000) } }, comment: "き".repeat(100000) }] };
+truthy("本文SSR/安全側の動作", "1項目が極端に長くても応答が肥大化しない（項目ごとの上限）",
+  buildRecipeBodyHtml({ grid: hugeGrid }, ssrMaps, 20000).length < 12000);
+truthy("本文SSR/安全側の動作", "刈り取っても本文の入れ物は壊れない",
+  buildRecipeBodyHtml({ grid: hugeGrid }, ssrMaps, 20000).endsWith("</script>"));
 
 // ---------------------------------------------------------------------- 出力
 const byArea = new Map();
