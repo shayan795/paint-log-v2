@@ -3561,11 +3561,15 @@ const safePhoto = u => {
         if (vb){
           sb.auth.getSession().then(function(s){
             var loggedIn = !!(s && s.data && s.data.session);
+            // ★ログイン後にこの投稿へ戻れるよう、戻り先(returnTo)を付ける。
+            //   これが無いとトップに飛ばされ、本人でも「見たかった非公開投稿」を探し直す羽目になる。
+            //   loginUrl() 側で戻り先の形を検証済み（未定義なら従来どおり素のログインへ）。
+            var loginHref = (typeof window.loginUrl === "function") ? window.loginUrl() : "/index.html#login";
             vb.innerHTML = loggedIn
               ? '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません。<br>非公開の投稿か、削除された可能性があります。</p>'
               : '<div style="padding:48px 16px;text-align:center;color:var(--sub)">'
                 + '<p>この投稿は非公開の可能性があります。<br>投稿者ご本人は、ログインすると表示できます。</p>'
-                + '<a href="/index.html" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#E60012;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
+                + '<a href="' + esc(loginHref) + '" style="display:inline-block;margin-top:14px;padding:10px 24px;border-radius:10px;background:#E60012;color:#fff;text-decoration:none;font-weight:700">ログインする</a>'
                 + '</div>';
           }, function(){
             vb.innerHTML = '<p style="padding:48px 16px;text-align:center;color:var(--sub)">この投稿は表示できません（非公開、または削除済み）。</p>';
@@ -4429,7 +4433,12 @@ const safePhoto = u => {
     }
     sec.appendChild(formArea);
     var loginBtn = formArea.querySelector('#cLogin');
-    if (loginBtn) loginBtn.onclick = function(){ location.href='/index.html#login'; };
+    // ★ログイン後、コメントしようとしていたこのレシピへ戻れるよう戻り先(returnTo)を付ける。
+    //   以前はトップへ飛ばしていたため、共有リンクで来た人はコメントを諦めていた。
+    //   戻り先の組み立てと検証は loginUrl()（メインscript）側で行う。
+    if (loginBtn) loginBtn.onclick = function(){
+      location.href = (typeof window.loginUrl === "function") ? window.loginUrl() : '/index.html#login';
+    };
     var submit = formArea.querySelector('#cSubmit');
     if (submit){
       var input = formArea.querySelector('#cInput');

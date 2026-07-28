@@ -429,8 +429,23 @@ button{font-family:inherit}
 [data-theme="dark"] .auth-inapp b{color:#F0C36D}
 [data-theme="dark"] .auth-inapp span{color:#D8C8A0}
 [data-theme="dark"] .auth-inapp .auth-inapp-alt{color:#B8A882}
+/* 逃げ道（外部ブラウザで開く／URLをコピー）は見つけやすさが命なので、文字リンクではなくボタンで大きく出す */
+.auth-inapp-acts{display:flex;gap:8px;margin:4px 0 2px;flex-wrap:wrap}
+.auth-inapp-btn{flex:1 1 46%;min-width:130px;display:inline-flex;align-items:center;justify-content:center;
+  padding:10px 12px;border-radius:9px;border:1px solid #C08A2A;background:#C08A2A;color:#fff;
+  font:inherit;font-weight:700;font-size:.8rem;text-decoration:none;cursor:pointer;text-align:center}
+.auth-inapp-btn.ghost{background:transparent;color:#7A4B00}
+.auth-inapp-url{width:100%;margin-top:6px;padding:8px 10px;border:1px solid #C08A2A;border-radius:8px;
+  background:#fff;color:#5A4300;font:inherit;font-size:.74rem;-webkit-user-select:all;user-select:all}
+[data-theme="dark"] .auth-inapp-btn.ghost{color:#F0C36D}
+[data-theme="dark"] .auth-inapp-url{background:#1B1710;color:#E7D8B0}
+/* 押した瞬間に案内へ視線を戻すための一瞬の点滅 */
+.auth-inapp.flash{animation:inappFlash .9s ease-out 2}
+@keyframes inappFlash{0%,100%{box-shadow:none}35%{box-shadow:0 0 0 4px rgba(192,138,42,.35)}}
 .auth-g{width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid var(--line-d); border-radius:10px; background:#fff; font:inherit; font-weight:700; font-size:.92rem; cursor:pointer}
 .auth-g:hover{background:var(--bp-bg)}
+/* アプリ内ブラウザでは押しても必ず失敗するので、押せないと分かる見た目にする（要素自体は残す） */
+.auth-g.auth-g-off{opacity:.45; cursor:not-allowed; filter:grayscale(1)}
 .auth-or{display:flex; align-items:center; gap:10px; color:var(--sub); font-size:.74rem; margin:16px 0}
 .auth-or::before,.auth-or::after{content:""; flex:1; height:1px; background:var(--line)}
 .auth-label{display:block; font-size:.76rem; font-weight:700; color:var(--ink); margin:12px 0 4px}
@@ -1665,9 +1680,16 @@ function setAuthUI(session, profile){
   renderDrawer();   // ログイン状態に応じてメニュー最下部のログアウト/退会/切替を出し分け
 }
 
+// 「今からGoogleへ飛んだ」ことを覚えておく目印。
+// 戻ってきてエラーが付いていたとき、それがメールのリンク由来かGoogle由来かを見分けるのに使う。
+var OAUTH_PENDING_KEY = "paintlog_oauth_pending";
+
 // Googleで続ける（ログイン＝新規登録を兼ねる。毎回アカウント選択させる）
 function googleLogin(){
   if (!sb) return;
+  // ★外部サイト(Google)へ出るとURLの ?returnTo= は失われるので、飛ぶ直前にタブへ預ける
+  saveReturnToFromUrl();
+  try { sessionStorage.setItem(OAUTH_PENDING_KEY, "1"); } catch (_) {}
   sb.auth.signInWithOAuth({ provider:"google", options:{
     redirectTo: location.origin + location.pathname,
     queryParams:{ prompt:"select_account" }   // 毎回どのGoogleアカウントか選ばせる（誤アカウント防止）
@@ -1829,7 +1851,8 @@ var IN_APP_UA_RE = new RegExp([
   "YJApp-ANDROID", "YJApp-IOS",                         // Yahoo! JAPAN アプリ
   "SmartNews",                                          // SmartNews
   "Discord", "Slack",                                   // Discord / Slack
-  "KAKAOTALK", "Snapchat", "Pinterest", "MicroMessenger", "NAVER", "Whale"
+  "KAKAOTALK", "Snapchat", "Pinterest", "MicroMessenger",
+  "NAVER\\(inapp"                                       // NAVERアプリ内（同社のWhaleブラウザは通常ブラウザなので含めない）
 ].join("|"), "i");
 
 // ②Android の WebView（＝アプリの中に埋め込まれたブラウザ）が必ず持つ印。
@@ -1974,7 +1997,7 @@ function sanitizeReturnTo(v){
   if (v.charAt(0) !== "/") return "";                     // 絶対URL(https://…)や javascript: を排除
   if (v.slice(0, 2) === "//") return "";                  // //evil.com は別サイトへの誘導になる
   if (v.indexOf("\\") >= 0) return "";                    // /\evil.com をブラウザが // と解釈する事故を防ぐ
-  if (/[ -]/.test(v)) return "";         // 制御文字（改行やタブ）入りは不正
+  if (/[\u0000-\u001F\u007F]/.test(v)) return "";         // 制御文字（改行やタブ）入りは不正
   if (!RETURN_TO_OK_RE.test(v)) return "";                // 最後に許可リストで確認（../ などはここで落ちる）
   return v;
 }
@@ -2021,7 +2044,7 @@ function renderAuth(mode){
       + '<div class="auth-err" id="aErr"></div>'
       + '<button class="auth-submit" id="aSubmit">登録する</button>'
       + '<div class="auth-foot">アカウントをお持ちの方は <button class="auth-link" id="aToLogin">ログイン</button></div>';
-    $("aG").onclick = googleLogin;
+    bindGoogleBtn();   // アプリ内ブラウザなら押せなくして逃げ道へ誘導する
     bindCopyUrl();
     $("aToLogin").onclick = function(){ renderAuth("login"); };
     $("aSubmit").onclick = doRegister;
@@ -2082,7 +2105,7 @@ function renderAuth(mode){
       + '<button class="auth-submit" id="aSubmit">ログイン</button>'
       + '<div class="auth-foot"><button class="auth-link" id="aReset">パスワードを忘れた方</button></div>'
       + '<div class="auth-foot">アカウントが無い方は <button class="auth-link" id="aToReg">新規登録</button></div>';
-    $("aG").onclick = googleLogin;
+    bindGoogleBtn();   // アプリ内ブラウザなら押せなくして逃げ道へ誘導する
     bindCopyUrl();
     $("aReset").onclick = function(){ renderAuth("reset"); };
     $("aToReg").onclick = function(){ renderAuth("register"); };
@@ -2143,6 +2166,7 @@ function doLogin(){
       return;
     }
     closeAuth();   // onAuthStateChange がUIを更新
+    goReturnTo();  // 元のレシピから来ていたらそこへ戻す（無ければ何もしない＝従来どおり）
   }).catch(function(e){
     // ★通信断などで reject された場合。以前はここが無く、ボタンが押せないまま
     //   「ログイン中…」で固まっていた（何も起きていないように見える）。
@@ -2588,26 +2612,56 @@ function applySession(session){
     setBellBadge(0);
   }
 }
+// ★起動時にいちばん先に「戻り先」を預かる。
+//   レシピページから /index.html?returnTo=%2Fr%2F<レシピID>#login で来るため。
+//   （sb が無い＝ライブラリ未読込のときでも、預けるだけなら害が無いのでここで実行する）
+saveReturnToFromUrl();
+
 if (sb){
-  // 認証リンク(確認メール・再設定メール)が無効だった場合、Supabaseは
-  // #error=access_denied&error_code=otp_expired&error_description=... を付けてトップに戻す。
-  // 何も表示しないと利用者は理由が分からず放り出されるため、日本語で説明し再送導線を出す。
-  (function showAuthLinkError(){
+  // 認証から戻ってきたときにURLへ付く #error=... を日本語で説明する。
+  // 経路が2つあり、同じ形で戻ってくるので区別が要る:
+  //   (a) 確認メール・再設定メールのリンク（期限切れ・使用済み）
+  //   (b) Googleログイン（キャンセル・アプリ内ブラウザ拒否・連携失敗）
+  // 以前は全部「メールのリンクが無効でした」と出していたため、Googleで失敗した人に
+  // 見当違いの案内が出て、原因（アプリ内ブラウザ）にたどり着けなかった。
+  (function showAuthReturnError(){
     try {
+      var wasOAuth = false;
+      try { wasOAuth = sessionStorage.getItem(OAUTH_PENDING_KEY) === "1"; sessionStorage.removeItem(OAUTH_PENDING_KEY); } catch(_){}
       var h = (location.hash || "").replace(/^#/, "");
       if (!h || h.indexOf("error") < 0) return;
       var q = new URLSearchParams(h);
       var code = q.get("error_code") || q.get("error") || "";
       var desc = q.get("error_description") || "";
       if (!code && !desc) return;
-      try { history.replaceState(null, "", location.pathname); } catch(_){}   // URLを綺麗にする
-      var msg = /expired/i.test(code + desc)
-        ? "メールのリンクの有効期限が切れています。お手数ですが、もう一度お試しください。"
-        : (/used|already/i.test(code + desc)
-            ? "このリンクは既に使用済みです。もう一度お試しください。"
-            : "メールのリンクが無効でした（" + (desc || code) + "）。もう一度お試しください。");
+      try { history.replaceState(null, "", location.pathname + location.search); } catch(_){}   // URLを綺麗にする（?returnTo= は残す）
+      var all = code + " " + desc;
+      // 経路の判定: 直前にGoogleへ飛んでいた、または本文にプロバイダ由来の語が出ている
+      var isOAuth = wasOAuth || /provider|oauth|google|disallowed_useragent|server_error|bad_code|exchange/i.test(all);
+      var title, msg;
+      if (isOAuth){
+        title = "Googleログインに失敗しました";
+        if (isInAppBrowser()){
+          msg = "アプリ内のブラウザ（X・Instagram・LINEなど）ではGoogleログインが使えません。\n"
+              + "画面右上の「⋮」や共有ボタンから「ブラウザで開く／Safariで開く」を選び、"
+              + "外部ブラウザで開き直してからお試しください。\n"
+              + "メールアドレスでのログインは、このままでもご利用いただけます。";
+        } else if (/access_denied|cancel/i.test(all)){
+          msg = "Googleの画面でキャンセルされたか、許可されませんでした。もう一度お試しください。";
+        } else {
+          msg = "Googleとの連携中に問題が起きました（" + (desc || code) + "）。\n"
+              + "時間をおいてもう一度お試しいただくか、メールアドレスでのログインをご利用ください。";
+        }
+      } else {
+        title = "リンクが無効です";
+        msg = /expired/i.test(all)
+          ? "メールのリンクの有効期限が切れています。お手数ですが、もう一度お試しください。"
+          : (/used|already/i.test(all)
+              ? "このリンクは既に使用済みです。もう一度お試しください。"
+              : "メールのリンクが無効でした（" + (desc || code) + "）。もう一度お試しください。");
+      }
       setTimeout(function(){
-        if (typeof authMessage === "function"){ openAuth("login"); authMessage("リンクが無効です", msg); }
+        if (typeof authMessage === "function"){ openAuth("login"); authMessage(title, msg); }
         else alert(msg);
       }, 0);
     } catch(_){}
@@ -2618,6 +2672,13 @@ if (sb){
     // 「パスワード再設定メール」のリンクから戻ってきた時だけ、新パスワード設定画面を出す。
     // これが無いと、パスワードを忘れた人は現在のパスワードを要求する画面しか無く再設定できない。
     if (_e === "PASSWORD_RECOVERY") openAuth("newpw");
+    // Googleログインから戻ってきた直後だけ、預けた戻り先へ移動する。
+    // ★INITIAL_SESSION（ただの再訪・リロード）では動かさない。動かすと、
+    //   すでにログイン済みの人がトップを開くたびに勝手に飛ばされてしまう。
+    if (_e === "SIGNED_IN" && session && session.user){
+      try { sessionStorage.removeItem(OAUTH_PENDING_KEY); } catch(_){}
+      goReturnTo();
+    }
   });
   // 45秒ごとに未読数を再取得（軽いポーリング。realtime は段8）
   setInterval(function(){ if (currentUserId) refreshBellBadge(); }, 45000);

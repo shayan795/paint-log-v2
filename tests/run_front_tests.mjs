@@ -104,6 +104,119 @@ truthy("サムネイル", "resize=contain がある（無いと拡大されて�
 check("サムネイル", "Storage以外のURLは変換しない", thumbUrl("https://example.com/a.jpg"), "https://example.com/a.jpg");
 check("サムネイル", "空でも壊れない", thumbUrl(""), "");
 
+// ------------------------------------------------- アプリ内ブラウザの判定（index.html）
+//
+//   なぜ必要か:
+//     Googleは「SNSアプリの中のブラウザ」でのログインを仕様として拒否する。
+//     検出できないと、利用者は「Googleでログイン」を押して403で行き止まりになり、そのまま去る。
+//     逆に検出しすぎる（誤検知）と、普通のSafari/Chromeの人に嘘の警告を出して離脱させる。
+//     どちらも実害が大きいので、実在のUserAgentで両方向を固定する。
+//
+const inappSrc = index.match(/\/\* ==== BEGIN:INAPP ====[\s\S]*?\/\* ==== END:INAPP ==== \*\//);
+if (!inappSrc) throw new Error("index.html から INAPP ブロックを取り出せませんでした");
+/** UAと表示モードを差し替えて isInAppBrowser() を作る */
+function makeIsInApp(ua, standalone) {
+  const nav = { userAgent: ua };
+  if (standalone) nav.standalone = true;
+  const win = { matchMedia: () => ({ matches: !!standalone }) };
+  return new Function("navigator", "window", `${inappSrc[0]}\nreturn isInAppBrowser;`)(nav, win);
+}
+const isInApp = (ua, standalone) => makeIsInApp(ua, standalone)();
+
+// 実在するUserAgent（左: 名前 / 中: UA / 右: アプリ内ブラウザか）
+const UA_TABLE = [
+  // ---- アプリ内ブラウザ（true でなければならない）
+  ["X(Twitter) iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 Twitter for iPhone/10.55", true],
+  ["X(Twitter) Android ※アプリ名を名乗らない", "Mozilla/5.0 (Linux; Android 14; SM-S911B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.6099.230 Mobile Safari/537.36", true],
+  ["Instagram iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 334.0.0.42.95 (iPhone14,2; iOS 17_5_1; ja_JP; ja; scale=3.00; 1170x2532)", true],
+  ["Instagram Android", "Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.0.0 Mobile Safari/537.36 Instagram 334.0.0.42.95 Android", true],
+  ["Facebook iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/460.0.0.32.107;FBBV/1234;FBDV/iPhone14,2]", true],
+  ["Facebook Android", "Mozilla/5.0 (Linux; Android 14; SM-A536B Build/UP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/460.0.0.32.107;]", true],
+  ["LINE iOS ※Safariを名乗る", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1 Line/14.6.1", true],
+  ["LINE Android", "Mozilla/5.0 (Linux; Android 14; SO-51D Build/68.2.A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 Line/14.6.1", true],
+  ["Threads Android", "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 Barcelona 340.0.0.35.109 Android", true],
+  ["Threads iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Barcelona 340.0.0.35.109", true],
+  ["TikTok Android", "Mozilla/5.0 (Linux; Android 13; V2172 Build/TP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/117.0.0.0 Mobile Safari/537.36 BytedanceWebview/d8a21c6", true],
+  ["TikTok iOS(musical_ly)", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 musical_ly_33.5.0 JsSdk/2.0 NetType/WIFI", true],
+  ["TikTok iOS(trill)", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 trill_320503 JsSdk/2.0 NetType/WIFI", true],
+  ["Yahoo! JAPAN Android ※wv無し", "Mozilla/5.0 (Linux; Android 14; SC-53C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 YJApp-ANDROID jp.co.yahoo.android.yjtop/4.10.0", true],
+  ["Yahoo! JAPAN iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 YJApp-IOS jp.co.yahoo.ios.yjtop/4.60.0", true],
+  ["SmartNews iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 SmartNews/24.5.0", true],
+  ["Discord Android", "Mozilla/5.0 (Linux; Android 14; Pixel 6 Build/AP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 Discord/198.15", true],
+  ["Slack iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1 Slack/24.05.20", true],
+  ["KakaoTalk Android", "Mozilla/5.0 (Linux; Android 13; SM-G991N Build/TP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.0.0 Mobile Safari/537.36 KAKAOTALK 10.4.0", true],
+  ["WeChat iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128) NetType/WIFI Language/ja", true],
+  ["Snapchat iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Snapchat/12.85.0.44 (like Safari/604.1)", true],
+  ["汎用Android WebView", "Mozilla/5.0 (Linux; Android 11; M2101K6G Build/RKQ1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36", true],
+  ["汎用iOS WKWebView(Safariを名乗らない)", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", true],
+
+  // ---- 通常のブラウザ（false でなければならない＝誤検知すると正常な利用者が離脱する）
+  ["iOS Safari", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", false],
+  ["SFSafariViewController(Safariと同じUA)", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1", false],
+  ["iOS Chrome", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1", false],
+  ["iOS Firefox", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/126.0 Mobile/15E148 Safari/605.1.15", false],
+  ["iOS Edge", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 EdgiOS/125.0.2535.60 Mobile/15E148 Safari/604.1", false],
+  ["iPad Safari", "Mozilla/5.0 (iPad; CPU OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", false],
+  ["Android Chrome", "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.72 Mobile Safari/537.36", false],
+  ["Android Firefox", "Mozilla/5.0 (Android 14; Mobile; rv:126.0) Gecko/126.0 Firefox/126.0", false],
+  ["Android Edge", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36 EdgA/125.0.2535.60", false],
+  ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36", false],
+  ["PC Chrome (Windows)", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36", false],
+  ["PC Safari (macOS)", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15", false],
+  ["PC Firefox (Windows)", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0", false],
+];
+for (const [name, ua, want] of UA_TABLE) {
+  check("アプリ内ブラウザ判定", `${name} は ${want ? "アプリ内" : "通常ブラウザ"}`, isInApp(ua, false), want);
+}
+
+// standalone（ブラウザUIが無い表示）でも検出が消えないこと。
+// ★これが以前の最悪の静かな失敗。standalone を先に見て return false していたため、
+//   アプリ内ブラウザが standalone と判定される端末では検出が丸ごと無効化されていた。
+const UA_X_ANDROID = UA_TABLE[1][1], UA_INSTA_IOS = UA_TABLE[2][1], UA_LINE_IOS = UA_TABLE[6][1];
+check("アプリ内ブラウザ判定", "standaloneでもX(Android WebView)はアプリ内のまま", isInApp(UA_X_ANDROID, true), true);
+check("アプリ内ブラウザ判定", "standaloneでもInstagram iOSはアプリ内のまま", isInApp(UA_INSTA_IOS, true), true);
+check("アプリ内ブラウザ判定", "standaloneでもLINE iOSはアプリ内のまま", isInApp(UA_LINE_IOS, true), true);
+// 逆に、ホーム画面に追加した本物のPWA（Safariを名乗らないだけ）は誤検知しない
+check("アプリ内ブラウザ判定", "ホーム画面追加のPWA(iOS)は通常扱い",
+  isInApp("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", true), false);
+check("アプリ内ブラウザ判定", "UAが空でも壊れず通常扱い", isInApp("", false), false);
+
+// ------------------------------------------------- ログイン後の戻り先（オープンリダイレクト対策）
+//
+//   なぜ必要か:
+//     受け取った戻り先をそのまま location に入れると、
+//     /index.html?returnTo=//evil.com のURLを配るだけで
+//     「うちのログイン画面から偽サイトへ送り込む」攻撃が成立してしまう。
+//
+const rtSrc = index.match(/\/\* ==== BEGIN:RETURNTO ====[\s\S]*?\/\* ==== END:RETURNTO ==== \*\//);
+if (!rtSrc) throw new Error("index.html から RETURNTO ブロックを取り出せませんでした");
+const { sanitizeReturnTo } = new Function(`${rtSrc[0]}\nreturn { sanitizeReturnTo };`)();
+
+const UUID = "550e8400-e29b-41d4-a716-446655440000";
+// 正常系（そのまま通す）
+check("戻り先の検証", "レシピのパスは通る", sanitizeReturnTo("/r/" + UUID), "/r/" + UUID);
+check("戻り先の検証", "大文字のIDも通る", sanitizeReturnTo("/r/" + UUID.toUpperCase()), "/r/" + UUID.toUpperCase());
+check("戻り先の検証", "トップ（/）は通る", sanitizeReturnTo("/"), "/");
+check("戻り先の検証", "/index.html は通る", sanitizeReturnTo("/index.html"), "/index.html");
+check("戻り先の検証", "/legacy.html は通る", sanitizeReturnTo("/legacy.html"), "/legacy.html");
+// 攻撃系（すべて空＝トップ扱いに落ちること）
+check("戻り先の検証", "//evil.com は捨てる（別サイトへの誘導）", sanitizeReturnTo("//evil.com"), "");
+check("戻り先の検証", "/\\evil.com は捨てる（ブラウザが//と解釈する）", sanitizeReturnTo("/\\evil.com"), "");
+check("戻り先の検証", "https://evil.com は捨てる", sanitizeReturnTo("https://evil.com"), "");
+check("戻り先の検証", "javascript: は捨てる", sanitizeReturnTo("javascript:alert(1)"), "");
+check("戻り先の検証", "data: は捨てる", sanitizeReturnTo("data:text/html,<script>alert(1)</script>"), "");
+check("戻り先の検証", "../ を使った上位移動は捨てる", sanitizeReturnTo("/../../etc/passwd"), "");
+check("戻り先の検証", "改行やタブなど制御文字入りは捨てる", sanitizeReturnTo("/r/" + UUID + "\n"), "");
+check("戻り先の検証", "先頭にNUL文字を挟んだ細工も捨てる", sanitizeReturnTo("\u0000//evil.com"), "");
+check("戻り先の検証", "先頭に空白を挟んだ細工も捨てる", sanitizeReturnTo(" //evil.com"), "");
+check("戻り先の検証", "先頭にタブを挟んだ細工も捨てる", sanitizeReturnTo("\t//evil.com"), "");
+check("戻り先の検証", "長すぎる値は捨てる", sanitizeReturnTo("/r/" + "a".repeat(300)), "");
+check("戻り先の検証", "IDの桁数が違うものは捨てる", sanitizeReturnTo("/r/1234"), "");
+check("戻り先の検証", "クエリを付け足した細工は捨てる", sanitizeReturnTo("/r/" + UUID + "?next=//evil.com"), "");
+check("戻り先の検証", "許可していないページは捨てる", sanitizeReturnTo("/admin.html"), "");
+check("戻り先の検証", "空・null・数値でも壊れない",
+  [sanitizeReturnTo(""), sanitizeReturnTo(null), sanitizeReturnTo(undefined), sanitizeReturnTo(123)], ["", "", "", ""]);
+
 // ---------------------------------------------------------------- 出力
 const byArea = new Map();
 for (const f of failures) {
