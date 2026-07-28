@@ -790,7 +790,14 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 </div>
 
 <!-- 認証ライブラリ＋接続設定（classic。HTTP配信時のみログイン動作。file://やオフラインでも閲覧は維持） -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabaseライブラリ。★バージョンを固定し、自分のサーバーから配信している。
+     以前は https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2 だった（＝「2で始まる最新」）。
+     この書き方だと平均4日に1度、誰にも知らされないまま中身が別物に差し替わり、
+     何も変えていないのに突然ログインできなくなる事故が起きうる。
+     さらに配信元(jsDelivr)が落ちるとSupabaseが元気でもサイトが動かない。
+     自前配信にすることで、その2つを構造的に無くしている。
+     更新方法: node scripts/check_deps.mjs で新版を確認 → README §4.5 の手順 -->
+<script src="/vendor/supabase-js-2.110.9.js"></script>
 <script src="src/config.js"></script>
 <script src="src/methods.js"></script>
 <script>

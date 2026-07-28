@@ -87,6 +87,63 @@ python3 -m http.server 4173
 
 ---
 
+## 4.5 ライブラリを更新する（Supabase）
+
+### 前提: なぜ固定しているか
+
+以前は `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2` と書いていた。
+末尾の `@2` は「2で始まる中で一番新しいものを毎回取ってくる」という意味で、**誰も版を決めていない**状態だった。
+
+実測: このライブラリは **90日で21回**（平均4.3日に1回）新版が出る。
+つまり **4日に1度、誰にも知らされないままサイトの心臓部が別のプログラムに差し替わっていた。**
+何も変更していないのに突然ログインできなくなり、しかも「動いていた版」に戻す手段も無い、という事故が起こりうる。
+さらに配信元(jsDelivr)が落ちると、Supabaseが正常でもサイトが動かなくなる。
+
+そこで **版を固定して `vendor/` に置き、自分のドメインから配信**している。
+- 突然の差し替えが構造的に起きない
+- jsDelivrが落ちてもサイトは動く（外部依存が2つ→1つに減る）
+- 別ドメインへの接続が減るぶん表示も速い
+
+### 更新を忘れないための仕掛け（3重）
+
+| 仕掛け | いつ気づくか |
+|---|---|
+| ① `node tests/run_front_tests.mjs` の最後に自動表示 | **開発するたび**（主役） |
+| ② Claudeの記憶ファイルに常駐 | 会話の開始時 |
+| ③ GitHub Actionsが毎週Issueを立てる | 開発していない期間の保険 |
+
+### 更新手順
+
+**Claudeに「Supabaseライブラリを更新して」と言えば全部やる。** 自分でやる場合:
+
+```bash
+V=2.111.0          # ← 新しい版に置き換える
+
+# 1) 取得
+curl -sSL "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@${V}/dist/umd/supabase.js" \
+     -o "vendor/supabase-js-${V}.js"
+
+# 2) npm公式の中身と一致するか確認（すり替えられていないかの検証・必須）
+curl -sSL "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-${V}.tgz" -o /tmp/sb.tgz
+tar -xzf /tmp/sb.tgz -C /tmp package/dist/umd/supabase.js
+cmp "/tmp/package/dist/umd/supabase.js" "vendor/supabase-js-${V}.js" && echo "一致OK"
+
+# 3) 読み込み先を差し替える（index.html / legacy.html / diagnostics.html の3か所）
+#    ※ index.html の記述が「いま使っている版」の正本。チェック用スクリプトはここを読む
+
+# 4) 古いファイルを消す
+git rm vendor/supabase-js-<古い版>.js
+
+# 5) テスト（画面31/塗料23/Worker55）
+node tests/run_front_tests.mjs && node tests/run_paint_tests.mjs && node tests/run_worker_tests.mjs
+```
+
+**5の後、必ずブラウザで「ログイン・投稿・画像アップロード」を実際に通すこと。**
+自動テストはライブラリ本体の動作までは見ていない（HTMLから安全用の関数を取り出して調べているだけ）。
+
+> ⚠️ `vendor/` のファイルは**手で書き換えないこと**。npm公式と1バイトでも違うと、
+> 上の(2)の検証が意味を失う。差し替えるときは必ず丸ごと入れ替える。
+
 ## 5. 環境変数・設定（dev / prod 分離）
 
 ### フロント: `src/config.js`

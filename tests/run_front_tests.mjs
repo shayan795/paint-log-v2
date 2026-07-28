@@ -113,6 +113,14 @@ for (const f of failures) {
 console.log(`\n${B}塗装レシピ録 — 自動テスト（画面まわり）${X}\n`);
 if (failures.length === 0) {
   console.log(`${G}✓ すべて合格${X}（${pass} 件）\n`);
+  // ★外部ライブラリの更新確認をここに置く理由:
+  //   版を固定したことで「勝手に壊れる」事故は消えたが、代わりに「更新を忘れる」問題が出る。
+  //   人の記憶に頼ると必ず抜けるので、開発中に必ず走るテストの最後にぶら下げて、
+  //   何もしなくても目に入るようにしている。失敗しても本テストの結果には影響しない。
+  try {
+    const { checkDeps } = await import("../scripts/check_deps.mjs");
+    await checkDeps({ quiet: true });
+  } catch (_) { /* 確認できなくてもテストは成功のまま */ }
 } else {
   for (const [area, list] of byArea) {
     console.log(`${R}✗${X} ${B}${area}${X}`);

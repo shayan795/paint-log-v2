@@ -52,6 +52,18 @@
 
 <script src="src/config.js"></script>
 <script type="module">
+// 自前配信のSupabaseライブラリ(UMD形式)を読み込む。読み込み済みなら何もしない。
+function loadSupabaseLib(src){
+  if (window.supabase && window.supabase.createClient) return Promise.resolve();
+  return new Promise(function(resolve, reject){
+    var sc = document.createElement("script");
+    sc.src = src;
+    sc.onload = function(){ resolve(); };
+    sc.onerror = function(){ reject(new Error("ライブラリを読み込めませんでした: " + src)); };
+    document.head.appendChild(sc);
+  });
+}
+
   const cfgEl = document.getElementById("cfg");
   const cfgDetail = document.getElementById("cfgDetail");
   const dbEl = document.getElementById("db");
@@ -70,7 +82,11 @@
     set(cfgEl, "ok", "設定OK");
     cfgDetail.textContent = cfg.SUPABASE_URL;
     try {
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+      // ★本体(index/legacy)と同じ、自前配信の固定版を使う。
+      //   以前は https://esm.sh/@supabase/supabase-js@2 から「2で始まる最新」を取っていたため、
+      //   接続診断ページだけ本体と違う版で動く可能性があった（診断の意味が薄れる）。
+      await loadSupabaseLib("/vendor/supabase-js-2.110.9.js");
+      const { createClient } = window.supabase;
       const sb = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
       const { data, error, count } = await sb
         .from("paints").select("*", { count: "exact", head: false }).limit(1);
