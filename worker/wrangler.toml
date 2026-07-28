@@ -14,6 +14,30 @@ routes = [
 # 有効にすると Cloudflare 側に一定期間ログが保存され、事後調査ができるようになる。
 # head_sampling_rate = 1 は「全リクエストを記録する」の意味。個人規模のアクセス量なので
 # 間引かず全部残す（無料枠に収まる範囲）。
+# 静的ファイル（HTML/CSS/JS/画像）をこのWorkerに同梱して配信する。
+# ★以前は GitHub Pages を配信元にしていたが、その公開URLを直接叩くと
+#   このWorkerを通らないため、内部ファイルの遮断が効かなかった。同梱すれば入口が1つになる。
+# directory は scripts/build_public.mjs が組み立てる public/。
+#   ★「配らないものを除外する」ではなく「配るものだけを集める」方式にしている。
+#     このリポジトリの手元には backups/storage/ に利用者の写真40MBがあり（Git管理外）、
+#     除外方式だと1行書き忘れた瞬間に他人の写真が公開される。
+#     集める方式なら、書き忘れて起きるのは「配信漏れ（すぐ気づく）」であって
+#     「流出（気づかない）」ではない。
+#   ※public/ は生成物なのでGit管理しない。deploy前に [build] が自動で作り直す。
+# run_worker_first = true … 静的ファイルより先に必ずworker.jsを走らせる。
+#   これを付けないと、遮断・セキュリティヘッダ・405制限・レシピのSSRが素通りされる。
+# html_handling = "none" … "/index.html" を "/" に転送したりしない。
+#   worker.js 側で "/" → "/index.html" の対応付けを既にしているので、二重にやると事故る。
+[build]
+command = "node ../scripts/build_public.mjs"
+
+[assets]
+directory = "../public"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
 [observability]
 enabled = true
 head_sampling_rate = 1
@@ -22,6 +46,9 @@ head_sampling_rate = 1
 [vars]
 # 配信元。GitHub Pages を使う（raw.githubusercontent.com はCDN用途を想定しておらず、
 # アクセス集中時に403/429を返して全ページが503になる。Pagesは100GB/月の帯域枠がある）
+# ORIGIN は 2026-07-28 に不要になった（静的ファイルはWorkerに同梱＝[assets]）。
+# 消さずに残しているのは、万一この変更を戻すときの復旧先として使うため。
+# ※worker.js はもうこの値を読んでいない。
 ORIGIN            = "https://shayan795.github.io/paint-log-v2"
 SITE              = "https://plamo-paint.com"
 SUPABASE_URL      = "https://zlkbaojclitlxshpxwpr.supabase.co"

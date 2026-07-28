@@ -15,3 +15,6 @@ backups/
 
 # ローカル作業用（画像パス一覧）
 scripts/storage_paths.local.txt
+
+# 配信用の生成物（scripts/build_public.mjs が作る）
+/public/

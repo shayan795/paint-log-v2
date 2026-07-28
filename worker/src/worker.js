@@ -384,9 +384,19 @@ function ctForPath(p) {
 }
 
 // GitHub raw から原本を取得
+// 静的ファイルの取得。
+// ★2026-07-28に「外部の配信元(GitHub Pages)へ取りに行く」から
+//   「Cloudflare自身が持っているものを返す」に変更した。
+//   理由: 配信元を別ドメインに置くと、そのドメインを直接叩けばこのWorkerを通らないため、
+//   内部ファイルの遮断もセキュリティヘッダも一切効かなかった（実際にBOMBS.mdやschema.sqlが
+//   誰でも読める状態だった）。同梱すれば入口がこのWorkerだけになり、その抜け道が消える。
+//   副次効果: 外部への往復が無くなるので速くなり、配信元の障害でサイトが落ちることも無くなる。
+//            さらにコードと静的ファイルが同時に反映されるため、
+//            「新しいHTMLと古いJSが混ざる」時間帯（BOMBS B-003）も原理的に生じない。
 async function fetchOrigin(env, pathname, search = "") {
-  const url = env.ORIGIN + pathname + (search || "");
-  return fetch(url, { cf: { cacheTtl: 300 } });
+  // ASSETS はパスだけを見る。ホスト名は何でもよいが、URLとして成立させる必要がある
+  const u = "https://assets.invalid" + pathname + (search || "");
+  return env.ASSETS.fetch(new Request(u));
 }
 
 // /r/:id または ?id=xxx を含むレシピ閲覧ページ：OGタグを差し込んだ legacy.html を返す
@@ -665,7 +675,8 @@ export default {
         console.error("healthz: データベースに到達できない", e);
       }
       try {
-        const r = await fetch(`${env.ORIGIN}/index.html`, { cf: { cacheTtl: 0 } });
+        // 配信元は Worker 同梱になったので、外部ではなく自分のアセットを確認する
+        const r = await fetchOrigin(env, "/index.html");
         out.checks.origin = r.ok ? "ok" : `ng(${r.status})`;
         if (!r.ok) { out.ok = false; console.error("healthz: 配信元の応答が異常", r.status); }
       } catch (e) {
