@@ -3107,6 +3107,50 @@ var _aboutGoto = document.getElementById("aboutGotoCreate"); if (_aboutGoto) _ab
 // 通知ベルも❌と同じく exitEditor を通す（従来は確認も保存もせず外へ飛び、書きかけが消えていた）
 var _ltBell = document.getElementById("ltBell");     if (_ltBell)   _ltBell.onclick   = () => exitEditor("/index.html#notifications");
 
+/* ★ログイン導線に「戻り先(returnTo)」を付ける。
+   SNSの共有リンク(/r/:id)から来た人がログインを押すと、これまでは無条件でトップへ飛んでいた。
+   ログイン後にさっきまで見ていたレシピが行方不明になり、「見る→保存したい」という一番大事な
+   流れがここで切れていた。そこで「どのレシピを見ていたか」をURLに載せて渡す。
+
+   受け渡し仕様（index.html 側と一致させること）:
+     /index.html?returnTo=<URLエンコードしたサイト内パス>#login
+
+   ★安全性: 受け取り側(index.html)でも検証するが、送る側でもここで必ず検証する（二重の守り）。
+     ここを緩めると「うちのサイトのログイン画面から偽サイトへ飛ばす」攻撃
+     （オープンリダイレクト）が成立してしまう。 */
+var RETURN_TO_ALLOW = /^\/r\/[0-9a-fA-F-]{36}$|^\/(index\.html)?$|^\/legacy\.html$/;
+function isSafeReturnTo(p){
+  if (typeof p !== "string" || !p) return false;
+  if (p.charAt(0) !== "/") return false;               // 自サイト内のパスだけ許す（http://… は論外）
+  if (p.slice(0,2) === "//") return false;             // //evil.com は「別サイトへ」の意味になる
+  if (p.indexOf("\\") !== -1) return false;            // \ をブラウザが / と解釈して抜けられるのを防ぐ
+  if (/[\u0000-\u001F\u007F]/.test(p)) return false;   // 改行やNULなどの制御文字による細工を防ぐ
+  return RETURN_TO_ALLOW.test(p);                      // 許可した形以外は全部お断り
+}
+/* いま見ているレシピのパス(/r/:id)を作る。URL(/r/:id か ?id=)→ currentRecipeId の順に探す。
+   IDが取れない・形が変なときは null を返し、returnTo を付けない（付けられないものを無理に付けない）。 */
+function currentRecipePath(){
+  var id = null;
+  try {
+    var m = location.pathname.match(/\/r\/([^\/?#]+)/);
+    if (m) id = m[1];
+    if (!id) id = new URLSearchParams(location.search).get("id");
+  } catch(_){}
+  if (!id && typeof currentRecipeId !== "undefined" && currentRecipeId) id = currentRecipeId;
+  if (!id) return null;
+  var p = "/r/" + id;
+  return isSafeReturnTo(p) ? p : null;
+}
+/* ログイン画面のURLを組み立てる。戻り先が作れないときは従来どおり素の #login。 */
+function loginUrl(){
+  var p = currentRecipePath();
+  return p ? ("/index.html?returnTo=" + encodeURIComponent(p) + "#login") : "/index.html#login";
+}
+// 別の<script>ブロック（レシピ読み込み・コメント欄）からも使うので window に出しておく
+window.isSafeReturnTo = isSafeReturnTo;
+window.currentRecipePath = currentRecipePath;
+window.loginUrl = loginUrl;
+
 // ★書きかけのレシピが無警告で消えるのを防ぐ。
 //   ブラウザの戻る／リロード／タブを閉じる／iOSのタブ破棄はJS側で止められないため、
 //   ブラウザ標準の確認ダイアログを出す（写真は保存操作までアップロードされず、消えると復元不能）。

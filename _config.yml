@@ -1,0 +1,61 @@
+# GitHub Pages（Jekyll）の公開設定
+# ============================================================================
+# ★何のためのファイルか
+#   このリポジトリは公開設定なので、GitHub Pages は「リポジトリの中身をまるごと」
+#   https://shayan795.github.io/paint-log-v2/ で配信してしまう。
+#   本番ドメイン(plamo-paint.com)では Cloudflare Worker が内部ファイルを遮断しているが、
+#   **GitHub のURLは Worker を通らないため、その遮断が一切効かない**。
+#
+#   実測(2026-07-28): 次のURLがすべて HTTP 200 で誰でも読めた。
+#     shayan795.github.io/paint-log-v2/BOMBS.md          ← 未修正の弱点をまとめた台帳
+#     shayan795.github.io/paint-log-v2/supabase/schema.sql
+#     shayan795.github.io/paint-log-v2/migrations/019_upload_guard.sql
+#     shayan795.github.io/paint-log-v2/tests/db/00_harness.sql
+#
+#   さらに悪いことに、検索エンジンが実際に読む robots.txt は
+#   「shayan795.github.io/robots.txt」であって、このリポジトリの robots.txt ではない。
+#   その shayan795.github.io/robots.txt は 404 なので、**制限なし＝全部クロールしてよい**
+#   と解釈される。つまり上記が検索結果に載りうる状態だった。
+#
+#   ここで exclude に挙げたものは、GitHub Pages の配信対象から外れる（404になる）。
+#
+# ⚠️ 触るときの注意
+#   ここに挙げたものは公開されなくなる。**サイトの動作に必要なものを足すと全断する。**
+#   特に src/ vendor/ assets/ と *.html は絶対に挙げないこと。
+#   変更してpushしたら、必ず次を確認すること:
+#     curl -sI https://plamo-paint.com/vendor/supabase-js-2.110.9.js   → 200
+#     curl -sI https://plamo-paint.com/src/config.js                   → 200
+#     curl -sI https://plamo-paint.com/                                → 200
+#
+# ※ 根本的な対策は「リポジトリを非公開にする」ことだが、GitHub Pages を非公開リポジトリで
+#   使うには有料プランが必要。将来 Cloudflare Pages 等へ配信元を移せば、
+#   リポジトリを非公開にできてこの問題自体が消える。
+# ============================================================================
+
+exclude:
+  # --- 開発用の記録・設計資料（外に出す必要がない） ---
+  - BOMBS.md                # 未修正の弱点台帳。最も見せてはいけない
+  - README.md               # 構成・運用手順・復旧手順
+  - CLAUDE引き継ぎ.md
+  - claude-code-prompt.md
+  - docs/
+
+  # --- データベースの設計そのもの ---
+  - supabase/               # schema.sql（テーブル定義・RLS・RPC の全文）
+  - migrations/             # 権限の変更履歴。どこをどう守っているかが分かる
+
+  # --- 検証・運用のための道具 ---
+  - tests/                  # 何をどう守っているかの一覧に等しい
+  - scripts/                # バックアップ手順・更新チェック
+  - worker/                 # Worker本体と wrangler.toml
+
+  # --- その他 ---
+  - .github/                # 自動処理の設定
+  - .claude/                # 開発ツールの設定
+  - vendor/pinned.json      # vendor配下の *.js は配信必須。この記録ファイルだけ除く
+
+# Jekyll のテンプレート処理でHTMLが壊れないようにする。
+# このサイトのHTMLは先頭にYAMLの前書きが無いので、Jekyll は加工せずそのままコピーする
+# （＝JavaScript内の {{ }} や {% %} が誤って置換される事故は起きない）。
+# 明示しておくのは、将来この前提が変わったときに気づけるようにするため。
+plugins: []

@@ -1808,46 +1808,198 @@ function authMessage(title, msg){
 }
 function requireLogin(fn){ if (currentUserId) fn(); else openAuth("login"); }
 
-// SNSアプリ内のブラウザ（X・Instagram・Facebook・LINE等）を判定する。
-// GoogleはこうしたブラウザでのOAuthを仕様として拒否する(403 disallowed_useragent)ため、
-// 「Googleでログイン」を押しても必ず失敗し、行き止まりになる。
-// 告知の主な流入元がSNSである以上、押させる前に案内する必要がある。
+/* ==== BEGIN:INAPP ====
+   （この BEGIN/END の目印は tests/run_front_tests.mjs がこの区間だけを取り出して
+     実際に動かすために付けている。消すとテストが「取り出せません」で落ちる）
+
+   SNSアプリの中で開くブラウザ（X・Instagram・Facebook・LINE・TikTok等）を判定する。
+   GoogleはこうしたブラウザでのOAuthを仕様として拒否する(403 disallowed_useragent)ため、
+   「Googleでログイン」を押しても必ず失敗し、行き止まりになる。
+   告知の主な流入元がSNSである以上、押させる前に案内する必要がある。                     */
+
+// ①「アプリの名前」がUserAgentに入っているもの＝アプリ内だと確実に分かる印。
+//   ここに載っていれば、他の条件を一切見ずにアプリ内と断定してよい。
+var IN_APP_UA_RE = new RegExp([
+  "FBAN", "FBAV", "FB_IAB", "FBIOS", "FB4A",          // Facebook / Messenger
+  "Instagram",                                          // Instagram
+  "Line\\/", "LIFF",                                    // LINE
+  "Twitter",                                            // X（iOS版は "Twitter" を名乗る。Android版は名乗らない→②で拾う）
+  "Barcelona",                                          // Threads（社内コード名がそのまま入る）
+  "BytedanceWebview", "musical_ly", "trill_",           // TikTok（国・版によって3種類ある）
+  "YJApp-ANDROID", "YJApp-IOS",                         // Yahoo! JAPAN アプリ
+  "SmartNews",                                          // SmartNews
+  "Discord", "Slack",                                   // Discord / Slack
+  "KAKAOTALK", "Snapchat", "Pinterest", "MicroMessenger", "NAVER", "Whale"
+].join("|"), "i");
+
+// ②Android の WebView（＝アプリの中に埋め込まれたブラウザ）が必ず持つ印。
+//   例: "...; SM-S911B Build/UP1A; wv) AppleWebKit/537.36 ..." の "; wv)"。
+//   ★XのAndroidアプリはアプリ名を一切名乗らないので、この印だけが手掛かりになる。
+//     通常のAndroid Chrome には "; wv)" が付かないため、誤検知しない。
+var ANDROID_WV_RE = /;\s*wv\s*\)/i;
+
+// ホーム画面に追加したPWAとして開かれているか（＝ブラウザのUIが無い状態）。
+function isStandaloneDisplay(){
+  try {
+    if (navigator.standalone === true) return true;
+    return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  } catch (_) { return false; }
+}
+
 function isInAppBrowser(){
-  var ua = navigator.userAgent || "";
-  // ★ホーム画面に追加したPWAはSafariを名乗らないため、除外しないとアプリ内ブラウザと誤判定される。
-  //   誤判定すると「Googleログインは使えません」と嘘の案内を出してPWA利用者を締め出してしまう。
-  var standalone = (navigator.standalone === true) ||
-    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-  if (standalone) return false;
-  if (/(FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TwitterAndroid|KAKAOTALK|Snapchat|Pinterest|MicroMessenger)/i.test(ua)) return true;
-  // iOSのアプリ内ブラウザはSafariを名乗らない（Safari本体は必ず "Safari/" を含む）
-  if (/iPhone|iPad|iPod/i.test(ua) && /AppleWebKit/i.test(ua) && !/Safari\//i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua)) return true;
+  var ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  // ①アプリ名で分かるものは、standalone(PWA風)であっても必ず true。
+  //   ★以前はここより先に「standaloneなら false」と書いてあったせいで、
+  //     ブラウザUIを持たないアプリ内ブラウザでは検出が丸ごと無効化されていた（静かな失敗）。
+  if (IN_APP_UA_RE.test(ua)) return true;
+  // ②Android WebView も同様に、standalone であっても true。
+  if (/Android/i.test(ua) && ANDROID_WV_RE.test(ua)) return true;
+  // ③iOSのアプリ内ブラウザはSafariを名乗らない（Safari本体は必ず "Safari/" を含む）。
+  //   これは「消去法」の弱い判定なので、ここだけはPWAを除外する。
+  //   ホーム画面に追加したPWAもSafariを名乗らないため、除外しないと
+  //   「Googleログインは使えません」と嘘の案内を出してPWA利用者を締め出してしまう。
+  if (/iPhone|iPad|iPod/i.test(ua) && /AppleWebKit/i.test(ua)
+      && !/Safari\//i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|EdgA/i.test(ua)) {
+    if (isStandaloneDisplay()) return false;
+    return true;
+  }
   return false;
+}
+/* ==== END:INAPP ==== */
+
+// 外部ブラウザで開き直してもらうときに渡すURL。
+// ★location.href をそのまま使わない理由: ログイン失敗時などハッシュに
+//   access_token などの秘密が乗っていることがあり、コピーさせると漏れる。
+function externalOpenUrl(){
+  var h = (location.hash || "");
+  var keep = (h === "#login" || h === "#register") ? h : "";
+  return location.origin + location.pathname + location.search + keep;
 }
 // アプリ内ブラウザ向けの案内（外部ブラウザで開き直してもらう）
 function inAppNotice(){
   if (!isInAppBrowser()) return "";
   var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-  return '<div class="auth-inapp">'
+  var url = externalOpenUrl();
+  return '<div class="auth-inapp" id="aInApp">'
     + '<b>アプリ内のブラウザでは Google ログインが使えません</b>'
     + '<span>Google側の仕様による制限です。お手数ですが、'
     + (isIOS ? '右下や右上の <b>共有ボタン</b> から「<b>Safariで開く</b>」' : '右上の <b>⋮</b> から「<b>ブラウザで開く</b>」')
     + 'を選んでから、もう一度お試しください。</span>'
-    + '<button type="button" class="auth-link" id="aCopyUrl">このページのURLをコピー</button>'
-    + '<span class="auth-inapp-alt">※ 下の<b>メールアドレスでの登録</b>は、このままでもご利用いただけます。</span>'
+    // 逃げ道は「見つけやすさ」が命なので、文字リンクではなくボタンとして大きく出す
+    + '<div class="auth-inapp-acts">'
+    +   '<a class="auth-inapp-btn" id="aOpenExt" href="' + esc(url) + '" target="_blank" rel="noopener">外部ブラウザで開く</a>'
+    +   '<button type="button" class="auth-inapp-btn ghost" id="aCopyUrl">URLをコピー</button>'
+    + '</div>'
+    // ★コピーもprompt()もWebViewでは無反応のことがあるため、最後の手段として
+    //   「選択してコピーできる文字」を画面に出せるようにしておく（既定は隠す）。
+    + '<input class="auth-inapp-url" id="aUrlText" type="text" readonly value="' + esc(url) + '" hidden>'
+    + '<span class="auth-inapp-alt">※ 下の<b>メールアドレス</b>でのログイン・登録は、このままでもご利用いただけます。</span>'
     + '</div>';
+}
+// URLを画面に出して選択状態にする（コピー機能が動かない環境の最後の逃げ道）
+function revealUrlText(){
+  var t = $("aUrlText");
+  if (!t) return false;
+  t.hidden = false;
+  try { t.focus(); t.setSelectionRange(0, t.value.length); } catch (_) {}
+  return true;
 }
 // 「URLをコピー」ボタンの動作を割り当てる（案内を出したときだけ存在する）
 function bindCopyUrl(){
   var btn = $("aCopyUrl");
   if (!btn) return;
   btn.onclick = function(){
-    var url = location.origin + location.pathname;
-    var done = function(){ btn.textContent = "コピーしました"; setTimeout(function(){ btn.textContent = "このページのURLをコピー"; }, 2000); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(done, function(){ prompt("このURLをコピーしてブラウザで開いてください", url); });
-    } else { prompt("このURLをコピーしてブラウザで開いてください", url); }
+    var url = externalOpenUrl();
+    var done = function(){ btn.textContent = "コピーしました"; setTimeout(function(){ btn.textContent = "URLをコピー"; }, 2000); };
+    // 失敗したら「選択できる文字」を出す。prompt() はAndroid WebViewで無反応のことがあるため頼らない。
+    var fallback = function(){
+      revealUrlText();
+      btn.textContent = "下のURLを長押しでコピー";
+      setTimeout(function(){ btn.textContent = "URLをコピー"; }, 4000);
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, fallback);
+      } else { fallback(); }
+    } catch (_) { fallback(); }
   };
+}
+// 「Googleでログイン/登録」ボタンの割り当て。
+// ★アプリ内ブラウザのときは押させない。押すとGoogleに拒否されて行き止まりになるため、
+//   代わりに逃げ道（外部ブラウザで開く／URLをコピー）へ視線を戻す。
+function bindGoogleBtn(){
+  var g = $("aG");
+  if (!g) return;
+  if (isInAppBrowser()){
+    g.classList.add("auth-g-off");
+    g.setAttribute("aria-disabled", "true");
+    g.onclick = function(){
+      var box = $("aInApp");
+      if (box){
+        box.classList.remove("flash");   // 連打しても毎回光るように一度外す
+        void box.offsetWidth;
+        box.classList.add("flash");
+        try { box.scrollIntoView({ block:"nearest" }); } catch (_) {}
+      }
+      revealUrlText();   // 押した人がすぐコピーできるようURLを出す
+    };
+  } else {
+    g.onclick = googleLogin;
+  }
+}
+
+/* ==== BEGIN:RETURNTO ====
+   （BEGIN/END の目印は tests/run_front_tests.mjs 用。消すとテストが落ちる）
+
+   ログイン後に「元いたレシピ」へ戻すための仕組み。
+   レシピページ側から /index.html?returnTo=%2Fr%2F<レシピID>#login の形で渡ってくる。
+
+   ★なぜ sessionStorage も使うのか:
+     Googleログインは一度 accounts.google.com という外部サイトへ出て戻ってくる。
+     その往復でURLの ?returnTo= は消えてしまうので、飛ぶ前にタブへ預けておく必要がある。
+     （sessionStorage はそのタブ・そのサイト専用の一時置き場。タブを閉じれば消える）
+
+   ★なぜ厳しく検証するのか（オープンリダイレクト対策）:
+     受け取った文字列をそのまま location に入れると、
+     /index.html?returnTo=//evil.com のようなURLを配るだけで
+     「うちのログイン画面から偽サイトへ送り込む」攻撃が成立してしまう。
+     そのため「自分のサイトの、決まった形のパスだけ」を通す許可リスト方式にしている。 */
+var RETURN_TO_KEY = "paintlog_return_to";
+// 許可する形: /r/<36文字のレシピID> ／ / ／ /index.html ／ /legacy.html のみ
+var RETURN_TO_OK_RE = /^\/r\/[0-9a-fA-F-]{36}$|^\/(index\.html)?$|^\/legacy\.html$/;
+
+function sanitizeReturnTo(v){
+  if (typeof v !== "string") return "";
+  if (!v || v.length > 200) return "";                    // 長すぎる値は問答無用で捨てる
+  if (v.charAt(0) !== "/") return "";                     // 絶対URL(https://…)や javascript: を排除
+  if (v.slice(0, 2) === "//") return "";                  // //evil.com は別サイトへの誘導になる
+  if (v.indexOf("\\") >= 0) return "";                    // /\evil.com をブラウザが // と解釈する事故を防ぐ
+  if (/[ -]/.test(v)) return "";         // 制御文字（改行やタブ）入りは不正
+  if (!RETURN_TO_OK_RE.test(v)) return "";                // 最後に許可リストで確認（../ などはここで落ちる）
+  return v;
+}
+/* ==== END:RETURNTO ==== */
+
+// URLの ?returnTo= を読み、検証を通ったものだけタブに預ける
+function saveReturnToFromUrl(){
+  try {
+    var raw = new URLSearchParams(location.search).get("returnTo") || "";
+    var ok = sanitizeReturnTo(raw);
+    if (ok) sessionStorage.setItem(RETURN_TO_KEY, ok);
+  } catch (_) { /* sessionStorage が使えない環境でも通常のログインは続行する */ }
+}
+// 預けた戻り先を取り出して消す（★使ったら必ず消す。残すと次のログインで意図しない所へ飛ぶ）
+function consumeReturnTo(){
+  var v = "";
+  try { v = sessionStorage.getItem(RETURN_TO_KEY) || ""; sessionStorage.removeItem(RETURN_TO_KEY); } catch (_) {}
+  return sanitizeReturnTo(v);   // 取り出す時にももう一度検証（保存後に細工された場合の保険）
+}
+// 戻り先があればそこへ移動して true。無ければ何もせず false（＝従来どおりの動き）
+function goReturnTo(){
+  var to = consumeReturnTo();
+  if (!to) return false;
+  try { location.replace(to); } catch (_) { location.href = to; }
+  return true;
 }
 
 function renderAuth(mode){
