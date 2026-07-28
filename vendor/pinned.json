@@ -1,0 +1,19 @@
+{
+  "_説明": "外部ライブラリを「いつ・どの版に固定したか」の記録。scripts/check_deps.mjs がこれを読む。",
+  "_なぜファイルに書くか": "ファイルの更新日時(mtime)では判定できないため。gitで取得し直すと全ファイルの日時がその時刻に書き換わり、『昨日固定したばかり』に見えてしまう。日付は人が明示的に書き残す必要がある。",
+  "_更新するとき": "版を上げたら version と pinnedAt を必ず両方書き換えること。pinnedAt を忘れると、次の3か月判定がずれる。",
+  "packages": [
+    {
+      "name": "@supabase/supabase-js",
+      "version": "2.110.9",
+      "pinnedAt": "2026-07-28",
+      "file": "vendor/supabase-js-2.110.9.js",
+      "verifiedAgainstNpm": true,
+      "note": "npm公式パッケージの dist/umd/supabase.js と1バイトも違わないことを cmp で確認済み"
+    }
+  ],
+  "policy": {
+    "reviewEveryDays": 90,
+    "_policy説明": "90日(約3か月)経ったら、新版の有無にかかわらず更新作業を行う。最新のままでも一度動作確認をしておくと、いざ更新が必要になったときに『久しぶりで手順を忘れた』状態を避けられる。"
+  }
+}

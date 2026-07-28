@@ -29,23 +29,30 @@ jobs:
         with:
           node-version: "22"
 
-      - name: 新しい版が出ていないか確認する
+      - name: 新しい版が出ていないか・見直し期限を過ぎていないか確認する
         id: check
         run: |
           set -euo pipefail
-          # 使用中の版は index.html の読み込み先が正本（二重管理しない）
-          CUR=$(grep -oE '/vendor/supabase-js-[0-9]+\.[0-9]+\.[0-9]+\.js' index.html \
-                | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          # 版と固定日は vendor/pinned.json が正本。
+          # ファイルの更新日時は使えない（git checkout で全部その時刻に書き換わるため）。
+          CUR=$(node -e 'const j=require("./vendor/pinned.json");console.log(j.packages[0].version)')
+          PINNED=$(node -e 'const j=require("./vendor/pinned.json");console.log(j.packages[0].pinnedAt)')
+          EVERY=$(node -e 'const j=require("./vendor/pinned.json");console.log(j.policy.reviewEveryDays)')
+          DAYS=$(node -e "console.log(Math.floor((Date.now()-Date.parse('$PINNED'+'T00:00:00Z'))/86400000))")
           LATEST=$(curl -sS --max-time 20 https://registry.npmjs.org/@supabase/supabase-js/latest \
                    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))')
-          echo "使用中: $CUR / 最新: $LATEST"
-          echo "current=$CUR" >> "$GITHUB_OUTPUT"
-          echo "latest=$LATEST"  >> "$GITHUB_OUTPUT"
-          if [ "$CUR" = "$LATEST" ]; then
-            echo "outdated=false" >> "$GITHUB_OUTPUT"
-          else
+          echo "使用中: $CUR / 最新: $LATEST / 固定から ${DAYS}日（${EVERY}日で見直し）"
+          echo "current=$CUR"  >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "days=$DAYS"     >> "$GITHUB_OUTPUT"
+          # 「新版が出ている」か「見直し期限を過ぎた」のどちらかで知らせる
+          if [ "$CUR" != "$LATEST" ] || [ "$DAYS" -ge "$EVERY" ]; then
             echo "outdated=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ "$DAYS" -ge "$EVERY" ]; then echo "overdue=true" >> "$GITHUB_OUTPUT";
+          else echo "overdue=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: 新版があればIssueを立てる（既にあれば作らない）
         if: steps.check.outputs.outdated == 'true'
@@ -53,9 +60,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CUR: ${{ steps.check.outputs.current }}
           LATEST: ${{ steps.check.outputs.latest }}
+          DAYS: ${{ steps.check.outputs.days }}
+          OVERDUE: ${{ steps.check.outputs.overdue }}
         run: |
           set -euo pipefail
-          TITLE="Supabaseライブラリの更新: ${CUR} → ${LATEST}"
+          if [ "$OVERDUE" = "true" ]; then
+            TITLE="【期限超過】Supabaseライブラリの更新: ${CUR} → ${LATEST}"
+          else
+            TITLE="Supabaseライブラリの更新: ${CUR} → ${LATEST}"
+          fi
           # 同じ内容のIssueが既に開いていれば作らない（毎週増え続けるのを防ぐ）
           EXISTING=$(gh issue list --state open --search "in:title Supabaseライブラリの更新" --json title \
                      --jq "[.[] | select(.title==\"${TITLE}\")] | length")
@@ -68,9 +81,9 @@ Supabaseライブラリに新しい版が出ています。
 
 - 使用中: \`${CUR}\`
 - 最新:   \`${LATEST}\`
+- 固定してから **${DAYS}日**
 
-**急ぎではありません。** ただし放置するとセキュリティ修正も入らないので、
-数か月に一度は更新してください。
+$( [ "$OVERDUE" = "true" ] && echo '**見直し期限(90日)を過ぎています。** 最新のままでも一度更新作業を通してください。' || echo '**急ぎではありません。** ただし放置するとセキュリティ修正も入りません。' )
 
 ## やること
 Claudeに「**Supabaseライブラリを更新して**」と言えば、
