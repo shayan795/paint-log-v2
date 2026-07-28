@@ -1,0 +1,101 @@
+# push したらサイトを公開する
+# ============================================================================
+# ★何のためのファイルか
+#   2026-07-28に配信元を GitHub Pages から Cloudflare(Worker同梱)へ移した。
+#   その結果、「push すればサイトが更新される」という以前の動きが失われ、
+#   公開するには `cd worker && npx wrangler deploy` が必要になった。
+#   人が毎回それを覚えているのは無理なので、pushしたら自動で公開されるようにする。
+#
+# ★動くために必要なもの（1回だけの設定）
+#   リポジトリの Settings → Secrets and variables → Actions → New repository secret
+#     名前: CLOUDFLARE_API_TOKEN
+#     値  : Cloudflareで発行したAPIトークン
+#           （dash.cloudflare.com → 右上のアイコン → プロフィール → APIトークン →
+#             「トークンを作成する」→ テンプレート「Cloudflare Workers を編集する」）
+#   ※このトークンは秘密。誰にも見せないこと。GitHubのSecretsに入れれば
+#     以後は画面にも表示されず、ログにも出ない。
+#
+#   トークンが未設定の間は、このワークフローは「何もせず正常終了」する。
+#   （失敗メールが毎回届いて嫌になる、という状態を避けるため）
+# ============================================================================
+name: サイトを公開する
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}     # 手動でも実行できるようにする（Actionsの画面からボタン1つ）
+
+# 同時に複数のデプロイが走らないようにする。
+# 連続でpushしたとき、古い方が後から上書きして「直したはずが戻っている」事故を防ぐ。
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # トークンが未設定なら、ここで止めて以降を飛ばす（失敗扱いにしない）
+      - name: トークンの有無を確認する
+        id: guard
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN が未設定のため、公開処理を飛ばしました。設定方法は .github/workflows/deploy.yml の冒頭を参照してください。"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ★公開する前に必ずテストを通す。
+      #   壊れたものを自動で本番へ送り出さないための最後の関門。
+      - name: 自動テストを実行する
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          node tests/run_front_tests.mjs
+          node tests/run_paint_tests.mjs
+          node tests/run_worker_tests.mjs
+
+      # 資産の版(?v=)がソースと一致しているかを確認する。
+      # ずれたまま公開すると、古いJSが使われ続ける時間帯が生まれる。
+      - name: 資産の版を確認する
+        if: steps.guard.outputs.ready == 'true'
+        run: node scripts/bump_asset_version.mjs --check
+
+      - name: Cloudflareへ公開する
+        if: steps.guard.outputs.ready == 'true'
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm install --no-save wrangler@4
+          # build_public.mjs は wrangler.toml の [build] が自動で実行する
+          npx wrangler deploy
+
+      # 公開後、本当に生きているかを確認する。
+      # ここで失敗すれば「公開したつもりで壊れていた」に気づける。
+      - name: 公開されたサイトを確認する
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          sleep 10
+          for p in / /src/config.js /vendor/supabase-js-2.110.9.js /sitemap.xml; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://plamo-paint.com$p?ci=${GITHUB_SHA}")
+            echo "  $p → $code"
+            [ "$code" = "200" ] || { echo "::error::$p が $code を返しました。公開に失敗している可能性があります。"; exit 1; }
+          done
+          # 内部ファイルが漏れていないかも毎回確認する
+          for p in /BOMBS.md /supabase/schema.sql /worker/src/worker.js; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://plamo-paint.com$p?ci=${GITHUB_SHA}")
+            echo "  $p → $code （404であるべき）"
+            [ "$code" = "404" ] || { echo "::error::$p が $code を返しました。内部ファイルが配信されています。"; exit 1; }
+          done
