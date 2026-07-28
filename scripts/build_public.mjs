@@ -41,6 +41,9 @@ const DIRS = [
   { dir: "vendor", exts: [".js"] },                                   // pinned.json は配らない
   { dir: "assets", exts: [".png", ".ico", ".jpg", ".jpeg", ".svg", ".webp", ".js"] },
 ];
+// assets/ のうち、どのページからも読み込まれていないので配信しないもの。
+// ★置いてあるだけのファイルを公開し続けると、意図しないものが外から見える状態が積み上がる。
+const ASSET_SKIP = ["IMG_7750.PNG", "IMG_7756.PNG", "IMG_7758.PNG"];
 
 function copyFile(rel) {
   const from = join(ROOT, rel);
@@ -70,6 +73,7 @@ for (const { dir, exts } of DIRS) {
     const full = join(abs, name);
     if (!statSync(full).isFile()) continue;              // サブフォルダは無視（＝配信しない）
     if (!exts.includes(extname(name).toLowerCase())) continue;
+    if (dir === "assets" && ASSET_SKIP.includes(name)) continue;
     const rel = dir + "/" + name;
     const n = copyFile(rel);
     if (n !== null) { copied.push(rel); bytes += n; }

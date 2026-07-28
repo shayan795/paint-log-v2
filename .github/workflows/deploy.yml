@@ -49,7 +49,10 @@ jobs:
         run: |
           if [ -z "$TOKEN" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CLOUDFLARE_API_TOKEN が未設定のため、公開処理を飛ばしました。設定方法は .github/workflows/deploy.yml の冒頭を参照してください。"
+            # ★notice ではなく warning にする。
+            #   notice だと実行結果が緑の✓のままで、「公開できている」ように見えてしまう。
+            #   実際には何も公開されていないので、黄色の警告で見て分かるようにする。
+            echo "::warning title=自動公開は動いていません::CLOUDFLARE_API_TOKEN が未設定のため、サイトは公開されていません。手動で公開するには cd worker && npx wrangler deploy。自動化するには Settings → Secrets and variables → Actions にトークンを登録してください。"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi

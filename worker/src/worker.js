@@ -18,7 +18,8 @@ const SECURITY_HEADERS = {
   "x-frame-options": "SAMEORIGIN",
   "content-security-policy": "frame-ancestors 'self'",
   "referrer-policy": "strict-origin-when-cross-origin",
-  "strict-transport-security": "max-age=15552000",
+  // includeSubDomains … 将来サブドメインを使ったときも自動で保護される
+  "strict-transport-security": "max-age=15552000; includeSubDomains",
 };
 
 // 配信してはいけない内部ファイル（GitHub Pagesはリポジトリ全体を公開するため、入口のWorkerで遮断する）。
@@ -103,7 +104,10 @@ function buildDescription(rec, authorLabel) {
       for (const k of Object.keys(row.cells)) {
         const c = row.cells[k];
         if (!c) continue;
-        if (typeof c.i === "number") paintKeys.add("i:" + c.i);
+        // ★安定ID(c.id)を先に見る。2026-07-28に塗料の指し方をIDへ移行したため、
+        //   c.i しか見ていないと、将来 c.i を書かなくなった時点で使用塗料数が0になる。
+        if (c.id) paintKeys.add("p:" + c.id);
+        else if (typeof c.i === "number") paintKeys.add("i:" + c.i);
         else if (c.c) paintKeys.add("c:" + c.c);
       }
     }
@@ -642,6 +646,23 @@ export default {
     // 両方で同じアプリを配信していたが、Supabaseのリダイレクト許可リストに www が
     // 入っていないため、www 側から入った人はログイン後の戻り先が拒否されて認証が失敗する。
     // ホストを1つに統一すれば、その経路自体が無くなる（SEOの重複対策にもなる）。
+    // ★暗号化されていない http:// で来た人を https:// へ送り返す。
+    //   これが無いと、ログイン画面を含むページ全体が暗号化されずに届く。
+    //   公共Wi-Fiなどでは通信を読まれるだけでなく**ページを書き換えられる**ため、
+    //   偽のログイン欄を差し込まれてメールアドレスとパスワードを盗まれ得る。
+    //   HSTSヘッダは付けていたが、平文で返したHSTSはブラウザが無視する規格なので、
+    //   「一度もhttpsで開いたことがない端末」は守られていなかった。
+    //   Cloudflareの前段では x-forwarded-proto でしか本来のスキームが分からないため、
+    //   url.protocol ではなくこのヘッダを見る（url.protocol は常に https に見えることがある）。
+    //   判定はCloudflareが付ける cf-visitor（{"scheme":"http"} が入る）と、
+    //   URL自身のスキームの両方を見る。環境によってどちらかしか取れないことがあるため。
+    const cfVisitor = request.headers.get("cf-visitor") || "";
+    const cameOverHttp = url.protocol === "http:" || /"scheme"\s*:\s*"http"/.test(cfVisitor);
+    if (cameOverHttp) {
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
+
     if (url.hostname === "www.plamo-paint.com") {
       url.hostname = "plamo-paint.com";
       return Response.redirect(url.toString(), 301);

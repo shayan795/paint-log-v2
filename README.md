@@ -18,10 +18,10 @@ Cloudflare Worker (worker/src/worker.js)   ← 全リクエストの入口
    ├─ /r/:id            → レシピ閲覧。Supabaseからレシピ取得し、OGP+JSON-LDを動的注入した legacy.html を返す
    ├─ /sitemap.xml      → 公開レシピを動的列挙
    ├─ /robots.txt       → 明示返却
-   └─ それ以外          → GitHub Pages(raw)の静的ファイルをプロキシ配信
+   └─ それ以外          → Worker に同梱した静的ファイルを直接配信（[assets]）
    │
    ▼
-GitHub Pages（リポジトリ shayan795/paint-log-v2 の main ブランチ = 静的ファイル配信元）
+（静的ファイルは Worker に同梱。外部の配信元は無い ← 2026-07-28に GitHub Pages から移行）
    │
    ▼（フロントJSから直接）
 Supabase（認証・PostgreSQL・Storage・RLS・RPC・トリガー）
@@ -77,12 +77,20 @@ python3 -m http.server 4173
 
 ## 4. デプロイ（**2系統**・混同注意）
 
+> ⚠️ **2026-07-28に配信のしくみが変わりました。`git push` だけでは公開されません。**
+
 | 変更したファイル | 反映方法 |
 |---|---|
-| `*.html` / `src/` / `assets/` 等の**静的ファイル** | **`git push`（main）** → GitHub Pages に反映（Worberがそれを配信） |
-| **`worker/src/worker.js`** | **`cd worker && npx wrangler deploy`**（git pushでは反映されない） |
+| **すべて**（`*.html` / `src/` / `assets/` / `worker/src/worker.js`） | **`cd worker && npx wrangler deploy`** |
 
-- Worker変更後は必ず `curl -sI https://plamo-paint.com/r/<id>` 等で壊れていないか検証すること。
+静的ファイルもWorkerに同梱して配信しているため、1回のdeployで全部が同時に反映されます。
+（コードと静的ファイルがズレる時間帯が構造的に生じない、という利点があります）
+
+`git push` すると `.github/workflows/deploy.yml` が自動でdeployします。ただし
+**`CLOUDFLARE_API_TOKEN` をリポジトリのSecretsに登録するまでは動きません**
+（未登録の間はActionsに黄色の警告が出て、何も公開されません）。
+
+- deploy後は必ず `curl -sI https://plamo-paint.com/` と `/r/<id>` で壊れていないか検証すること。
 - **`src/config.js` か `src/methods.js` を変えたら、push前に必ず `node scripts/bump_asset_version.mjs` を実行する**（HTMLが読むURLの `?v=` を更新し、デプロイ直後に古いJSが使われるのを防ぐ／確認だけなら `--check`）。
 - 静的側の反映はGitHub Pages 10分キャッシュ + Worker cacheTtl 300秒により**デプロイ直後5〜10分は旧新混成**があり得る（BOMBS.md B-003）。
   上の `?v=` でブラウザとCloudflareの層は解消済み。残るGitHub Pages層のズレは、画面側の `version_skew` 検出（console.error＋eventsテーブル）で気づけるようにしてある。

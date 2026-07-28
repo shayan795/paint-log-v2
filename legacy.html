@@ -1388,13 +1388,13 @@ const PAINTS = [
   ["GSIクレオス アクリジョン","N5","ブルー","#1D4E9E","pt_ce8d9bd9aa3f"],
   ["GSIクレオス アクリジョン","","ベースホワイト","#F0F0ED","pt_bd3f5e0f018d"],
   ["GSIクレオス アクリジョン","","ベースグレー","#9A9DA2","pt_09a0eab68555"],
-  /* --- GSIクレオス サーフェイサー (6色) --- */
+  /* --- サーフェイサー (6色。うち4色はガイアノーツ製。安定IDを変えないため並びはこのまま) --- */
   ["GSIクレオス サーフェイサー","B-526","Mr.サーフェイサー1000(缶)","#A9ABAE","pt_307743dac971"],
   ["GSIクレオス サーフェイサー","B-528","Mr.サーフェイサー1500 ブラック(缶)","#26282B","pt_6df42becb4c0"],
-  ["GSIクレオス サーフェイサー","SF-701","ガイア サーフェイサーエヴォ ホワイト","#EDEDEA","pt_02a259c0fbaa"],
-  ["GSIクレオス サーフェイサー","SF-703","ガイア サーフェイサーエヴォ グレー","#9DA0A4","pt_ac137375d9d0"],
-  ["GSIクレオス サーフェイサー","SF-705","ガイア サーフェイサーエヴォ ブラック","#26282B","pt_63115739ac7a"],
-  ["GSIクレオス サーフェイサー","","ガイア サーフェイサーエヴォ オキサイドレッド","#7A4036","pt_b7df0873b26a"],
+  ["ガイアノーツ サーフェイサー","SF-701","サーフェイサーエヴォ ホワイト","#EDEDEA","pt_02a259c0fbaa"],
+  ["ガイアノーツ サーフェイサー","SF-703","サーフェイサーエヴォ グレー","#9DA0A4","pt_ac137375d9d0"],
+  ["ガイアノーツ サーフェイサー","SF-705","サーフェイサーエヴォ ブラック","#26282B","pt_63115739ac7a"],
+  ["ガイアノーツ サーフェイサー","","サーフェイサーエヴォ オキサイドレッド","#7A4036","pt_b7df0873b26a"],
   /* --- GSIクレオス ガンダムカラー (29色) --- */
   ["GSIクレオス ガンダムカラー","UG01","MSホワイト","#F2F2EC","pt_a5b56173f83c"],
   ["GSIクレオス ガンダムカラー","UG02","MSブルー","#2A52A0","pt_08f803cde3ad"],
@@ -3493,9 +3493,15 @@ const safePhoto = u => {
   function makeCover(uid, snap){
     var st = snap || state;
     var has = (st.photos||[]).filter(Boolean).length || (st.rows||[]).some(function(r){ return r.photo; });
-    if (!has) return Promise.resolve(null);
+    if (!has) return Promise.resolve(null);       // 写真が1枚も無い＝カバーは意図的に無し
     return new Promise(function(res){
-      generateCardUrl("dark", function(durl){ uploadImage(uid, durl, "cover").then(res, function(){ res(null); }); }, { state: st });
+      // ★アップロードに失敗したときは null ではなく false を返す。
+      //   両方 null にしていたため、保存時に「カバー無し」として cover_url に null を書き込み、
+      //   通信が一瞬切れただけで**既存投稿の表紙画像が黙って消えていた**（利用者には何も表示されない）。
+      //   null=意図的に無し / false=作れなかったので今の値に触るな、と呼び出し側で区別する。
+      generateCardUrl("dark", function(durl){
+        uploadImage(uid, durl, "cover").then(function(u){ res(u || false); }, function(){ res(false); });
+      }, { state: st });
     });
   }
   // 旧フォーマット（中央の「塗装レシピ」文字なし）で保存された既存投稿向け。
@@ -3509,7 +3515,7 @@ const safePhoto = u => {
     // ここも「今表示している内容」を固定してから作る（生成中に編集タブへ移って触られてもズレない）
     var snap; try { snap = JSON.parse(JSON.stringify(state)); } catch(_){ snap = state; }
     makeCover(uid, snap).then(function(url){
-      if (!url){ return; }
+      if (!url){ return; }   // null(写真なし) も false(作成失敗) もここで止まる＝既存カバーは触らない
       sb.from("recipes").update({ cover_url: url }).eq("id", recipeId).then(function(r){
         if (!r || r.error) return;
         if (recipeId === currentRecipeId) currentCoverUrl = url;   // 差し替えた新カバーを削除時の対象にする
@@ -3867,10 +3873,16 @@ const safePhoto = u => {
               title: (snap.kit || "").trim() || null,
               author_label: (snap.author || "").trim() || null,
               memo: (snap.memo || "").trim() || null,
-              grid: g, is_public: isPublic, cover_url: cover,
+              grid: g, is_public: isPublic,
               methods: Array.isArray(snap.methods) ? snap.methods : [],
               comments_disabled: commentsDisabled
             };
+            // ★カバー画像の扱い。cover が false は「作れなかった」の意味。
+            //   既存投稿の更新では cover_url を payload に入れない＝いまの表紙をそのまま残す。
+            //   新規投稿では入れようがないので null（表紙なしで作られ、次回の保存で付く）。
+            if (cover !== false) payload.cover_url = cover;
+            else if (!currentRecipeId) payload.cover_url = null;
+
             var q;
             if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
             else { payload.owner_id = uid; q = sb.from("recipes").insert(payload); }
@@ -4007,7 +4019,11 @@ const safePhoto = u => {
     if (!sb || !id) return;
     sb.from("drafts").select("id,grid").eq("id", id).single().then(function(res){
       if (res.error || !res.data){ legacyToast("下書きの読み込みに失敗しました"); return; }
-      try{ state = migrate(res.data.grid || {}); }catch(_){ state = res.data.grid || newState(); }
+      // ★migrateが失敗したときに生のgridをそのまま使ってはいけない。
+      //   migrateは壊れた値（写真URLの細工・不正な色指定など）を無害化する役目も持つので、
+      //   素通しすると防御を飛ばした状態で描画してしまう。空の状態に落とす方が安全。
+      try{ state = migrate(res.data.grid || {}); }
+      catch(_){ try{ state = migrate({}); }catch(__){ state = newState(); } }
       currentDraftId = id; currentRecipeId = null;
       // 下書きは「新規投稿」扱いなので、ボタンを投稿用に戻して下書きボタンも表示
       document.querySelectorAll(".js-publish").forEach(function(b){ b.textContent = "投稿する"; });

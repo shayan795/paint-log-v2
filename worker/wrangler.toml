@@ -1,7 +1,10 @@
 name = "paintlog-v2"
 main = "src/worker.js"
 compatibility_date = "2026-06-01"
-workers_dev = true
+# ★false にして workers.dev の入口を閉じる。
+# true だと paintlog-v2.<アカウント>.workers.dev でも全く同じサイトが公開され、
+# 独自ドメイン以外の入口が増える（検索に重複として拾われる／利用者が迷い込む）。
+workers_dev = false
 
 routes = [
   { pattern = "plamo-paint.com/*",     zone_name = "plamo-paint.com" },
