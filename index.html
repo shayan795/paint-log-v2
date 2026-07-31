@@ -573,6 +573,10 @@ textarea.pf-field{resize:vertical; line-height:1.6}
 .set-muted{color:var(--sub); font-size:.78rem}
 .set-help{font-size:.74rem; color:var(--sub); margin:8px 0 6px}
 .set-item{display:block; width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:10px; padding:13px 15px; margin-top:8px; font:inherit; font-size:.9rem; font-weight:700; color:var(--ink); cursor:pointer; text-decoration:none}
+/* 設定の一番奥に置く「控えの保存」。ふだん使わない機能なので、
+   目に飛び込まないよう文字を小さく薄くする（存在は残すが誘わない）。 */
+.set-block-quiet{margin-top:28px;padding-top:16px;border-top:1px solid var(--line,#E5E7EB)}
+.set-item-quiet{font-size:.85rem;color:var(--sub,#6B7280);font-weight:400}
 .set-item:hover{border-color:var(--ink)}
 .set-item.danger{color:var(--warn); border-color:var(--warn)}
 .set-ver{font-size:.78rem; color:var(--sub); margin:18px 0 0}
@@ -1119,8 +1123,8 @@ function openPaint(opts){
 // 自分のデータ（プロフィール＋全レシピ:公開/非公開）をJSONでダウンロード。既存RLS(自分の行はSELECT可)の範囲。
 function exportMyData(){
   if (!sb || !currentUserId) return;
-  var btn = $("setExport"); if (btn){ btn.disabled = true; btn.textContent = "エクスポート中…"; }
-  var reset = function(){ if (btn){ btn.disabled = false; btn.textContent = "自分のデータをエクスポート（JSON）"; } };
+  var btn = $("setExport"); if (btn){ btn.disabled = true; btn.textContent = "保存中…"; }
+  var reset = function(){ if (btn){ btn.disabled = false; btn.textContent = "投稿データの控えを保存する"; } };
   Promise.all([
     sb.from("profiles").select("*").eq("id", currentUserId).single(),
     sb.from("recipes").select("*").eq("owner_id", currentUserId).order("created_at", { ascending:false })
@@ -1137,8 +1141,8 @@ function exportMyData(){
     var a = document.createElement("a"); a.href = url; a.download = "paintlog-export-" + stamp + ".json";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-    reset(); if (typeof toast === "function") toast("データをダウンロードしました");
-  }, function(e){ reset(); alert("エクスポートに失敗しました：" + (e && e.message ? e.message : e)); });
+    reset(); if (typeof toast === "function") toast("控えを保存しました");
+  }, function(e){ reset(); alert("控えの保存に失敗しました：" + (e && e.message ? e.message : e)); });
 }
 
 // 設定（アカウントのハブ。ログイン必須）
@@ -1180,7 +1184,7 @@ function openSettings(){
         + '</div>'
         + '<div class="set-sec"><div class="set-k">通知の設定</div>'
         +   '<label class="set-row" style="cursor:pointer"><span>コメント通知を受け取る</span><input type="checkbox" id="setNotifComments"'+(prof.notify_comments === false ? '' : ' checked')+'></label>'
-        +   '<p class="set-help">あなたの投稿に新しいコメントが付いた時に、アプリ内のベル🔔に通知が届きます。</p>'
+        +   '<p class="set-help">あなたの投稿に新しいコメントが付いた時に、アプリ内の通知に届きます。</p>'
         + '</div>'
         // DARKMODE:UI
         + '<div class="set-sec"><div class="set-k">外観（テーマ）</div>'
@@ -1197,10 +1201,19 @@ function openSettings(){
         + '<a class="set-item" href="terms.html">利用規約</a>'
         + '<a class="set-item" href="privacy.html">プライバシーポリシー</a>'
         + '<a class="set-item" href="help.html">ヘルプ</a>'
-        + '<button class="set-item" id="setExport">自分のデータをエクスポート（JSON）</button>'
         + '<button class="set-item" id="setLogout">ログアウト</button>'
         // 管理者(運営)は誤操作で自分を消すとモデレーション不能になるため退会ボタンを出さない
         + (currentIsAdmin ? '' : '<button class="set-item danger" id="setDelete">退会（アカウント削除）</button>')
+        // ★データの持ち出しは一番奥に置く。
+        //   個人情報保護法の開示請求(プライバシーポリシー第10条)に自分で対応できるようにする機能で、
+        //   消すと規約の変更が必要になる。ただし普段使う機能ではなく、
+        //   知らずに押すと見慣れない文字列のファイルが出てきて驚かせるだけなので、
+        //   X や Instagram と同じく「設定の一番奥」に置き、何が起きるかを先に書いておく。
+        + '<div class="set-block set-block-quiet">'
+        +   '<button class="set-item set-item-quiet" id="setExport">投稿データの控えを保存する</button>'
+        +   '<p class="set-help">あなたのプロフィールと投稿内容を1つのファイルにまとめて、端末に保存します。'
+        +     '万一に備えた控えです。ふだんの利用では使いません（開いても読みやすい形式ではありません）。</p>'
+        + '</div>'
         + '<p class="set-ver">塗装レシピ録</p>';
       $("setProfile").onclick = function(){ openProfile(); };
       $("setLogout").onclick = doLogout;

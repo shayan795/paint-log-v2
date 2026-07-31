@@ -373,6 +373,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 
 /* スマホ: 表をカード型に切替(横スクロール不要・縦文字化を防ぐ。編集表と同じ640pxで切替) */
 @media(max-width:640px){
+  /* 塗料が入っていない欄はスマホでは行ごと消す（「下地 —」だけの行を作らない） */
+  .vrecipe-empty.js-empty{display:none !important}
+
   .vrecipe-table thead{display:none}
   .vrecipe-table, .vrecipe-table tbody, .vrecipe-table tr, .vrecipe-table td{display:block;width:100%}
   .vrecipe-table tr{border:1px solid var(--line);margin-bottom:14px;background:#fff;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
@@ -2926,7 +2929,14 @@ function renderViewMode(){
             <a class="buy rakuten" target="_blank" rel="nofollow noopener" href="${rakutenUrl(buyName)}">楽天</a>
             <a class="buy yodobashi" target="_blank" rel="nofollow noopener" href="${yodobashiUrl(buyName)}">ヨドバシ</a>
           </div></td>`;
-      } else html += `<td class="vrecipe-empty" data-label="${esc(proc.name)}">—</td>`;
+      } else {
+        // ★塗料が入っていない欄は「—」を出さない。
+        //   PCは表なので列を揃えるために空セル自体は必要（消すと列がずれる）。
+        //   ただしスマホはこの表がカードに変形し、1セル=1行になるため、
+        //   「下地 —」のような中身ゼロの行が並んで読みづらくなる。
+        //   そこで空セルには js-empty を付け、スマホ側のCSSで丸ごと非表示にする。
+        html += `<td class="vrecipe-empty js-empty" data-label="${esc(proc.name)}"></td>`;
+      }
     });
     // スマホ用: カード末尾(塗料の下)に色グループ写真。PCではCSSで非表示
     if (row.photo) html += `<td class="vr-photo-cell"><div class="vr-photo"><img src="${esc(viewPhoto(row.photo, 800))}" alt="${esc(row.part||'')}" loading="lazy"${PHOTO_FALLBACK}${vrPhotoStyle}>${vrMark}</div></td>`;
@@ -3615,8 +3625,20 @@ const safePhoto = u => {
       // コメントセクション
       // ★高速表示(Worker埋め込み)ではこのapplyRecipeがコメントscript読込より先に走るため、
       //   renderComments未定義なら読込完了後(次tick)にやり直す（他人の投稿でコメント欄が空になる不具合の修正）。
-      if (window.renderComments) window.renderComments(rec);
-      else setTimeout(function(){ if (window.renderComments) window.renderComments(rec); }, 0);
+      // ★再試行は1回では足りない。
+      //   コメント機能はこのページの後方にある<script>で用意されるため、
+      //   applyRecipeの方が先に走ると未定義になる。setTimeout(...,0)の1回だけだと、
+      //   その時点でまだ読み込めていない場合に**二度と呼ばれず、コメント欄が永久に空になる**。
+      //   実際2026-07-31に本番の全レシピでコメント欄が消えていた（SSR導入で読み込み順が変わったため）。
+      //   用意できるまで短い間隔で待つ方式にする（最大5秒で諦める＝無限に回らない）。
+      (function callRenderComments(){
+        var tries = 0;
+        (function attempt(){
+          if (window.renderComments){ try { window.renderComments(rec); } catch(e){ console.error("コメント欄の描画に失敗", e); } return; }
+          if (++tries > 100) { console.error("コメント機能を読み込めませんでした"); return; }
+          setTimeout(attempt, 50);
+        })();
+      })();
       // 段5: 閲覧数を加算（公開のみ・同一ブラウザ同日1回で水増し防止・失敗は無視）＋X風の表示回数を出す
       if (rec.is_public){
         var showViews = function(){
