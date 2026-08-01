@@ -87,11 +87,22 @@ check("CSS位置", "記号を含む注入は既定値に落ちる", safePos("50%
 
 // ---------------------------------------------------------------- index.html
 const index = readFileSync(join(ROOT, "index.html"), "utf8");
-const safeUrlDef = index.match(/var safeUrl = function\(u\)\{[\s\S]*?\};/)[0];
+const safeUrlDef = index.match(/var safeUrl = function\(u\)\{[\s\S]*?\n\};/)[0];
 const thumbUrlDef = index.match(/var thumbUrl = function[\s\S]*?\n};/)[0];
 const { safeUrl, thumbUrl } = new Function(`${safeUrlDef}\n${thumbUrlDef}\nreturn { safeUrl, thumbUrl };`)();
 
 check("リンクURLの無害化", "httpsは通る", safeUrl("https://example.com"), "https://example.com");
+// 保存型CSS注入の再発防止。
+// プロフィールのヘッダー画像URLは背景画像 background-image:url(...) にも使われるため、
+// ")" や ";" が通ると url() を閉じて別のCSSを書き足せてしまう（画面を全面覆う等）。
+check("CSS注入対策", "url()を閉じてCSSを継ぎ足す細工を拒否",
+  safeUrl("https://evil.example.com/a.png);position:fixed;inset:0;background:red"), "");
+check("CSS注入対策", "引用符入りを拒否", safeUrl('https://evil.example.com/a"x'), "");
+check("CSS注入対策", "空白入りを拒否", safeUrl("https://evil.example.com/a .png"), "");
+check("CSS注入対策", "波括弧入りを拒否", safeUrl("https://evil.example.com/a{}.png"), "");
+check("CSS注入対策", "バッククォート入りを拒否", safeUrl("https://evil.example.com/a`x"), "");
+truthy("CSS注入対策", "正常なURLは今までどおり通る",
+  safeUrl("https://zlkbaojclitlxshpxwpr.supabase.co/storage/v1/object/public/profile/u/h.jpg") !== "");
 check("リンクURLの無害化", "javascript:は空になる", safeUrl("javascript:alert(1)"), "");
 check("リンクURLの無害化", "data:は空になる", safeUrl("data:text/html,x"), "");
 

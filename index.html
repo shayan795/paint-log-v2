@@ -963,7 +963,21 @@ function randomToken(n){
   (window.crypto || window.msCrypto).getRandomValues(a);
   return Array.prototype.map.call(a, function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
 }
-var safeUrl = function(u){ u = String(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
+var safeUrl = function(u){
+  u = String(u||"").trim();
+  if (!/^https?:\/\//i.test(u)) return "";
+  // ★URLの体裁でも、CSSやHTMLの構文から抜け出せる文字が混ざっていたら拒否する。
+  //   このURLは背景画像の指定 background-image:url(...) にも使われるため、
+  //   ")" や ";" が通ると url() を閉じて別のCSSを書き足せる（保存型のCSS注入）。
+  //   例: https://例.com/a.png);position:fixed;inset:0;background:red
+  //   → そのプロフィールを開いた人の画面を全面覆う、といったことができてしまう。
+  //   本物の画像URLにこれらの文字が入ることはないので、まとめて弾く。
+  if (/[()<>"'`\\\s;{}]/.test(u)) return "";
+  return u;
+};
+// 背景画像として安全に使えるCSSの値。使えないURLなら空文字。
+// ★HTMLの style="..." へ文字列連結しないこと。必ず要素の style.backgroundImage へ代入する。
+var cssBgUrl = function(u){ var v = safeUrl(u); return v ? 'url("' + v + '")' : ""; };
 // 一覧サムネ用に縮小版のURLを作る（カバーは1080x1080/約200KBで、一覧に何枚も並ぶと
 // 無料枠の転送量5GB/月をすぐ使い切るため）。Supabaseの画像変換で幅400・品質70にすると
 // 実測で約7分の1(212KB→28KB)になる。変換が使えない場合に備え、img側で元URLに戻す。
@@ -2499,11 +2513,12 @@ function renderProfileView(prof, isSelf){
   var xurl = xProfileUrl(prof.x_account);
   var xh   = xurl ? xurl.split("/").pop() : "";
   $("fvTitle").textContent = "プロフィール";
-  var hdrStyle = safeUrl(prof.header_url) ? ' style="background-image:url('+esc(safeUrl(prof.header_url))+')"' : '';
+  // ★style属性を文字列で組み立てない（CSS注入の入口になる）。描画後にプロパティへ代入する。
+  var hdrBg = cssBgUrl(prof.header_url);
   var avInner  = safeUrl(prof.avatar_url) ? '<img src="'+esc(safeUrl(prof.avatar_url))+'" alt="">' : esc(ini);
   fullviewBody.innerHTML =
     '<div class="pf">'
-    + '<div class="pf-header"'+hdrStyle+'></div>'
+    + '<div class="pf-header" id="pfHeaderBg"></div>'
     + '<div class="pf-bar"><span class="pf-avatar">'+avInner+'</span>'
     +   (isSelf ? '<button class="pf-edit" id="pfEdit">編集</button>' : '') + '</div>'
     + '<div class="pf-info">'
@@ -2519,6 +2534,10 @@ function renderProfileView(prof, isSelf){
         : '<h3>投稿</h3>')
     +   '<div id="pfPosts"></div></div>'
     + '</div>';
+  // ★背景画像はここで「プロパティへ代入」する。HTMLへ文字列で埋め込まない。
+  //   ブラウザはこの代入を1つのCSS値としてしか解釈しないので、
+  //   値の中身がどうであれ別のCSSを継ぎ足すことはできない。
+  if (hdrBg){ var _h = $("pfHeaderBg"); if (_h) _h.style.backgroundImage = hdrBg; }
   fullview.hidden = false;
   if (isSelf){
     $("pfEdit").onclick = function(){ renderProfileEdit(prof); };
@@ -2563,8 +2582,9 @@ function renderProfileEdit(prof){
     + '<div><button class="drawer-btn primary" id="pfSave" style="width:auto;margin-top:18px;padding:11px 30px">保存</button></div>'
     + '<p class="note" style="margin-top:12px;font-size:.74rem;color:var(--sub)">画像はその場で保存されます。文字情報は「保存」で確定。本名でなくてOK。</p>'
     + '</div>';
-  if (prof.header_url) $("hdrPrev").style.backgroundImage = "url(" + prof.header_url + ")";
-  if (prof.avatar_url) $("avPrev").style.backgroundImage  = "url(" + prof.avatar_url + ")";
+  // 生の値をそのまま使わず、検証済みの値だけを使う（上と同じ理由）
+  var _hb = cssBgUrl(prof.header_url); if (_hb) $("hdrPrev").style.backgroundImage = _hb;
+  var _ab = cssBgUrl(prof.avatar_url); if (_ab) $("avPrev").style.backgroundImage  = _ab;
   $("hdrFile").onchange = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
     openImageCropper(f, { aspect:3, outW:1500, outH:500, round:false, title:"ヘッダー画像の位置を調整" }, function(blob){ uploadProfileBlob("header", blob, $("hdrStatus"), $("hdrPrev")); }); };
   $("avFile").onchange  = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
