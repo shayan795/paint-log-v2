@@ -2767,8 +2767,12 @@ function openReportsAdmin(){
       // 対象者の表示名と停止状態をまとめて取得
       var ids = [];
       rows.forEach(function(r){ if (r.target_user_id && ids.indexOf(r.target_user_id) < 0) ids.push(r.target_user_id); });
+      // ★banned_at は列ごと読み取り権限を外した（migrations/022）。
+      //   外した理由: profiles は誰でも全行読めるため、そのままだと
+      //   「誰が利用停止中か」をログインした人全員が一覧できてしまっていた。
+      //   管理者だけが使えるRPC経由に変更する。
       var profQ = ids.length
-        ? sb.from("profiles").select("id,user_id,display_name,banned_at").in("id", ids)
+        ? sb.rpc("admin_user_states", { ids: ids })
         : Promise.resolve({ data: [] });
 
       profQ.then(function(pres){
