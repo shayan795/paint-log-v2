@@ -27,8 +27,14 @@ routes = [
 #     集める方式なら、書き忘れて起きるのは「配信漏れ（すぐ気づく）」であって
 #     「流出（気づかない）」ではない。
 #   ※public/ は生成物なのでGit管理しない。deploy前に [build] が自動で作り直す。
-# run_worker_first = true … 静的ファイルより先に必ずworker.jsを走らせる。
-#   これを付けないと、遮断・セキュリティヘッダ・405制限・レシピのSSRが素通りされる。
+# run_worker_first … Workerを先に通すパスを限定する。
+#   ★以前は true（全部通す）にしていたため、画像・JS・faviconまで全部がWorkerの呼び出しになり、
+#     無料枠10万回/日を1ページ表示あたり約10回ずつ消費していた（＝1日1万表示で上限）。
+#     上限に達しても静的配信へ切り替わらず、サイト全体が429で止まる作りだった。
+#     下に挙げた経路だけがWorkerの仕事（レシピのSSR・sitemap・robots・死活監視）で、
+#     残りはCloudflareが直接配るため枠を消費しない。
+#   ※内部ファイルはそもそも public/ に入れていないため、Workerを通らなくても配信されない。
+#   ※セキュリティヘッダーは public/_headers で補う（scripts/build_public.mjs が生成）。
 # html_handling = "none" … "/index.html" を "/" に転送したりしない。
 #   worker.js 側で "/" → "/index.html" の対応付けを既にしているので、二重にやると事故る。
 [build]
@@ -37,7 +43,17 @@ command = "node ../scripts/build_public.mjs"
 [assets]
 directory = "../public"
 binding = "ASSETS"
-run_worker_first = true
+run_worker_first = [
+  # 動的な処理（レシピのSSR・sitemap・robots・死活監視）
+  "/r/*", "/sitemap.xml", "/robots.txt", "/healthz", "/legacy", "/legacy.html",
+  # ★人が直接開く「ページ」は必ずWorkerを通す。
+  #   ここを外すと http:// で開いたときに https へ転送されず、平文のまま中身が返る。
+  #   平文だと途中で書き換えられ、偽のログイン欄を差し込まれる恐れがある。
+  #   （2026-08-01に一度これで穴を開けてしまい、実測して戻した）
+  #   画像・JS・フォントはページがhttpsなら必ずhttpsで読まれるので、通さなくてよい。
+  "/", "/index.html", "/help.html", "/privacy.html", "/terms.html",
+  "/course.html", "/goodbye.html", "/diagnostics.html",
+]
 html_handling = "none"
 not_found_handling = "none"
 

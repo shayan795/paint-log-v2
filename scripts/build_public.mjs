@@ -80,6 +80,22 @@ for (const { dir, exts } of DIRS) {
   }
 }
 
+// ---- _headers: 静的配信でもセキュリティヘッダーを付ける ------------------
+// ★2026-08-01まで全リクエストがWorkerを通り、そこでヘッダーを付けていた。
+//   Worker無料枠(10万回/日)を画像やJSまで消費していたため、動的な経路だけWorkerを通し、
+//   静的ファイルはCloudflareが直接配る形に変えた。
+//   その結果ヘッダーもWorkerを通らなくなるので、この _headers ファイルで補う。
+//   これが無いと、他サイトに枠で埋め込まれる攻撃(クリックジャッキング)を防げなくなる。
+const HEADERS = `/*
+  x-content-type-options: nosniff
+  x-frame-options: SAMEORIGIN
+  content-security-policy: frame-ancestors 'self'
+  referrer-policy: strict-origin-when-cross-origin
+  strict-transport-security: max-age=15552000; includeSubDomains
+`;
+writeFileSync(join(OUT, "_headers"), HEADERS);
+copied.push("_headers");
+
 // ---- self-check: 参照されているのに配信されていないものが無いか ----------
 // HTML/manifest/sw.js が読み込んでいる自前ファイルを抽出して突き合わせる。
 const scanTargets = copied.filter(f => /\.(html|webmanifest|js)$/.test(f));
