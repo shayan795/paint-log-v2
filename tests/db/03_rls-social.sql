@@ -67,8 +67,12 @@ begin
     format('insert into public.notifications(user_id,type,title,body) values (%L,%L,%L,%L)',
            ub, 'system', '自作自演通知', '本文'), 'notifications');
 
+  -- ★2026-08-01: notify_self は 'system' を名乗れないようにした（レート制限の抜け道だったため）。
+  --   正規の種別で作れることを確認する。
   perform tests.allowed(ar, '専用RPC(notify_self)なら自分宛の通知を作れる',
-    format('select public.notify_self(%L,%L,%L,%L)', 'system', '自分宛RPCテスト', '本文', 'index.html'));
+    format('select public.notify_self(%L,%L,%L,%L)', 'email_changed', '自分宛RPCテスト', '本文', 'index.html'));
+  perform tests.denied(ar, '★notify_selfでsystemを名乗ることはできない',
+    format('select public.notify_self(%L,%L,%L,%L)', 'system', 'なりすまし', '本文', 'index.html'), '作成できません');
   n := -1;
   begin select count(*)::int into n from public.notifications where user_id = ub and title = '自分宛RPCテスト';
   exception when others then n := -1; end;
@@ -76,7 +80,7 @@ begin
 
   perform tests.as_anon();
   perform tests.denied(ar, '未ログインではnotify_selfを実行できない',
-    format('select public.notify_self(%L,%L,%L,%L)', 'system', '匿名RPC', '本文', 'index.html'), 'notify_self');
+    format('select public.notify_self(%L,%L,%L,%L)', 'email_changed', '匿名RPC', '本文', 'index.html'), 'notify_self');
 
   ---------------------------------------------------------------------------
   -- 3) notifications の更新（既読）・削除

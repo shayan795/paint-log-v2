@@ -140,7 +140,8 @@ begin
   perform tests.eq(area_name, '停止通知は他の利用者からは読めない', cnt, 0);
 
   select count(*)::int into cnt from public.recipes where id = r_pub;
-  perform tests.eq(area_name, '停止されても本人の公開投稿は他の利用者から見える（BANは投稿を隠さない）', cnt, 1);
+  -- ★2026-08-01: BANは投稿を隠すようになった（それまでは違反投稿が公開され続けていた）。
+  perform tests.eq(area_name, '★停止されたら公開投稿は他の利用者から見えなくなる', cnt, 0);
 
   perform tests.affects(area_name, '一般利用者が他人の banned_at を書き換えても1件も反映されない',
     format('update public.profiles set banned_at = null where id = %L', u1), 0);
