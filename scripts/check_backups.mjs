@@ -96,6 +96,28 @@ export function checkBackups({ today = new Date(), quiet = false } = {}) {
     }
   }
 
+  // ★パス一覧そのものが古くなっていないかも見る。
+  //   一覧が古いと「一覧に載っている分は全部取れた＝成功」と表示されるのに、
+  //   その後に増えた画像は最初から対象外なので、静かに取り逃す。
+  //   実際2026-08-04に、8日前の一覧のまま実行して新しい画像5件分がずれていた
+  //   （うち5件は削除済みで失敗として検出できたが、新規追加分は失敗すら出ない）。
+  try {
+    const listPath = join(ROOT, "scripts", "storage_paths.local.txt");
+    if (existsSync(listPath)) {
+      const ageDays = Math.floor((today.getTime() - statSync(listPath).mtimeMs) / 86400000);
+      if (ageDays >= WARN_DAYS) {
+        console.log("");
+        console.log(`${Y}⚠ 画像の一覧(storage_paths.local.txt)が ${ageDays}日前のものです${X}`);
+        console.log(`${Y}   このまま取ると、その後に増えた画像を静かに取り逃します。${X}`);
+        console.log(`${Y}   Claudeに「画像の一覧を最新にして」と言えば作り直します。${X}`);
+        if (worst === "ok") worst = "warn";
+      }
+    } else {
+      console.log(`${Y}⚠ 画像の一覧が見つかりません。公開分しかバックアップできていません。${X}`);
+      if (worst === "ok") worst = "warn";
+    }
+  } catch (_) { /* 確認できなくても本体は止めない */ }
+
   // ★別リポジトリ側の自動バックアップは、ここからは確認できない。
   //   確認できないことを黙っていると「全部見えている」と誤解されるので明示する。
   if (!quiet) {
