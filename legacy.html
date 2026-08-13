@@ -1147,7 +1147,11 @@ body{background-image:none}
    上部の「塗装レシピ録」を押したらトップへ戻る。
    戻すときは、このCSSと <script> の "BRANDHOME:" と、
    #brandHome の role/tabindex を消せばよい。 */
-#brandHome{cursor:pointer; -webkit-tap-highlight-color:transparent}
+/* ★pointer-events:auto を必ず付けること。
+   .lt-brand-textword は元々「飾り」として pointer-events:none が指定されており、
+   指でもマウスでも触れない状態だった。cursor だけ変えても、
+   見た目は押せそうなのに実際は反応しない（一番分かりにくい壊れ方）。 */
+#brandHome{cursor:pointer; pointer-events:auto; -webkit-tap-highlight-color:transparent}
 #brandHome:active{opacity:.6}
 /* ===================== BRANDHOME:END ===================== */
 
