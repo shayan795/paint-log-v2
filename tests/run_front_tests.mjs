@@ -88,8 +88,13 @@ check("CSS位置", "記号を含む注入は既定値に落ちる", safePos("50%
 // ---------------------------------------------------------------- index.html
 const index = readFileSync(join(ROOT, "index.html"), "utf8");
 const safeUrlDef = index.match(/var safeUrl = function\(u\)\{[\s\S]*?\n\};/)[0];
+const safeThumbSrcDef = index.match(/var safeThumbSrc = function\(u\)\{[\s\S]*?\n\};/)[0];
 const thumbUrlDef = index.match(/var thumbUrl = function[\s\S]*?\n};/)[0];
-const { safeUrl, thumbUrl } = new Function(`${safeUrlDef}\n${thumbUrlDef}\nreturn { safeUrl, thumbUrl };`)();
+// window / location はブラウザ側にしか無いので、テストでは同等のものを与える
+const stubs = `var window = { PAINTLOG_CONFIG: { SUPABASE_URL: "https://zlkbaojclitlxshpxwpr.supabase.co" } };
+var location = { href: "https://plamo-paint.com/" };`;
+const { safeUrl, thumbUrl, safeThumbSrc } = new Function(
+  `${stubs}\n${safeUrlDef}\n${safeThumbSrcDef}\n${thumbUrlDef}\nreturn { safeUrl, thumbUrl, safeThumbSrc };`)();
 
 check("リンクURLの無害化", "httpsは通る", safeUrl("https://example.com"), "https://example.com");
 // 保存型CSS注入の再発防止。
@@ -109,11 +114,30 @@ check("リンクURLの無害化", "data:は空になる", safeUrl("data:text/htm
 // サムネイル（縦横比が崩れて特大表示になる不具合の再発防止）
 const t = thumbUrl(STORAGE);
 truthy("サムネイル", "変換用のURLに置き換わる", t.includes("/render/image/public/"), `実際=${t}`);
-truthy("サムネイル", "幅と高さの両方を指定している（片方だけだと縦横比が崩れる）",
-  t.includes("width=400") && t.includes("height=400"), `実際=${t}`);
+// 幅と高さは必ず両方・同じ値。片方だけだと縦横比が崩れて特大表示になる。
+const tw = (t.match(/width=(\d+)/) || [])[1];
+const th = (t.match(/height=(\d+)/) || [])[1];
+truthy("サムネイル", "幅と高さの両方を同じ値で指定している（片方だけだと縦横比が崩れる）",
+  !!tw && tw === th, `実際=${t}`);
+// 400px固定だと、いまのスマホ（画面が2〜3倍細かい）で引き伸ばされてぼやける。
+truthy("サムネイル", "画面の細かさに足りる大きさを取り寄せている（480px以上）",
+  Number(tw) >= 480, `実際=${tw}px`);
 truthy("サムネイル", "resize=contain がある（無いと拡大されて崩れる）", t.includes("resize=contain"), `実際=${t}`);
-check("サムネイル", "Storage以外のURLは変換しない", thumbUrl("https://example.com/a.jpg"), "https://example.com/a.jpg");
 check("サムネイル", "空でも壊れない", thumbUrl(""), "");
+
+// 一覧の表紙は「投稿者の写真」になった。表紙のURLは所有者がAPIで直接書ける列なので、
+// 外部サーバーのURLを置かれると、トップページを開いた全員のIP・端末・時刻がそこへ送られる。
+// 画像は普通に表示されるため、見ている側も運営側も異常に気づけない。
+check("表紙の出どころ確認", "外部サーバーの画像は出さない",
+  safeThumbSrc("https://evil.example.com/track.png"), "");
+check("表紙の出どころ確認", "紛らわしい名前のドメインも出さない",
+  safeThumbSrc("https://zlkbaojclitlxshpxwpr.supabase.co.evil.example.com/a.jpg"), "");
+truthy("表紙の出どころ確認", "自分のStorageの画像は今までどおり通る",
+  safeThumbSrc(STORAGE) === STORAGE, `実際=${safeThumbSrc(STORAGE)}`);
+truthy("表紙の出どころ確認", "自サイトの画像も通る",
+  safeThumbSrc("https://plamo-paint.com/og-image.png") !== "");
+check("表紙の出どころ確認", "外部URLはサムネ変換にも渡さない",
+  thumbUrl("https://evil.example.com/track.png"), "");
 
 // ------------------------------------------------- アプリ内ブラウザの判定（index.html）
 //

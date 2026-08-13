@@ -251,6 +251,25 @@ button{font-family:inherit}
 
 /* おすすめカルーセル */
 .card-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch}
+/* 使い方の見本。初めて来た人が最初に見る場所なので、他のカードより大きく1件だけ出す。
+   ★意図的に「おすすめ」より上に置いている。何のサイトか分からないまま
+     作品一覧だけ見せても、記録できることが伝わらないため。 */
+.sample-sec{margin-bottom:22px}
+.sample-card{display:flex;gap:14px;align-items:stretch;text-decoration:none;color:inherit;
+  border:1px solid var(--line,#E5E7EB);border-radius:16px;overflow:hidden;background:#fff}
+.sample-thumb{flex:0 0 40%;max-width:200px;background:#F1F2F4}
+.sample-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.sample-body{flex:1 1 auto;padding:14px 16px 14px 0;display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:0}
+.sample-badge{align-self:flex-start;font-size:.7rem;font-weight:700;color:#fff;
+  background:var(--accent,#E60012);border-radius:999px;padding:3px 10px}
+.sample-title{font-size:1rem;font-weight:700;color:var(--ink,#1E2430);line-height:1.35;
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.sample-note{font-size:.78rem;color:var(--sub,#6B7280);line-height:1.5}
+@media(max-width:640px){
+  .sample-thumb{flex:0 0 38%}
+  .sample-body{padding:12px 14px 12px 0}
+  .sample-title{font-size:.95rem}
+}
 .card-row::-webkit-scrollbar{display:none}
 .reco-card{flex:none; width:280px; cursor:pointer}
 .reco-thumb{
@@ -699,6 +718,18 @@ textarea.pf-field{resize:vertical; line-height:1.6}
       <svg id="searchIcon" viewBox="0 0 24 24" style="cursor:pointer"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="search" id="searchInput" placeholder="作品・塗料・塗装方法を探す" enterkeyhint="search">
     </div>
+    <!-- 使い方の見本。運営が1件だけ指定できる（migrations/034）。未指定なら丸ごと非表示 -->
+    <section class="block sample-sec" id="sampleSec" hidden>
+      <h3>はじめての方へ</h3>
+      <a class="sample-card" id="sampleCard" href="#">
+        <div class="sample-thumb"><img id="sampleImg" alt="" loading="lazy" decoding="async"></div>
+        <div class="sample-body">
+          <span class="sample-badge">使い方の見本</span>
+          <div class="sample-title" id="sampleTitle"></div>
+          <div class="sample-note">実際の投稿です。どんな記録が残せるか、開いて確かめてください。</div>
+        </div>
+      </a>
+    </section>
     <section class="block">
       <h3>おすすめ</h3>
       <div class="card-row" id="recoRow"></div>
@@ -842,12 +873,12 @@ textarea.pf-field{resize:vertical; line-height:1.6}
          node scripts/bump_asset_version.mjs
        （中身が変わった時だけ版が変わる。何度実行しても結果は同じ）
      ============================================================================ -->
-<script src="src/config.js?v=3e1a7c81"></script>
-<script src="src/methods.js?v=3e1a7c81"></script>
+<script src="src/config.js?v=1cefac5a"></script>
+<script src="src/methods.js?v=1cefac5a"></script>
 <!-- ASSETVER:START — 自動生成。手で編集しない（node scripts/bump_asset_version.mjs で更新される） -->
 <script>
 window.PAINTLOG_ASSET_EXPECT = {
-  version: "3e1a7c81",
+  version: "1cefac5a",
   config:  "SUPABASE_ANON_KEY,SUPABASE_URL,TURNSTILE_SITE_KEY",
   methods: "grad,candy,candy_red,candy_blue,wrap,marble,weather,brush,metal,matte,mask"
 };
@@ -978,20 +1009,77 @@ var safeUrl = function(u){
 // 背景画像として安全に使えるCSSの値。使えないURLなら空文字。
 // ★HTMLの style="..." へ文字列連結しないこと。必ず要素の style.backgroundImage へ代入する。
 var cssBgUrl = function(u){ var v = safeUrl(u); return v ? 'url("' + v + '")' : ""; };
+// ★プロフィール画像（アイコン・ヘッダー）専用の関門。
+//   safeUrl は「CSSを継ぎ足す細工」を弾くだけで、**どこのサーバーの画像かは見ていない**。
+//   そのため誰でも自分のアイコンURLに外部サーバーのアドレスを入れられ、
+//   そのプロフィールを開いた人のIP・端末・時刻が第三者に送られていた。
+//   画像は普通に表示されるので、見ている側も運営側も気づけない。
+//   legacy.html では同じ穴を塞いであったが、こちら側だけ取り残されていた。
+var safeImg = function(u){
+  var v = safeThumbSrc(u);        // 出どころ（自分のStorage・自サイト）を確認
+  return v ? safeUrl(v) : "";     // そのうえでCSSへの細工も弾く
+};
+var cssBgImg = function(u){ var v = safeImg(u); return v ? 'url("' + v + '")' : ""; };
 // 一覧サムネ用に縮小版のURLを作る（カバーは1080x1080/約200KBで、一覧に何枚も並ぶと
 // 無料枠の転送量5GB/月をすぐ使い切るため）。Supabaseの画像変換で幅400・品質70にすると
 // 実測で約7分の1(212KB→28KB)になる。変換が使えない場合に備え、img側で元URLに戻す。
 // ★resize=contain と height を必ず付けること。width だけ指定すると Supabase の画像変換は
 //   縦横比を保たず 400x1080 のような縦長画像を返し、object-fit で極端に拡大表示されて崩れる。
 //   contain なら元の比率のまま 400x400 の箱に収まる（実測 212KB → 19KB）。
-var thumbUrl = function(u){
+// ★出す前に「自分のStorageの画像か」を必ず確かめる。
+//   表紙(cover_url)は所有者がAPIで直接書き換えられる列で、以前は運営が作る合成カードしか
+//   入らなかったが、投稿者の写真を入れる形に変えたことで任意のURLを置く余地ができた。
+//   外部サーバーのURLを入れられると、トップページを開いた**全員のIP・端末・時刻**が
+//   その第三者に送られる（画像は表示されるので誰も異常に気づかない）。
+//   legacy.html の safePhoto と同じ考え方をこちらにも置く。
+//   この関数は外の変数に依存しない形にしてある（テストから単体で取り出して確かめるため）。
+var safeThumbSrc = function(u){
   u = String(u || "");
-  return u.indexOf("/storage/v1/object/public/") >= 0
-    ? u.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=400&height=400&resize=contain&quality=70"
-    : u;
+  if (!u) return "";
+  if (u.indexOf("data:image/") === 0) return u;      // 端末内で作った画像はそのまま
+  var cfg = (typeof window !== "undefined" && window.PAINTLOG_CONFIG) ? window.PAINTLOG_CONFIG : {};
+  var base = (typeof location !== "undefined" && location.href) ? location.href : "https://plamo-paint.com/";
+  var allowed = [];
+  try { if (cfg.SUPABASE_URL) allowed.push(new URL(cfg.SUPABASE_URL).origin); } catch (_) {}
+  try { allowed.push(new URL(base).origin); } catch (_) {}
+  var org = "";
+  try { org = new URL(u, base).origin; } catch (_) { return ""; }
+  return allowed.indexOf(org) >= 0 ? u : "";
+};
+var thumbUrl = function(u){
+  u = safeThumbSrc(u);
+  if (!u) return "";
+  if (u.indexOf("/storage/v1/object/public/") < 0) return u;
+  // ★画面の細かさ(devicePixelRatio)に合わせて取り寄せる大きさを決める。
+  //   400px固定にしていたため、いまのスマホ（3倍の細かさ）では
+  //   幅280pxのタイルでも実際には840px分の細かさが要るのに400pxしか無く、
+  //   引き伸ばされて明らかにぼやけていた。
+  //   一方で常に大きい画像を取ると通信量が増えるので、必要な分だけにする。
+  var dpr = 1;
+  try { dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1)); } catch (_) {}
+  //   ★440という数字の根拠：一番大きいタイル(おすすめ)は幅280px。
+  //     resize=contain は「長い方の辺」を指定値に合わせるので、縦長写真だと
+  //     幅はその2/3ほどしか無い。280px分を確保するには余裕を見た値が要る。
+  //     400にしていたときは縦長写真で幅533pxしか取れず、わずかに足りなかった。
+  var px = Math.round(440 * dpr);
+  if (px < 480) px = 480;
+  //   ★上限は880まで。3倍の画面で1080まで取ると、一覧1画面で15枚前後×大きい画像となり、
+  //     無料枠の転送量(5GB/月)を一気に削る。880あれば一番大きいタイル(幅280px)でも
+  //     縦長写真の横幅が587px確保でき、実測で等倍以下（＝ぼやけない）に収まる。
+  if (px > 880) px = 880;
+  return u.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+       + "?width=" + px + "&height=" + px + "&resize=contain&quality=78";
 };
 // 変換版が失敗したら元画像に戻すための onerror（1回だけ）
 var THUMB_FALLBACK = ' onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=this.src.replace(\'/render/image/public/\',\'/object/public/\').split(\'?\')[0];}"';
+// 一覧サムネの切り取り位置。投稿者が「一覧での見え方」で決めた値。
+// ★style属性に差し込む値なので、必ずここで形を確かめる。
+//   cover_pos は所有者がAPIで直接書き換えられる列でもあるため、
+//   DB側の制約だけに頼らず、出す直前にも確かめる（過去にCSS注入の穴を作っている）。
+var coverPosAttr = function(p){
+  p = String(p == null ? "" : p);
+  return /^\d{1,3}% \d{1,3}%$/.test(p) ? ' style="object-position:' + p + '"' : '';
+};
 
 /* ----------------------------- 下タブ切替 ----------------------------- */
 var screens = { discover: $("screen-discover"), records: $("screen-records") };
@@ -1012,7 +1100,7 @@ function setHash(h){ try{ history.replaceState(null, "", h ? "#"+h : location.pa
 // 投稿カード（記録/プロフィール共通）
 function recordCard(r){
   var c = document.createElement("button"); c.className = "pf-post";
-  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></span>' : '<span class="pf-post-thumb"></span>';
+  var thumb = r.cover_url ? '<span class="pf-post-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+coverPosAttr(r.cover_pos)+THUMB_FALLBACK+'></span>' : '<span class="pf-post-thumb"></span>';
   var badge = (r.is_public === false) ? '<span class="rec-private">非公開</span>' : '';
   c.innerHTML = thumb + '<div class="pf-post-title">'+esc(r.title||"無題")+badge+'</div>';
   c.addEventListener("click", function(){ location.href = "/r/" + r.id; });
@@ -1027,7 +1115,7 @@ function renderRecords(){
   }
   box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
   // 記録タブ＝保存(クリップ)した投稿だけ。自分の作成物はプロフィールで見る
-  var SEL = "id,title,cover_url,is_public,created_at";
+  var SEL = "id,title,cover_url,cover_pos,is_public,created_at";
   sb.from("clips").select("recipe_id").eq("user_id", currentUserId).then(function(cl){
     if (cl && cl.error){ box.innerHTML = '<div class="note-box">読み込みに失敗しました。通信状況を確認して、引き下げて更新してください。</div>'; return; }
     var ids = (cl && cl.data) ? cl.data.map(function(x){ return x.recipe_id; }) : [];
@@ -1416,7 +1504,10 @@ function openTagResults(slug, label){
   var recoSec = $("tagRecoSec"), recoRow = $("tagRecoRow"), recoDots = $("tagRecoDots");
   recoSec.hidden = true; recoRow.innerHTML = ""; recoDots.innerHTML = "";
   window.scrollTo(0,0);
-  sb.from("recipes").select("id,title,cover_url,created_at,view_count,owner_id").eq("is_public", true)
+  // ★見本は「人気の塗装方法」の件数から既に除いてある(popular_methods)。
+  //   一覧にだけ出すと、件数と実際に並ぶ数が食い違って見える。
+  sb.from("recipes").select("id,title,cover_url,cover_pos,created_at,view_count,owner_id").eq("is_public", true)
+    .eq("is_sample", false)
     .contains("methods", [slug]).order("created_at", { ascending:false }).limit(50)
     .then(function(res){
       if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
@@ -1438,7 +1529,7 @@ function openTagResults(slug, label){
         recoSec.hidden = false;
         withCover.forEach(function(r, i){
           var card = document.createElement("div"); card.className = "reco-card";
-          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></div>'
+          card.innerHTML = '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+coverPosAttr(r.cover_pos)+THUMB_FALLBACK+'></div>'
             + '<div class="reco-title">'+esc(r.title||"無題")+'</div>';
           card.addEventListener("click", function(){ location.href = "/r/" + r.id; });
           recoRow.appendChild(card);
@@ -1481,7 +1572,7 @@ function openSearchResults(q){
   // フォールバック：公開投稿を新着300件取得→クライアント側でtitle/methods/grid内塗料名フィルタ。
   // （search_recipes RPC 未適用の環境でも動くよう残置）
   function searchFallback(){
-    sb.from("recipes").select("id,title,cover_url,is_public,created_at,methods,grid,owner_id").eq("is_public", true)
+    sb.from("recipes").select("id,title,cover_url,cover_pos,is_public,created_at,methods,grid,owner_id").eq("is_public", true)
       .order("created_at", { ascending:false }).limit(300)
       .then(function(res){
         if (res && res.error){ list.innerHTML = '<p class="pf-empty">読み込みに失敗しました。</p>'; return; }
@@ -1671,7 +1762,10 @@ window.track = track;   // legacy.html から共有して使う
 // アバター表示の共通ロジック：画像URLがあれば画像、無ければ頭文字テキスト
 var currentAvatar = null;
 function avatarMarkup(url, initial){
-  return url ? '<img src="'+esc(url)+'" alt="">' : esc(initial);
+  // 自分のアイコンでも同じ関門を通す。経路ごとに扱いが違うと、
+  // どこかで必ず素通しが残る（今回それで index.html 側だけ穴が残っていた）。
+  var v = safeImg(url);
+  return v ? '<img src="'+esc(v)+'" alt="">' : esc(initial);
 }
 // PCサイドバーのアカウント表示も連動させる（画像対応）
 function setSidebarAccount(initial, label, url){
@@ -2475,7 +2569,7 @@ function deleteAccount(){
 function renderProfilePosts(ownerId, isSelf, vis){
   var box = $("pfPosts"); if (!box || !sb || !ownerId) return;
   box.innerHTML = '<p class="pf-empty">読み込み中…</p>';
-  var q = sb.from("recipes").select("id,title,cover_url,is_public,created_at").eq("owner_id", ownerId);
+  var q = sb.from("recipes").select("id,title,cover_url,cover_pos,is_public,created_at").eq("owner_id", ownerId);
   if (!isSelf || vis === "public") q = q.eq("is_public", true);
   else if (vis === "private") q = q.eq("is_public", false);
   q.order("created_at", { ascending:false }).then(function(res){
@@ -2514,8 +2608,9 @@ function renderProfileView(prof, isSelf){
   var xh   = xurl ? xurl.split("/").pop() : "";
   $("fvTitle").textContent = "プロフィール";
   // ★style属性を文字列で組み立てない（CSS注入の入口になる）。描画後にプロパティへ代入する。
-  var hdrBg = cssBgUrl(prof.header_url);
-  var avInner  = safeUrl(prof.avatar_url) ? '<img src="'+esc(safeUrl(prof.avatar_url))+'" alt="">' : esc(ini);
+  var hdrBg = cssBgImg(prof.header_url);
+  var _avSrc   = safeImg(prof.avatar_url);   // 出どころが不明なら頭文字表示に落とす
+  var avInner  = _avSrc ? '<img src="'+esc(_avSrc)+'" alt="">' : esc(ini);
   fullviewBody.innerHTML =
     '<div class="pf">'
     + '<div class="pf-header" id="pfHeaderBg"></div>'
@@ -2583,8 +2678,8 @@ function renderProfileEdit(prof){
     + '<p class="note" style="margin-top:12px;font-size:.74rem;color:var(--sub)">画像はその場で保存されます。文字情報は「保存」で確定。本名でなくてOK。</p>'
     + '</div>';
   // 生の値をそのまま使わず、検証済みの値だけを使う（上と同じ理由）
-  var _hb = cssBgUrl(prof.header_url); if (_hb) $("hdrPrev").style.backgroundImage = _hb;
-  var _ab = cssBgUrl(prof.avatar_url); if (_ab) $("avPrev").style.backgroundImage  = _ab;
+  var _hb = cssBgImg(prof.header_url); if (_hb) $("hdrPrev").style.backgroundImage = _hb;
+  var _ab = cssBgImg(prof.avatar_url); if (_ab) $("avPrev").style.backgroundImage  = _ab;
   $("hdrFile").onchange = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
     openImageCropper(f, { aspect:3, outW:1500, outH:500, round:false, title:"ヘッダー画像の位置を調整" }, function(blob){ uploadProfileBlob("header", blob, $("hdrStatus"), $("hdrPrev")); }); };
   $("avFile").onchange  = function(e){ var f = e.target.files[0]; e.target.value = ""; if (!f) return;
@@ -3029,8 +3124,12 @@ function renderReco(){
   var row = $("recoRow"), dots = $("recoDots");
   if (!sb){ row.innerHTML = ""; dots.innerHTML = ""; return; }
   row.innerHTML = '<div class="note-box" style="flex:1 1 100%">読み込み中…</div>'; dots.innerHTML = "";
-  sb.from("recipes").select("id,title,cover_url,created_at,view_count,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
-    .eq("is_public", true).order("created_at", { ascending:false }).limit(40)
+  // ★見本として固定した投稿は、この一覧から外す。
+  //   画面の一番上に「はじめての方へ」で出しているので、すぐ下の「おすすめ」にも
+  //   同じ作品が並ぶと、同じ写真が2つ続いて出る。
+  //   運営が置いた1件が利用者の作品の枠を1つ奪うことにもなる。
+  sb.from("recipes").select("id,title,cover_url,cover_pos,created_at,view_count,owner_id,profiles!recipes_owner_id_fkey(display_name,user_id)")
+    .eq("is_public", true).eq("is_sample", false).order("created_at", { ascending:false }).limit(40)
     .then(function(res){
       row.innerHTML = ""; dots.innerHTML = "";
       if (res && res.error){   // 通信失敗を「投稿なし」と誤表示しない
@@ -3047,7 +3146,7 @@ function renderReco(){
         var card = document.createElement("div");
         card.className = "reco-card";
         var thumb = r.cover_url
-          ? '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+THUMB_FALLBACK+'></div>'
+          ? '<div class="reco-thumb"><img src="'+esc(thumbUrl(r.cover_url))+'" alt="" loading="lazy" decoding="async"'+coverPosAttr(r.cover_pos)+THUMB_FALLBACK+'></div>'
           : '<div class="reco-thumb"><span class="ph-ico">🖼</span></div>';
         var author = (r.profiles && r.profiles.display_name) ? r.profiles.display_name : "";
         card.innerHTML = thumb + '<div class="reco-title">'+esc(r.title||"無題")+'</div><div class="reco-author">'+esc(author)+'</div>';
@@ -3287,8 +3386,31 @@ function startCarousel(row, dots){
   onScroll();
 })();
 
+// 使い方の見本（運営が1件だけ固定できる投稿）。
+// ★投稿者のアイコンや名前は出さない。運営が置いた案内であって、誰かの作品自慢ではない。
+//   名前が並ぶと「この人の投稿」に見えて、見本だと伝わらなくなる。
+// ★指定が無ければ枠ごと出さない。空の見出しだけが残ると、壊れているように見える。
+function renderSample(){
+  var sec = document.getElementById("sampleSec");
+  if (!sec) return;
+  function hide(){ sec.hidden = true; }
+  if (!sb || !sb.rpc){ hide(); return; }
+  sb.rpc("sample_recipe").then(function(res){
+    var r = (res && !res.error && res.data && res.data[0]) ? res.data[0] : null;
+    if (!r || !r.id){ hide(); return; }
+    var img = document.getElementById("sampleImg");
+    var src = thumbUrl(r.cover_url);          // 出どころの確認も通す
+    if (src){ img.src = src; img.alt = (r.title || "") + " の完成写真"; }
+    else { img.removeAttribute("src"); }
+    document.getElementById("sampleTitle").textContent = r.title || "無題のレシピ";
+    document.getElementById("sampleCard").href = "/r/" + encodeURIComponent(r.id);
+    sec.hidden = false;
+  }, hide);
+}
+
 /* ----------------------------- 起動 ----------------------------- */
 renderDrawer();
+renderSample();
 renderReco();
 renderCategories();
 renderTrending();

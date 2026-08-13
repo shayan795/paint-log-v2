@@ -24,3 +24,6 @@ BOMBS.md
 claude-code-prompt.md
 CLAUDE引き継ぎ.md
 docs/codex-review-brief.md
+.dev.vars*
+worker/.dev.vars*
+public/

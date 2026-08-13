@@ -64,7 +64,7 @@ function isAllowedImageOrigin(u, env) {
 // Supabase REST API から1件レシピを取得
 async function getRecipeFromSupabase(env, id) {
   // 公開投稿のみ取得（is_public=true）
-  const select = "id,title,author_label,methods,cover_url,owner_id,is_public,comments_disabled,grid,profiles:owner_id(display_name,user_id)";
+  const select = "id,title,author_label,methods,cover_url,share_url,owner_id,is_public,is_sample,comments_disabled,grid,profiles:owner_id(display_name,user_id)";
   const url = `${env.SUPABASE_URL}/rest/v1/recipes?id=eq.${encodeURIComponent(id)}&is_public=eq.true&select=${encodeURIComponent(select)}`;
   const res = await fetch(url, {
     headers: {
@@ -223,7 +223,8 @@ function buildRecipeBodyHtml(rec, maps, maxChars) {
   // 表示名は「gridの値」を優先する。閲覧画面(renderViewMode)が state=grid を見て描くので、
   // ここを合わせないとサーバーが出した文とJSが出す文が食い違う。
   const kit = clip(asStr(g.kit).trim() || asStr(r.title).trim(), 200);
-  const author = clip(asStr(g.author).trim() || asStr(r.author_label).trim(), 100);
+  // 見本投稿は制作者を出さない（誤って制作者名が入っていても出さない、を構造で保証する）
+  const author = r.is_sample ? "" : clip(asStr(g.author).trim() || asStr(r.author_label).trim(), 100);
   const memo = clip(asStr(g.memo).trim() || asStr(r.memo).trim(), 2000);
 
   const procs = (Array.isArray(g.procs) ? g.procs : [])
@@ -444,18 +445,34 @@ async function serveRecipePage(env, id) {
     const prof = rec.profiles || {};
     // 外部メタ(og/twitter/JSON-LD)の「制作者」は検証済みの display_name / @user_id のみ採用する。
     // 自由入力の author_label は身元未検証のため外部メタには出さない（なりすまし・スパム表示の防止）。
-    const authorLabel = (prof.display_name && prof.display_name.trim())
-      ? prof.display_name.trim()
-      : (prof.user_id ? "@" + prof.user_id : "");
+    // ★見本投稿は制作者を一切出さない。
+    //   SNSの説明文と検索エンジン向けの構造化データにも出さない。
+    //   所有者アカウント(@paintlog_ops)は「投稿には持ち主が要る」という仕組み上の都合で
+    //   存在するだけで、読者に見せる情報ではない。画面だけ隠しても、
+    //   共有したときのプレビューや検索結果に名前が出ては意味がない。
+    const authorLabel = rec.is_sample ? ""
+      : ((prof.display_name && prof.display_name.trim())
+          ? prof.display_name.trim()
+          : (prof.user_id ? "@" + prof.user_id : ""));
     const title = (rec.title && rec.title.trim() ? rec.title.trim() + "｜" : "") + "塗装レシピ録";
     const desc = buildDescription(rec, authorLabel);
     // cover_url は所有者がAPIで任意値に設定可能なため、Supabase Storage か自サイト由来のみ採用。
     // それ以外（外部の悪意画像等）は汎用OGPにフォールバック。
     const fallbackImg = `${env.SITE}/og-image.png`;
-    const cover = String(rec.cover_url || "");
+    // ★SNSに出すのは share_url（「塗装レシピ録」の文字入り合成カード・1080角）。
+    //   サイト内の一覧は cover_url（作品の写真そのもの）を使うので、用途で分けている。
+    //   share_url が無い古い投稿は cover_url に落とす。
     // ★前方一致(startsWith)だと https://<ref>.supabase.co.evil.com/... が通ってしまうため、
     //   URLとして解析し「オリジン完全一致」で判定する。
-    const image = isAllowedImageOrigin(cover, env) ? cover : fallbackImg;
+    const share = String(rec.share_url || "");
+    const cover = String(rec.cover_url || "");
+    const useShare = isAllowedImageOrigin(share, env);
+    const image = useShare ? share : (isAllowedImageOrigin(cover, env) ? cover : fallbackImg);
+    // 大きさの申告は、実際に1080角だと分かっている合成カードのときだけ出す。
+    // 写真は縦横比がまちまちで、固定値を書くと嘘の申告になる。
+    const sizeTags = useShare
+      ? `<meta property="og:image:width" content="1080"><meta property="og:image:height" content="1080">`
+      : "";
     const pageUrl = `${env.SITE}/r/${rec.id}`;
 
     const block =
@@ -465,8 +482,7 @@ async function serveRecipePage(env, id) {
       `<meta property="og:description" content="${esc(desc)}">` +
       `<meta property="og:url" content="${esc(pageUrl)}">` +
       `<meta property="og:image" content="${esc(image)}">` +
-      `<meta property="og:image:width" content="1080">` +
-      `<meta property="og:image:height" content="1080">` +
+      sizeTags +
       `<meta property="og:locale" content="ja_JP">` +
       `<meta name="twitter:card" content="summary_large_image">` +
       `<meta name="twitter:title" content="${esc(title)}">` +
@@ -524,7 +540,18 @@ async function serveRecipePage(env, id) {
     // クライアント側の Supabase ラウンドトリップを消すため、レシピ本体を script タグに埋め込む
     // legacy.html の loadById がこれを優先的に使う
     // < を < に落として script の早期終了自体を封じる（</script 対策の上位互換・JSONとしては同値）
-    const initialData = JSON.stringify(rec).replace(/</g, "\\u003c");
+    // ★見本投稿は、持ち主のアカウント情報をページに含めない。
+    //   画面に出さないだけでは足りない。ここに profiles(表示名・ID) が入っていると、
+    //   ページのソースを見るだけで運営アカウントの名前とIDが読めてしまう。
+    //   見本は「サイトが置いた案内」であって、持ち主が誰かは読者に見せる情報ではない。
+    //   ★owner_id は消さない。消すと「自分の投稿かどうか」を画面が判定できず、
+    //     持ち主なのに編集ボタンが出なくなる（隠したいのは"誰か"であって、
+    //     編集できるかどうかの判定材料まで奪う必要はない）。
+    //     owner_id は意味を持たない識別子なので、それ自体は名前もIDも表さない。
+    const recForClient = rec.is_sample
+      ? Object.assign({}, rec, { profiles: null, author_label: null })
+      : rec;
+    const initialData = JSON.stringify(recForClient).replace(/</g, "\\u003c");
     const inject = `<script id="__initial_recipe">window.__INITIAL_RECIPE__=${initialData};</script>`;
     html = html.replace(/<\/head>/i, () => inject + "</head>");
     // canonical をこのレシピ自身に向ける。既定のままだとトップページを指し、
@@ -571,9 +598,22 @@ async function serveRecipePage(env, id) {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS },
     });
   }
-  return new Response(html, {
+  return new Response(injectDevLogin(html, env), {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", ...SECURITY_HEADERS },
   });
+}
+
+// ★手元の開発サイトだけ、ログインを自動で済ませるための値を差し込む。
+//   合言葉は worker/.dev.vars（Gitに入らない）にしか無いので、本番にはこの値自体が存在せず、
+//   差し込む経路が構造的に生まれない。config.js に書くと本番からも読めてしまうので置かない。
+function injectDevLogin(html, env) {
+  if (env.LOCAL_DEV !== "1" || !env.DEV_LOGIN_EMAIL || !env.DEV_LOGIN_PASSWORD) return html;
+  const tag = `<script>window.DEV_AUTOLOGIN=${JSON.stringify({
+    email: env.DEV_LOGIN_EMAIL, password: env.DEV_LOGIN_PASSWORD,
+  })};</script>`;
+  // ★置換文字列は関数で返す。文字列で渡すと $& や $1 が「置換パターン」として解釈され、
+  //   合言葉に $ が入っていた瞬間に中身が化ける。過去に同じ形で事故を起こしている。
+  return html.replace("</head>", () => tag + "</head>");
 }
 
 // 動的サイトマップ: 固定ページ＋全公開投稿の /r/:id を列挙してGoogleに知らせる
@@ -656,9 +696,19 @@ export default {
     //   url.protocol ではなくこのヘッダを見る（url.protocol は常に https に見えることがある）。
     //   判定はCloudflareが付ける cf-visitor（{"scheme":"http"} が入る）と、
     //   URL自身のスキームの両方を見る。環境によってどちらかしか取れないことがあるため。
+    //   ★手元での開発（wrangler dev）だけは例外にする。
+    //     localhost に証明書は無いので https へ送ると必ず開けなくなり、
+    //     開発用サイトが一切使えない。
+    //
+    //     判定は「リクエストの中身」ではなく **設定値** で行う。
+    //     ホスト名で見分ける書き方も試したが、実際には効かなかった（後述）。
+    //     それ以前に、外から書き換えられる Host ヘッダを安全判定の根拠にするのは筋が悪い。
+    //     LOCAL_DEV は worker/.dev.vars にしか書かず、そのファイルはGitに入らないので、
+    //     本番へは構造的に届かない＝本番で暗号化が外れる経路が存在しない。
+    const isLocalDev = env.LOCAL_DEV === "1";
     const cfVisitor = request.headers.get("cf-visitor") || "";
     const cameOverHttp = url.protocol === "http:" || /"scheme"\s*:\s*"http"/.test(cfVisitor);
-    if (cameOverHttp) {
+    if (cameOverHttp && !isLocalDev) {
       url.protocol = "https:";
       return Response.redirect(url.toString(), 301);
     }
@@ -774,6 +824,12 @@ export default {
     // 画像・フォント等の不変アセットは長め、HTML/JS等は短めにして更新の伝播を早くする
     const immutable = /\.(png|jpe?g|gif|webp|svg|ico|woff2?)$/i.test(reqPath);
     h.set("cache-control", immutable ? "public, max-age=86400" : "public, max-age=300");
+
+    // 手元の開発サイトだけ、ログインを自動で済ませる（詳細は injectDevLogin のコメント）
+    if (env.LOCAL_DEV === "1" && env.DEV_LOGIN_EMAIL && /\.html$/.test(reqPath)) {
+      h.set("cache-control", "no-store");
+      return new Response(injectDevLogin(await originRes.text(), env), { status: originRes.status, headers: h });
+    }
     return new Response(originRes.body, { status: originRes.status, headers: h });
   },
 };

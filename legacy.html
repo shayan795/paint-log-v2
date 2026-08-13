@@ -205,6 +205,34 @@ td.cell .chipline{display:flex;align-items:center;gap:6px;text-align:left}
 td.cell .pname{font-size:.74rem;line-height:1.25}
 td.cell .pcode{font-family:"IBM Plex Mono",monospace;font-size:.62rem;color:var(--sub);display:block}
 td.cell.empty{color:var(--line-d);font-size:1rem}
+/* 完成写真の2枠（正面／背面）。何を撮ればいいかを枠自体に書いておく */
+.photoslots{display:grid;grid-template-columns:1fr;gap:10px;max-width:320px}
+.photoslot{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;min-height:132px;padding:10px;font:inherit;cursor:pointer;
+  background:var(--card,#fff);border:1.5px dashed var(--line-d);border-radius:10px;color:var(--sub)}
+.photoslot.filled{border-style:solid;padding:0;overflow:hidden}
+.photoslot .ps-label{position:absolute;top:6px;left:8px;z-index:2;
+  font-size:.74rem;font-weight:700;color:var(--ink);
+  background:rgba(255,255,255,.9);border-radius:5px;padding:1px 7px}
+.photoslot.filled .ps-label{border:1px solid var(--line)}
+.photoslot .ps-empty{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.78rem}
+.photoslot .ps-empty .ico-cam{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6}
+/* 縦長の写真をそのまま出すと入力欄が画面何枚分にもなるので、見本の高さに収める */
+.photoslot.filled{aspect-ratio:4/3;min-height:0}
+.photoslot img{width:100%;height:100%;object-fit:cover;display:block}
+/* ★×は枠の内側に置く。外に出す書き方だと、枠の縁で切れて押せなくなる。
+   丸の中で×が上や左に寄らないよう、中央に置く指定を明示する
+   （元の指定は line-height だけで中央を作っていて、文字の大きさを変えるとずれる）。 */
+.cover-adjust{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  width:100%;font:inherit;font-size:.78rem;font-weight:700;color:var(--ink);
+  padding:9px 12px;border:1px solid var(--line-d);background:#fff;border-radius:9px;cursor:pointer}
+.cover-adjust em{font-style:normal;font-weight:400;font-size:.72rem;color:var(--sub)}
+.cover-adjust:hover{border-color:var(--ink)}
+.photoslot .thumb-del{top:6px;right:6px;width:28px;height:28px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;line-height:1;
+  background:rgba(255,255,255,.94);border:1px solid rgba(0,0,0,.18);
+  box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .photobox{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .photo-preview{display:flex;gap:10px;flex-wrap:wrap}
 .photo-thumb{position:relative;display:inline-block}
@@ -316,6 +344,9 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 
 /* 作品タイトルバンド */
 .vband{padding:20px 0 16px;border-bottom:1px solid var(--line)}
+/* 写真より上に置く帯（作品名・制作者）。写真がすぐ下に来るので下線は付けない */
+.vband-top{padding:6px 0 10px;border-bottom:none}
+@media(min-width:641px){ #viewMode .vband-top{max-width:560px;margin-left:auto;margin-right:auto} }
 .vband-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .vband .v-share{flex:none;align-self:flex-start;padding:6px 9px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-d);background:#fff;color:var(--sub);border-radius:8px;cursor:pointer;font:inherit;font-size:.72rem;line-height:1}
 .vband .v-share:hover{border-color:var(--ink);color:var(--ink)}
@@ -367,7 +398,10 @@ footer{text-align:center;font-size:.72rem;color:var(--sub);margin-top:26px}
 /* 色グループのコメント。長文は3行で省略し、タップで全文表示 */
 .vr-comment-cell{display:none}  /* スマホ用セル。PCでは独立行(.vr-comment-row)を使う */
 .vr-comment-row td{padding:0 0 12px 12px;border-bottom:1px solid var(--line)}
+/* ★角を丸める。カードも写真もボタンも丸いのに、ここだけ角ばっていて浮いていた。
+   左のaccent線は「コメント」だと分かる目印なので残し、その側だけ角を small にする。 */
 .vr-comment{font-size:.8rem;color:var(--ink);line-height:1.7;background:var(--bp-bg);border-left:3px solid var(--accent);padding:9px 12px;white-space:pre-wrap;cursor:pointer;
+  border-radius:4px 10px 10px 4px;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .vr-comment.open{-webkit-line-clamp:unset;overflow:visible}
 
@@ -740,6 +774,93 @@ body{background-image:none}
 #viewMode .vband{border-bottom:none}                    /* 塗装レシピ表の上の横線を削除 */
 #viewMode #viewHero{margin:14px 0; border-radius:14px; overflow:hidden}  /* メイン画像の角丸 */
 
+/* ===================== STEP1:START =====================
+   完成写真をそのまま大きく出す＋どの写真もタップで拡大する。
+   戻すときは、このCSSブロックと <script> 内の "STEP1:" 印の箇所を消せばよい。
+
+   ★なぜ変えるか
+     これまで閲覧画面の一番上は、写真をぼかし背景・キット名・制作者名と合成した
+     「カード画像」1枚だった（写真そのものはサイト上のどこにも出ていなかった）。
+     初めて来た人が写真をタップして拡大しようとして何も起きない、という詰まり方が
+     実際に起きたため、写真は写真として出し、タップで拡大できるようにする。
+     ※共有・SNS用のカード生成は別処理なので、この変更では消えない。 */
+#viewHero.vhero-photos{background:#0E1014}
+#viewHero.vhero-photos img{cursor:zoom-in}
+#viewHero.vhero-photos img + img{margin-top:4px}          /* ガンスタのように縦に並べる */
+.vr-photo img{cursor:zoom-in}
+/* 写真のすぐ下に案内文を置かないので、続く要素との間を詰める */
+#viewMode #viewThumb:empty{display:none}
+#viewMode #viewHero{margin-top:6px}
+
+/* 拡大表示。position:fixed で画面全体を覆う */
+.zoomlb{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:9999;
+        display:none;align-items:center;justify-content:center}
+.zoomlb.open{display:flex}
+.zoomlb img{max-width:100vw;max-height:100vh;object-fit:contain;display:block}
+.zoomlb .zoomclose{
+  position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:14px;
+  width:44px;height:44px;border-radius:50%;border:none;         /* 44px＝指で押せる最小の大きさ */
+  background:rgba(255,255,255,.2);color:#fff;font-size:24px;line-height:1;cursor:pointer}
+/* ★PCで写真が大きすぎたので、読みやすい幅に収める（ガンスタと同じくらい）。
+   スマホは画面いっぱいのまま。 */
+@media(min-width:641px){
+  #viewMode #viewHero{max-width:560px;margin-left:auto;margin-right:auto}
+  /* ★PCでは「未設定」の工程を出さない。
+     スマホでは既に隠していた。PCだけ「未設定」の行がずらりと並び、
+     実際に塗った工程より未設定の方が目立つ状態になっていた。 */
+  .vrecipe-table td.vrecipe-empty{display:none !important}
+  /* 写真2枚を横に並べたとき用。縦長どうしのときだけJSがこの印を付ける */
+  /* !important が要る。表示のON/OFFを style="display:block" で直接書いているため、
+     ここに !important が無いとインライン指定に負けて横並びにならない。 */
+}
+/* ===================== STEP1:END ===================== */
+
+/* ===================== STEP2:START =====================
+   1枚の写真から引き出し線を伸ばし、余白に「部位名」の枠を置く。
+   枠を押すと、その部位のレシピがカードで出る。
+   戻すときは、このCSSブロックと <script> 内の "STEP2:" の箇所を消せばよい。 */
+.vhero-item{position:relative;line-height:0}
+.vhero-item + .vhero-item{margin-top:4px}
+.vhero-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.vhero-lab{
+  position:absolute;display:flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.94);border:1.5px solid #14161A;border-radius:8px;
+  padding:0 8px;height:30px;line-height:1;font-size:12px;font-weight:700;color:#14161A;
+  white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.vhero-lab.on{background:#14161A;color:#fff;border-color:#14161A}
+.vhero-lab .sw{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.28);flex:none}
+.vhero-lab.on .sw{border-color:rgba(255,255,255,.5)}
+.vhero-dot{position:absolute;width:11px;height:11px;border-radius:50%;
+           background:#fff;border:2.5px solid #14161A;transform:translate(-50%,-50%);pointer-events:none}
+.vhero-dot.on{background:#14161A}
+
+/* 押したときに出るカード。画面下からせり上がる */
+.vcard-sheet{position:fixed;left:0;right:0;bottom:0;z-index:9998;
+  background:#fff;border-top:1px solid var(--line);border-radius:16px 16px 0 0;
+  padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -6px 24px rgba(0,0,0,.16);max-height:62vh;overflow:auto;
+  transform:translateY(102%);transition:transform .22s ease}
+.vcard-sheet.open{transform:translateY(0)}
+.vcard-sheet h4{margin:0 0 2px;font-size:1.02rem}
+.vcard-sheet .cap{margin:0 0 10px;font-size:.72rem;color:var(--sub)}
+.vcard-sheet .st{display:grid;grid-template-columns:84px 1fr;gap:10px;align-items:center;
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.vcard-sheet .st .k{font-size:.72rem;color:var(--sub)}
+.vcard-sheet .st .v{font-size:.86rem;display:flex;align-items:center;gap:7px;min-width:0}
+.vcard-sheet .st .v i{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.25);flex:none}
+.vcard-sheet .goto{display:block;width:100%;margin-top:8px;padding:10px;border:1px solid var(--accent);
+  background:none;color:var(--accent);border-radius:10px;font:inherit;font-weight:700;cursor:pointer}
+.vcard-close{position:absolute;top:8px;right:10px;width:34px;height:34px;border:none;background:none;
+  font-size:22px;line-height:1;color:var(--sub);cursor:pointer}
+@media(min-width:641px){
+  .vcard-sheet{left:50%;transform:translate(-50%,102%);width:520px;border-radius:16px;bottom:18px;
+               border:1px solid var(--line)}
+  .vcard-sheet.open{transform:translate(-50%,0)}
+}
+/* ===================== STEP2:END ===================== */
+
 /* 公開フローカード（編集画面・プレビュー両方の末尾に配置。class共通） */
 .publish-card{background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px; margin:26px 0 8px}
 .publish-card h2{font-size:1.02rem; font-weight:700; margin-bottom:12px; color:var(--ink)}
@@ -808,6 +929,12 @@ body{background-image:none}
   /* PC：画像サイズはベース定義(.vr-photo max-width:520px) と完全一致＝赤丸の%位置がスマホと統一 */
   /* PC専用に追加していた scrollの外枠は不要（trごとに枠を持つ） */
   #viewMode .scroll{border:none !important;border-radius:0 !important;overflow:visible !important}
+  /* ★色グループのコメントはカードの中(.vr-comment-cell)と独立行(.vr-comment-row)の
+     2か所に出力されている。独立行を隠す指定はスマホ用(439行)にしか無かった。
+     これまでは全行が閉じていたので両方まとめて隠れていたが、
+     「最初から開く」に変えた結果、PCで同じコメントが2つ並ぶようになった。
+     PCも今はカード型に統一済みなので、独立行はもう役目が無い。 */
+  .vrecipe-table tr.vr-comment-row{display:none}
 }
 /* ===================== ACCORDION:END ===================== */
 
@@ -835,6 +962,18 @@ body{background-image:none}
 .crop-marker-toggle{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--ink);cursor:pointer;user-select:none}
 .crop-marker-toggle input{width:auto}
 .crop-marker-controls{display:flex;flex-direction:column;gap:8px}
+/* ★hidden属性を効かせる。display を書いた時点でブラウザ既定の hidden(=display:none) に
+   勝ってしまい、隠したつもりの目印の設定が出たままになる。 */
+.crop-marker-controls[hidden]{display:none}
+/* 投稿画面でだけ、矢印を指で掴めるようにする（閲覧側は触れないまま） */
+#cropLead .lead-hit,#cropLead .lead-lab{pointer-events:auto;cursor:grab;touch-action:none}
+#cropLead.grabbing .lead-lab{cursor:grabbing}
+.crop-lead-tip{margin:0 0 8px;font-size:.78rem;line-height:1.6;color:var(--sub)}
+.crop-lead-tip b{color:var(--ink)}
+.crop-flip{margin-left:auto;flex:none;font:inherit;font-size:.74rem;font-weight:700;
+  padding:5px 10px;border:1px solid var(--line-d);background:#fff;color:var(--sub);
+  border-radius:999px;cursor:pointer}
+.crop-flip:hover{border-color:var(--ink);color:var(--ink)}
 .crop-mc-row{display:flex;align-items:center;gap:10px;font-size:.78rem;color:var(--sub)}
 .crop-mc-row .crop-mc-label{flex:none;font-weight:700;color:var(--ink);min-width:44px}
 .crop-mc-row input[type=range]{flex:1;min-width:0;height:24px;accent-color:var(--mc,#E01E28);touch-action:none}
@@ -844,6 +983,27 @@ body{background-image:none}
 /* 閲覧側：色グループ写真の上に重なるマーカー（表示専用） */
 .vr-photo{position:relative}
 .vr-photo .vr-mark{position:absolute;border:4px solid var(--mc,#E01E28);border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 0 8px rgba(0,0,0,.45);transform:translate(-50%,-50%);pointer-events:none}
+
+/* ===================== LEAD:START =====================
+   写真の目印を「赤丸」から「引き出し線＋枠」に変えたもの。
+   丸は「どこか」しか示せないが、線と枠なら「どこが・何色か」を一度に示せる。
+   戻すときは、このCSSブロックと <script> の "LEAD:" の箇所を消せばよい。 */
+.vr-lead,.lead-layer{position:absolute;inset:0;pointer-events:none}
+.lead-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lead-dot{position:absolute;width:10px;height:10px;border-radius:50%;
+  background:var(--mc,#E01E28);border:2px solid #fff;
+  box-shadow:0 0 3px rgba(0,0,0,.5);transform:translate(-50%,-50%)}
+/* 矢印を掴むための当たり判定。見えないが指で掴める大きさ(48px)にする。
+   点は10pxしかなく、そのままでは指で掴めない。 */
+.lead-hit{position:absolute;width:48px;height:48px;border-radius:50%;
+  transform:translate(-50%,-50%);pointer-events:none}
+.lead-lab{position:absolute;display:inline-flex;align-items:center;height:26px;
+  padding:0 9px;line-height:1;font-size:11.5px;font-weight:700;white-space:nowrap;
+  max-width:62%;overflow:hidden;text-overflow:ellipsis;
+  background:rgba(255,255,255,.95);color:#14161A;
+  border:2px solid var(--mc,#E01E28);border-radius:7px;
+  box-shadow:0 1px 4px rgba(0,0,0,.28);transform:translateY(-50%)}
+/* ===================== LEAD:END ===================== */
 /* ===================== CROPPER:END ===================== */
 
 /* ===================== COMMENTS:START =====================
@@ -914,6 +1074,77 @@ body{background-image:none}
 .c-replies .c-av{width:30px;height:30px;font-size:.85rem}
 .c-replies .c-body{font-size:.88rem}
 /* ===================== COMMENTS:END ===================== */
+
+/* ===================== HOWTO:START =====================
+   投稿の作り方（画面写真8手順）。1つだけ作って、2か所から開く。
+   ・見本投稿の最後  … 「こんなの作れる」と思った直後に作り方へ
+   ・投稿作成画面の頭 … 実際に手が止まる場所に置く
+   戻すときは、このCSSブロックと <script> の "HOWTO:" 部分、
+   HTMLの #howtoOpenEdit を消せばよい。 */
+.howto-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  margin:18px auto 4px;max-width:560px;padding:13px 16px;font:inherit;font-size:.92rem;font-weight:700;
+  color:var(--accent);background:none;border:1.5px solid var(--accent);border-radius:12px;cursor:pointer}
+.howto-cta:hover{background:var(--accent);color:#fff}
+.howto-cta svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2}
+#howtoOpenEdit{margin-top:0;margin-bottom:14px}
+/* ★見本投稿の中では大きく出す。控えめな枠線だと、写真とレシピに挟まれて完全に埋もれた。
+   塗りつぶしにして、レシピを読み始める前に必ず目に入るようにする。 */
+.howto-cta-big{
+  margin:26px auto 6px;padding:17px 18px;font-size:1.02rem;
+  color:#fff;background:var(--accent);border-color:var(--accent);
+  border-radius:14px;box-shadow:0 3px 10px rgba(224,30,40,.28)}
+.howto-cta-big:hover{background:#C2161F;border-color:#C2161F;color:#fff}
+.howto-cta-big svg{width:20px;height:20px}
+
+.howto-ov{position:fixed;inset:0;z-index:10000;background:rgba(10,12,16,.92);
+  display:none;flex-direction:column;padding:0}
+.howto-ov.show{display:flex}
+.howto-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;color:#fff;flex:none}
+.howto-head b{font-size:.95rem}
+/* ★丸の中で×が中央に来るように、位置決めを明示する。
+   line-height だけで中央を作ると、文字の大きさや書体で簡単にずれる（実際ずれていた）。 */
+.howto-close{width:38px;height:38px;border:none;background:rgba(255,255,255,.14);color:#fff;
+  border-radius:50%;padding:0;cursor:pointer;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;line-height:1;font-weight:400}
+/* 横スワイプで1枚ずつ。縦に8枚並べると見本投稿が延々と長くなるため */
+.howto-track{flex:1 1 auto;display:flex;overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:0}
+.howto-track::-webkit-scrollbar{display:none}
+.howto-slide{flex:0 0 100%;scroll-snap-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-start;padding:0 14px 8px;min-width:0}
+.howto-cap{color:#fff;font-size:.86rem;font-weight:700;line-height:1.5;text-align:center;
+  margin:0 0 10px;max-width:520px}
+.howto-cap span{display:block;font-weight:400;font-size:.76rem;color:#B9BFC8;margin-top:3px}
+.howto-slide img{max-width:100%;max-height:calc(100vh - 220px);width:auto;height:auto;
+  border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.5);display:block;background:#fff}
+.howto-foot{flex:none;display:flex;align-items:center;justify-content:center;gap:7px;
+  padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px))}
+.howto-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.32)}
+.howto-dot.on{background:#fff;width:9px;height:9px}
+.howto-nav{position:absolute;top:50%;transform:translateY(-50%);width:42px;height:42px;
+  border:none;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:20px;
+  cursor:pointer;display:none}
+@media(min-width:641px){ .howto-nav{display:block} .howto-nav.prev{left:12px} .howto-nav.next{right:12px} }
+/* ===================== HOWTO:END ===================== */
+
+/* ===================== NODIVIDER:START =====================
+   【試験中】カードの中の工程（サフ／本塗装／スミ入れ…）の間の区切り線を消す。
+   戻すときは、このブロックを丸ごと削除するだけでよい。他は一切触っていない。
+
+   ★残すもの：カードの外枠、部位名の下の線。
+     外枠まで消すと、どこからどこまでが1つの部位なのか分からなくなる。
+   ★このブロックは他の指定より後に置いてある。
+     スマホ用(418行付近)とPC用(910行付近)の2か所で線を引いているので、
+     どちらかを書き換える形だと片方が残って画面幅で見え方が変わる。 */
+.vrecipe-table td.vr-cell,
+.vrecipe-table td.vrecipe-empty,
+.vrecipe-table td.vr-photo-cell,
+.vrecipe-table td.vr-comment-cell{border-bottom:none !important}
+/* 行の間隔が詰まりすぎないよう、線の代わりに少しだけ余白を足す */
+.vrecipe-table td.vr-cell{padding-top:11px !important;padding-bottom:11px !important}
+/* ===================== NODIVIDER:END ===================== */
 </style>
 <!-- v2: 投稿をDBに保存するための Supabase（UMDグローバル版）＋接続設定 -->
 <!-- Supabaseライブラリ。★バージョンを固定し、自分のサーバーから配信している。
@@ -930,12 +1161,12 @@ body{background-image:none}
      ファイル名を変える方式ではなく ?v= にした理由、および残る限界（GitHub Pagesは
      キャッシュの見分けに ?v= を使わない）は index.html の同じ場所に詳しく書いてある。
      版の更新は手作業にせず必ず: node scripts/bump_asset_version.mjs -->
-<script src="/src/config.js?v=3e1a7c81"></script>
-<script src="/src/methods.js?v=3e1a7c81"></script>
+<script src="/src/config.js?v=1cefac5a"></script>
+<script src="/src/methods.js?v=1cefac5a"></script>
 <!-- ASSETVER:START — 自動生成。手で編集しない（node scripts/bump_asset_version.mjs で更新される） -->
 <script>
 window.PAINTLOG_ASSET_EXPECT = {
-  version: "3e1a7c81",
+  version: "1cefac5a",
   config:  "SUPABASE_ANON_KEY,SUPABASE_URL,TURNSTILE_SITE_KEY",
   methods: "grad,candy,candy_red,candy_blue,wrap,marble,weather,brush,metal,matte,mask"
 };
@@ -1162,13 +1393,9 @@ window.PAINTLOG_ASSET_EXPECT = {
     <textarea id="memo" rows="4" placeholder="例: フレームはガンメタル一発塗りで省エネ仕上げ。"></textarea>
   </div>
   <div style="margin-top:12px">
-    <label style="font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:4px;display:block">サムネイル画像 <span style="font-weight:400;color:var(--sub);font-size:.76rem">— 最大2枚・任意・端末内でのみ処理</span></label>
-    <div class="photobox" id="photobox">
-      <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
-      <button class="small photo-add" id="photoBtn"><svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg><span>写真を追加</span></button>
-      <button class="small ghost" id="photoClear" style="display:none">全部削除</button>
-      <div class="photo-preview" id="photoPreview"></div>
-    </div>
+    <label style="font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:4px;display:block">サムネイル <span style="font-weight:400;color:var(--sub);font-size:.76rem">— 一覧に出る顔になる1枚・任意。他の写真は下のレシピの各行へ</span></label>
+    <div class="photoslots" id="photoSlots"></div>
+    <input type="file" id="photoInput" accept="image/*" style="display:none">
   </div>
   <div style="margin-top:12px">
     <label style="font-size:.82rem;font-weight:700;color:var(--ink);margin-bottom:6px;display:block">塗装方法 <span style="font-weight:400;color:var(--sub);font-size:.76rem">— 複数選択可・任意</span></label>
@@ -1916,18 +2143,30 @@ var currentRecipeId = null, currentOwnerId = null;   // ?idで読み込んだ既
 
 /* 編集：塗装方法チップ（プリセット＝トグル／独自＝#入力）。選択は state.methods(配列)に保持 */
 function addCustomTag(raw){
-  var t = String(raw || "").replace(/^#+/, "").trim().toLowerCase().replace(/\s+/g, "_");
-  if (!t) return;
+  var s = String(raw || "").replace(/^#+/, "").trim();
+  if (!s) return;
   if (!Array.isArray(state.methods)) state.methods = [];
+  // ★入力欄で見えている名前（例「キャンディ塗装」）を打ったら、
+  //   独自タグではなく用意してあるタグとして扱う。
+  //   同じ意味のタグが「キャンディ塗装」と「candy」で二重にできると、
+  //   探す画面でどちらか片方しか引っかからなくなる。
+  var hit = null;
+  PAINT_METHODS.forEach(function(m){ if (!hit && m.label === s) hit = m.slug; });
+  var t = hit || s.toLowerCase().replace(/\s+/g, "_");
   if (state.methods.indexOf(t) < 0) state.methods.push(t);
   renderMethodChips();
 }
+// ★用意してあるタグを全部並べると、それだけで画面1つ分になる。
+//   よく使うものだけ出して、残りは「もっと見る」で開く。
+var methodsExpanded = false;
+var METHOD_VISIBLE = 4;
+var keepFocus = false;      // タグ追加の直後だけ入力欄に戻す（キーボードを閉じさせない）
 function renderMethodChips(){
   var box = document.getElementById("methodChips"); if (!box) return;
   if (!Array.isArray(state.methods)) state.methods = [];
   box.innerHTML = "";
-  // プリセット（トグル）
-  PAINT_METHODS.forEach(function(m){
+
+  function presetChip(m){
     var b = document.createElement("button");
     b.type = "button";
     b.className = "mchip" + (state.methods.indexOf(m.slug) >= 0 ? " on" : "");
@@ -1935,11 +2174,27 @@ function renderMethodChips(){
     b.onclick = function(){
       var i = state.methods.indexOf(m.slug);
       if (i >= 0) state.methods.splice(i, 1); else state.methods.push(m.slug);
-      b.classList.toggle("on");
+      renderMethodChips();
     };
-    box.appendChild(b);
-  });
-  // 独自タグ（プリセットに無いもの）＝削除可チップ
+    return b;
+  }
+  // 選んだものは必ず出す。選んでいないものは既定で先頭4つだけ。
+  var chosen = PAINT_METHODS.filter(function(m){ return state.methods.indexOf(m.slug) >= 0; });
+  var rest   = PAINT_METHODS.filter(function(m){ return state.methods.indexOf(m.slug) < 0; });
+  var shown  = methodsExpanded ? rest : rest.slice(0, METHOD_VISIBLE);
+  chosen.forEach(function(m){ box.appendChild(presetChip(m)); });
+  shown.forEach(function(m){ box.appendChild(presetChip(m)); });
+
+  var hiddenCount = rest.length - shown.length;
+  if (hiddenCount > 0 || methodsExpanded){
+    var more = document.createElement("button");
+    more.type = "button"; more.className = "mchip mchip-more";
+    more.textContent = methodsExpanded ? "閉じる" : ("もっと見る（" + hiddenCount + "）");
+    more.onclick = function(){ methodsExpanded = !methodsExpanded; renderMethodChips(); };
+    box.appendChild(more);
+  }
+
+  // 独自タグ（用意してあるものに無いもの）＝削除可チップ
   state.methods.forEach(function(t){
     if (METHOD_LABEL[t]) return;
     var c = document.createElement("button");
@@ -1948,11 +2203,26 @@ function renderMethodChips(){
     c.onclick = function(){ var i = state.methods.indexOf(t); if (i >= 0) state.methods.splice(i, 1); renderMethodChips(); };
     box.appendChild(c);
   });
-  // #タグ追加 入力
+
+  // #タグ追加 入力。打ち始めると候補が出る（用意してあるタグの一覧から）
+  var dl = document.createElement("datalist");
+  dl.id = "methodSuggest";
+  PAINT_METHODS.forEach(function(m){
+    var o = document.createElement("option"); o.value = m.label; dl.appendChild(o);
+  });
+  box.appendChild(dl);
   var inp = document.createElement("input");
   inp.type = "text"; inp.className = "mchip-input"; inp.placeholder = "#タグを追加";
-  inp.onkeydown = function(e){ if (e.key === "Enter"){ e.preventDefault(); addCustomTag(inp.value); inp.value = ""; } };
+  inp.setAttribute("list", "methodSuggest");
+  // ★印は addCustomTag の「前」に立てる。
+  //   addCustomTag の中で入力欄ごと作り直されるので、後に立てても間に合わない。
+  inp.onkeydown = function(e){ if (e.key === "Enter"){ e.preventDefault(); keepFocus = true; var v = inp.value; inp.value = ""; addCustomTag(v); } };
+  // 候補から選んだ瞬間にも入れる（Enterを押さない人がいる）
+  inp.onchange = function(){ if (inp.value.trim()){ keepFocus = true; var v = inp.value; inp.value = ""; addCustomTag(v); } };
   box.appendChild(inp);
+  // ★タグを1つ入れるたびに入力欄を作り直しているので、そのままだと
+  //   スマホでキーボードが閉じてしまい、2つ目以降を続けて打てない。
+  if (keepFocus){ keepFocus = false; try { inp.focus(); } catch(_){} }
 }
 function newState(){
   return { kit:"", author:"", memo:"", photos:[],
@@ -2238,7 +2508,7 @@ function makeRowPhotoControl(row){
             row.photo_pos = pos;
             if (mark) row.photo_mark = mark; else delete row.photo_mark;
             renderGrid();
-          });
+          }, row.part || "");
         }
         renderGrid();
       }
@@ -2257,7 +2527,7 @@ function makeRowPhotoControl(row){
           row.photo_pos = pos;
           if (mark) row.photo_mark = mark; else delete row.photo_mark;
           renderGrid();
-        });
+        }, row.part || "");
       } else {
         fileInput.click();  // フォールバック：差し替え
       }
@@ -2456,20 +2726,39 @@ function renderMeta(){ ["kit","author","memo"].forEach(id => document.getElement
 function renderAll(){ renderMeta(); renderGrid(); renderUsed(); }
 
 /* ===================== 完成写真 ===================== */
+// ★完成写真は1枚だけ。
+//   2枚並べると、投稿を開いた瞬間に写真だけで画面が埋まり、レシピまで遠くなる。
+//   2枚目以降は「色グループごとの写真」としてレシピのカードの中に入れる方が、
+//   どの部位の写真なのかが分かって役に立つ。
+const PHOTO_SLOTS = ["サムネイル"];
 const photoInput = document.getElementById("photoInput");
-document.getElementById("photoBtn").onclick = () => photoInput.click();
-document.getElementById("photoClear").onclick = () => { state.photos = []; renderPhoto(); };
+let photoTarget = 0;                 // いまどちらの枠に入れようとしているか
+// サムネイルの「中心をどこにするか」を決める画面。選んだ直後と、あとから直すときの両方で使う。
+function openCoverPos(src){
+  if (!src || !window.openPhotoCropper) return;
+  window.openPhotoCropper(src, state.cover_pos || "50% 50%", null, function(pos){
+    state.cover_pos = pos; renderPhoto();
+  }, "", {
+    hideMark: true, ratio: "4 / 3",
+    title: "中心にする場所",
+    hint: "投稿を開いたときは写真全体が表示されます。一覧などの小さい枠では、ここで決めた中心が映ります。"
+  });
+}
 photoInput.onchange = async e => {
-  const files = Array.from(e.target.files || []);
-  for (const f of files){
-    if (state.photos.length >= 2){ alert("写真は最大2枚までです"); break; }
-    try{
-      const dataUrl = await processImage(f);
-      state.photos.push(dataUrl);
-      renderPhoto();
-    }catch(err){ alert("この画像は読み込めませんでした"); }
-  }
+  const f = (e.target.files || [])[0];
   e.target.value = "";
+  if (!f) return;
+  try{
+    const dataUrl = await processImage(f);
+    while (state.photos.length < photoTarget) state.photos.push("");   // 手前の枠は空のまま確保
+    state.photos[photoTarget] = dataUrl;
+    state.cover_pos = null;               // 別の写真になったので位置は決め直し
+    renderPhoto();
+    // ★選んだらそのまま中心を決める画面へ進む。
+    //   別ボタンにしていたときは、押さずに投稿されて一覧で見切れる投稿が出る。
+    //   選んだ流れのまま決めてもらえば、決め忘れが起きない。
+    openCoverPos(dataUrl);
+  }catch(err){ alert("この画像は読み込めませんでした"); }
 };
 // 画像を EXIF回転補正しつつ長辺max(px)に縮小して dataURL を返す(比率維持・トリミングなし・sRGB JPEG)
 async function processImage(file, max){
@@ -2486,17 +2775,72 @@ async function processImage(file, max){
   return cv.toDataURL("image/jpeg", 0.83);
 }
 function renderPhoto(){
-  const prev = document.getElementById("photoPreview");
-  const clr = document.getElementById("photoClear");
-  prev.innerHTML = "";
-  state.photos.forEach((src, i) => {
-    const wrap = document.createElement("span"); wrap.className = "photo-thumb";
-    wrap.innerHTML = `<img src="${esc(viewPhoto(src, 600))}" alt="完成写真${i+1}" loading="lazy"${PHOTO_FALLBACK}>`;
-    const del = document.createElement("button"); del.className = "thumb-del"; del.textContent = "×"; del.title = "この写真を削除";
-    del.onclick = () => { state.photos.splice(i,1); renderPhoto(); };
-    wrap.appendChild(del); prev.appendChild(wrap);
+  const box = document.getElementById("photoSlots");
+  if (!box) return;
+  box.innerHTML = "";
+  PHOTO_SLOTS.forEach((label, i) => {
+    const src = state.photos[i];
+    // ★写真が入っているときは div にする。
+    //   中に削除用の button を置くため、外側も button だと入れ子になって無効なHTMLになり、
+    //   ブラウザによっては削除が押せなくなる。
+    //   div にする代わりに role と tabindex とキー操作を自分で付けて、
+    //   キーボードでも今までどおり選べるようにする。
+    const slot = document.createElement(src ? "div" : "button");
+    if (src){
+      slot.setAttribute("role", "button");
+      slot.setAttribute("tabindex", "0");
+      slot.setAttribute("aria-label", label + "を選び直す");
+      slot.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); photoTarget = i; photoInput.click(); }
+      });
+    } else {
+      slot.type = "button";
+    }
+    slot.className = "photoslot" + (src ? " filled" : "");
+    // ★決めた中心を、この枠の中でもそのまま見せる。
+    //   ここに反映しないと「設定したのに何も変わらない」ように見えて、
+    //   本当に効いているのか確かめようがない。
+    const posStyle = state.cover_pos ? ' style="object-position:' + safePos(state.cover_pos) + '"' : "";
+    slot.innerHTML = '<span class="ps-label">' + esc(label) + '</span>'
+      + (src
+          ? '<img src="' + esc(viewPhoto(src, 600)) + '" alt="' + esc(label) + '"' + PHOTO_FALLBACK + posStyle + '>'
+          : '<span class="ps-empty"><svg class="ico-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.3"/></svg>写真を選ぶ</span>');
+    slot.addEventListener("click", () => { photoTarget = i; photoInput.click(); });
+    if (src){
+      // ★button のままにする。span に変えるとキーボードでも読み上げでも押せなくなる。
+      //   見た目は同じでも操作できない人が出るので、見た目のために要素を変えない。
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "thumb-del"; del.textContent = "×";
+      del.title = "この写真を削除"; del.setAttribute("aria-label", "サムネイルを削除");
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // ★空文字を置くのではなく、その要素ごと取り除く。
+        //   空文字を置く書き方だと、古い投稿(写真2枚)で1枚目を消したとき
+        //   photos が ["", 2枚目] になり、保存時に「空でない最初の写真」＝
+        //   **画面に一度も出ていない2枚目**が表紙として公開されてしまう。
+        //   取り除けば2枚目が枠に繰り上がって見えるので、何が公開されるかを目で確認できる。
+        state.photos.splice(i, 1);
+        // ★中心の指定も一緒に捨てる。別の写真に古い中心が効くと、
+        //   意図しない切り取られ方をしたまま一覧に出る。
+        state.cover_pos = null;
+        renderPhoto();
+      });
+      slot.appendChild(del);
+    }
+    box.appendChild(slot);
+
+    // ★一覧に出るときは枠の形に合わせて切り取られるので、どこを中心にするかを決めてもらう。
+    //   「投稿を開いたときは写真全体が出る」ことを文言で明記する。
+    //   ここを書かないと「切り取った部分しか載らない」と誤解して、投稿そのものをためらう人が出る。
+    if (src){
+      const adj = document.createElement("button");
+      adj.type = "button"; adj.className = "cover-adjust";
+      adj.innerHTML = '<span>中心にする場所を変える</span>'
+        + '<em>' + (state.cover_pos ? "設定済み" : "いまは中央") + '</em>';
+      adj.addEventListener("click", () => openCoverPos(src));
+      box.appendChild(adj);
+    }
   });
-  clr.style.display = state.photos.length ? "" : "none";
 }
 
 /* ===================== URL共有(URLは1種類。開くと閲覧、タブで編集に切替) ===================== */
@@ -2795,7 +3139,9 @@ function generateCardUrl(theme, cb, opts) {
     // 背景を全面塗りしているので透明部分は無く、JPEG化で破綻しない。文字も1080pxなら品質0.88で劣化は見えない。
     cb(cv.toDataURL("image/jpeg", 0.88));
   };
-  const srcs = (st.photos || []).slice(0,2);
+  // ★空の枠("")を除く。写真は「正面／背面」の2枠になり、片方だけ入れると
+  //   もう片方は空文字で残る。そのまま渡すと空のsrcを読みに行って絵が出ない。
+  const srcs = (st.photos || []).filter(Boolean).slice(0,2);
   if (!srcs.length){ draw([]); return; }
   let loaded = 0; const imgs = [];
   srcs.forEach((src, idx) => {
@@ -2835,26 +3181,73 @@ function renderViewMode(){
   document.getElementById("editMode").style.display = "none";
   document.getElementById("viewMode").style.display = "block";
 
-  // --- ヒーロー: カード画像(黒)を非同期生成して表示 ---
+  // --- ヒーロー: 完成写真をそのまま大きく出す（STEP1） ---
+  // ★以前はここで合成カード画像を1枚だけ出していた。写真そのものは出していなかったため、
+  //   写真をタップして拡大しようとした人が何も起きずに詰まった。
+  //   写真があるなら写真を出す。無い投稿だけ、これまで通り合成カードを出す（何も見えない状態を作らない）。
   const heroEl = document.getElementById("viewHero");
   heroEl.style.display = "none";
   heroEl.innerHTML = "";
-  // サイト内表示のヒーローは「塗装レシピ」文字を描かない(毎回のくどさ解消)。
-  // 共有/OGP用の cover_url は別途 makeCover() が文字付きで生成するため、ここは無影響。
-  generateCardUrl("dark", dataUrl => {
-    const img = document.createElement("img");
-    img.src = dataUrl; img.alt = "塗装レシピカード";
-    heroEl.appendChild(img);
+  heroEl.className = "";
+  // 完成写真は1枚だけ出す。古い投稿に2枚入っていても、2枚目は表示しない
+  // （データは消さない。編集で残せる／戻せるようにしておく）。
+  const heroPhotos = (state.photos || []).filter(p => typeof p === "string" && p).slice(0, 1);
+  if (heroPhotos.length){
+    heroEl.className = "vhero-photos";
+    heroPhotos.forEach((src, i) => {
+      const img = document.createElement("img");
+      img.src = viewPhoto(src, 1200);
+      img.alt = (state.kit ? state.kit + " " : "") + "完成写真" + (heroPhotos.length > 1 ? (i + 1) : "");
+      img.loading = i ? "lazy" : "eager";
+      img.dataset.zoomSrc = safePhoto(src);      // 拡大時は縮小前のURLを使う（ここも関門を通す）
+      // ★縮小版が取れなかったら元の画像に戻す。
+      //   viewPhoto() は Supabase の画像変換URLを作るが、これは有料機能で、
+      //   使えない環境では読み込みに失敗する。既存の写真表示は HTML属性で同じ手当てを
+      //   していた(PHOTO_FALLBACK)。ここは JS で組み立てるので同じ手当てを明示的に付ける。
+      //
+      //   ★戻す先も必ず safePhoto() を通すこと。
+      //     一度ここを生の src に戻す書き方にしてしまったが、それだと
+      //     「自分のStorageの画像だけ表示する」という関門を素通りする。
+      //     投稿者が直接APIを叩いて他人のサーバーの画像URLを仕込むと、
+      //     そのレシピを開いた閲覧者のIP・端末・時刻が第三者に送られる（審査後の差し替えも可能）。
+      //     safePhoto() はまさにその穴を塞ぐために作られたもので、迂回してはいけない。
+      img.addEventListener("error", function(){
+        if (img.dataset.fb) return;
+        img.dataset.fb = "1";
+        img.src = safePhoto(src);
+      });
+      // STEP2: 引き出しラベルを重ねるため、写真1枚ずつを入れ物で包む
+      const item = document.createElement("div");
+      item.className = "vhero-item";
+      item.appendChild(img);
+      heroEl.appendChild(item);
+    });
     heroEl.style.display = "block";
-  }, { noTitle: true });
+    if (window.buildHeroLabels) window.buildHeroLabels();   // STEP2
+  } else {
+    // 共有/OGP用の cover_url は別途 makeCover() が文字付きで生成するため、ここは無影響。
+    generateCardUrl("dark", dataUrl => {
+      const img = document.createElement("img");
+      img.src = dataUrl; img.alt = "塗装レシピカード";
+      heroEl.appendChild(img);
+      heroEl.style.display = "block";
+    }, { noTitle: true });
+  }
 
-  // --- 写真はヒーローのカード画像に合成済みなので、ここでは重複表示しない ---
+  // 案内文は置かない。写真をタップして拡大するのは、いまはどのサイトでも同じ動きなので、
+  // わざわざ書くと画面を1行分押し下げるだけになる。
   const thumb = document.getElementById("viewThumb");
   thumb.innerHTML = "";
 
   // --- タイトルバンド ---
+  // ★作品名と制作者は「写真より上」に置く。
+  //   以前は写真の下だったため、投稿を開くといきなり写真が出て、
+  //   何の作品なのかが分からないまま画面を占領していた。
+  //   タグと制作コメントは読み物なので、写真の下のままにする。
   const existingBand = document.getElementById("vBand");
   if (existingBand) existingBand.remove();
+  const existingTop = document.getElementById("vBandTop");
+  if (existingTop) existingTop.remove();
   const band = document.createElement("div");
   band.id = "vBand";
   band.className = "vband";
@@ -2874,7 +3267,11 @@ function renderViewMode(){
       return '<a class="vmethod" href="/index.html?m='+encodeURIComponent(s)+'#m/'+esc(s)+'">'+esc(lbl)+'</a>';
     }).join("") + '</div>';
   }
-  band.innerHTML = `
+  // 写真より上：作品名・制作者・共有ボタン
+  const bandTop = document.createElement("div");
+  bandTop.id = "vBandTop";
+  bandTop.className = "vband vband-top";
+  bandTop.innerHTML = `
     <div class="vband-inner">
       <div>
         <div class="vtitle">${esc(state.kit || "無題のレシピ")}</div>
@@ -2887,9 +3284,13 @@ function renderViewMode(){
           <line x1="12" y1="2" x2="12" y2="15"/>
         </svg>
       </button>
-    </div>
-    ${methodsHtml}
+    </div>`;
+  heroEl.before(bandTop);
+
+  // 写真より下：塗装方法タグと制作コメント
+  band.innerHTML = `${methodsHtml}
     ${state.memo ? `<div class="vmeta-memo"><span class="vmeta-memo-label">制作コメント</span>${esc(state.memo)}</div>` : ""}`;
+  band.style.display = (methodsHtml || state.memo) ? "" : "none";
   thumb.after(band);
   // 共有ボタン：Web Share API → fallback で X 投稿インテント
   var shareBtn = document.getElementById("vShare");
@@ -2908,8 +3309,10 @@ function renderViewMode(){
   state.rows.forEach(row => {
     if (!row.part.trim() && !Object.keys(row.cells).length && !row.photo) return;
     const vrPhotoStyle = row.photo_pos ? ` style="--pp:${safePos(row.photo_pos)}"` : "";
-    const vrMark = (row.photo_mark && typeof row.photo_mark.x==='number')
-      ? `<div class="vr-mark" style="left:${+row.photo_mark.x}%;top:${+row.photo_mark.y}%;width:${(+row.photo_mark.r)*2}%;aspect-ratio:1/1;--mc:${safeColor(row.photo_mark.c||'#E01E28')}"></div>`
+    // LEAD: 目印は「丸」ではなく「引き出し線＋枠」。中身はJS(drawLead)が後から描く。
+    const _mk = row.photo_mark;
+    const vrMark = (_mk && typeof _mk.x === 'number')
+      ? `<div class="vr-lead" data-x="${+_mk.x}" data-y="${+_mk.y}" data-side="${_mk.s === 'L' ? 'L' : (_mk.s === 'R' ? 'R' : '')}" data-text="${esc(row.part || '')}" style="--mc:${safeColor(_mk.c || '#E01E28')}"></div>`
       : "";
     const vrPhoto = row.photo ? `<div class="vr-photo"><img src="${esc(viewPhoto(row.photo, 800))}" alt="${esc(row.part||'')}" loading="lazy"${PHOTO_FALLBACK}${vrPhotoStyle}>${vrMark}</div>` : "";
     html += `<tr><td class="vr-part">${esc(row.part||"—")}${vrPhoto}</td>`;
@@ -3184,7 +3587,7 @@ window.addEventListener("beforeunload", function(e){
 /* v2: 編集を離れるときの挙動。空＝確認なしで離脱／入力あり＝保存・破棄ダイアログ */
 function editorHasContent(){
   if ((state.kit||"").trim() || (state.author||"").trim() || (state.memo||"").trim()) return true;
-  if ((state.photos||[]).length) return true;
+  if ((state.photos||[]).filter(Boolean).length) return true;   // 空の枠は「中身あり」と数えない
   return (state.rows||[]).some(function(r){
     return (r.part||"").trim() || (r.comment||"").trim() || r.photo || Object.keys(r.cells||{}).length;
   });
@@ -3372,9 +3775,103 @@ const safePhoto = u => {
   var cfg = window.PAINTLOG_CONFIG || {};
   var sb = (window.supabase && cfg.SUPABASE_URL)
     ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+
+  // ★手元の開発サイトだけ、勝手にログインしておく。
+  //   window.DEV_AUTOLOGIN は Worker が LOCAL_DEV のときだけ差し込む値で、
+  //   本番にはそもそも存在しない（合言葉は worker/.dev.vars にしか無く、Gitにも入らない）。
+  //   これが無いと、見た目を確認するたびに毎回ログインし直すことになり、
+  //   確認そのものが面倒で行われなくなる。
+  //
+  //   ★勝手に入り直さないための歯止め。
+  //     最初の作りは「ログインしていなければ入り直して再読み込み」だけだった。そのため
+  //     ログアウトしても即座に運営アカウントへ戻り、別のアカウントでログインしようとすると
+  //     入力の途中で再読み込みが割り込んで進めなくなっていた。
+  //     ・?devlogin=off で自動ログインを止める（この端末に記憶する）
+  //     ・?devlogin=on  で再開する
+  //     ・再読み込みは1回だけ（繰り返しの読み込みに陥らないように印を付ける）
+  // ★開発版だけ、いま誰でログインしているかを画面の下に出す。
+  //   自動で切り替わったかどうかが分からず「編集ボタンが出ない」原因を突き止められなかった。
+  //   状態を見えるようにして、その場で切り替えられるようにする（推測しなくて済む）。
+  if (sb && window.DEV_AUTOLOGIN && window.DEV_AUTOLOGIN.email){
+    (function devBar(){
+      if (document.getElementById("__devbar")) return;
+      var bar = document.createElement("div");
+      bar.id = "__devbar";
+      bar.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99999;display:flex;gap:8px;"
+        + "align-items:center;background:#14161A;color:#fff;font:12px/1.2 -apple-system,sans-serif;"
+        + "padding:7px 10px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.35);opacity:.92";
+      var who = document.createElement("span"); who.textContent = "確認中…";
+      var btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = "運営に切替";
+      btn.style.cssText = "font:inherit;font-weight:700;border:none;border-radius:999px;"
+        + "padding:5px 10px;background:#E01E28;color:#fff;cursor:pointer";
+      btn.onclick = function(){
+        btn.disabled = true; btn.textContent = "切替中…";
+        sb.auth.signOut().then(function(){
+          return sb.auth.signInWithPassword({
+            email: window.DEV_AUTOLOGIN.email, password: window.DEV_AUTOLOGIN.password });
+        }).then(function(r){
+          if (r && r.error){ btn.textContent = "失敗"; console.error(r.error.message); return; }
+          location.reload();
+        });
+      };
+      bar.appendChild(who); bar.appendChild(btn);
+      function paint(){
+        sb.auth.getSession().then(function(r){
+          var s = r && r.data && r.data.session;
+          var em = s && s.user && s.user.email;
+          who.textContent = em ? ("開発版: " + em) : "開発版: 未ログイン";
+          var ok = em === window.DEV_AUTOLOGIN.email;
+          btn.style.display = ok ? "none" : "";
+          who.style.color = ok ? "#8BE38B" : "#FFD36A";
+        });
+      }
+      if (document.body) { document.body.appendChild(bar); paint(); }
+      else document.addEventListener("DOMContentLoaded", function(){ document.body.appendChild(bar); paint(); });
+    })();
+    (function(){
+      var OFF = "_dev_autologin_off", TRY = "_dev_autologin_tries";
+      try {
+        var q = new URLSearchParams(location.search).get("devlogin");
+        if (q === "off"){ localStorage.setItem(OFF, "1"); console.log("開発用の自動ログインを止めました"); }
+        if (q === "on"){ localStorage.removeItem(OFF); sessionStorage.removeItem(TRY); }
+        if (localStorage.getItem(OFF) === "1") return;      // 手動でログインしたい時はここで終わり
+        // ★「1回やったら終わり」にはしない。それだと、別のアカウントで入ったままの端末で
+        //   入り直しができなくなる。代わりに試行回数だけ数えて、繰り返しの読み込みを防ぐ。
+        //   （ログインが保存されない環境で、延々と再読み込みし続けるのを避けるため）
+        if (Number(sessionStorage.getItem(TRY) || 0) >= 2) return;
+      } catch (_) {}
+      var want = String(window.DEV_AUTOLOGIN.email || "").toLowerCase();
+      sb.auth.getSession().then(function(r){
+        var s = r && r.data && r.data.session;
+        var now = s && s.user && String(s.user.email || "").toLowerCase();
+        if (now === want) return;                       // 目的のアカウントで入っている＝何もしない
+        // ★ここが要点。「ログイン済みなら何もしない」だけだと、
+        //   前に別のアカウントで入った端末に古いログインが residual として残り、
+        //   持ち主が違うので編集ボタンが出ない、という状態から抜け出せない。
+        //   別のアカウントで入っていたら、いったん出てから入り直す。
+        try { sessionStorage.setItem(TRY, String(Number(sessionStorage.getItem(TRY) || 0) + 1)); } catch (_) {}
+        var pre = now ? sb.auth.signOut() : Promise.resolve();
+        return pre.then(function(){
+          return sb.auth.signInWithPassword({
+            email: window.DEV_AUTOLOGIN.email, password: window.DEV_AUTOLOGIN.password
+          });
+        }).then(function(res){
+          if (res && res.error){ console.error("開発用の自動ログインに失敗", res.error.message); return; }
+          console.log("開発用アカウントで自動ログインしました");
+          location.reload();
+        });
+      });
+    })();
+  }
   /* currentRecipeId / currentOwnerId はメインスクリプトのグローバルを共有して使う */
   var currentDraftId = null;   // 編集中の下書きID（下書きから開いた場合にセット。投稿成功で削除）
   var currentCoverUrl = null;  // 表示中の投稿のカバー画像URL（削除時にStorageからも消すため控える）
+  // ★SNS共有用カードのURLも控える。
+  //   これが無いと、投稿を削除しても共有カードだけがStorageに残る。
+  //   そのカードには完成写真・作品名・制作者名が焼き込まれているので、
+  //   「写真も含めて削除しました」と表示しながら、URLを知る人には見え続けることになる。
+  var currentShareUrl = null;
 
   // 段7-3.6: イベント計測（fire-and-forget。index.htmlと同じ仕様）
   function getLegacySessionId(){
@@ -3436,9 +3933,10 @@ const safePhoto = u => {
     return m ? decodeURIComponent(m[1]) : null;
   }
   // grid(またはstate)とカバーURLから、その投稿/下書きが持つ画像URLを全部集める
-  function imageUrlsOf(grid, coverUrl){
+  function imageUrlsOf(grid, coverUrl, shareUrl){
     var out = [];
     if (coverUrl) out.push(coverUrl);
+    if (shareUrl) out.push(shareUrl);   // SNS共有カードも削除対象に含める
     if (grid){
       (grid.photos || []).forEach(function(p){ if (p) out.push(p); });
       (grid.rows || []).forEach(function(r){ if (r && r.photo) out.push(r.photo); });
@@ -3518,6 +4016,12 @@ const safePhoto = u => {
   // 所有者が自分の投稿を開いた時、画面には何も出さず裏でカバーを文字付きへ更新する（空白タブ等は一切なし）。
   // ct2_<id> フラグで「1投稿1回」に抑える。
   function silentRefreshCover(uid, recipeId, oldCoverUrl){
+    // ★停止中。表紙を「写真そのもの」に変えたので、この処理が残っていると
+    //   投稿者が自分の投稿を開くたびに合成カードが作り直されて表紙に戻り、
+    //   変更が黙って巻き戻る（エラーも出ないので原因に辿り着けない）。
+    //   元に戻すときはこの return を消す。
+    return;
+    /* eslint-disable no-unreachable */
     if (!uid || !recipeId) return;
     try { if (localStorage.getItem("ct2_" + recipeId) === "1") return; } catch(_){}
     var has = (state.photos||[]).filter(Boolean).length || (state.rows||[]).some(function(r){ return r.photo; });
@@ -3570,7 +4074,7 @@ const safePhoto = u => {
     }
     // ここから先は Supabase からフェッチが必要
     if (!sb) return;
-    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,methods,comments_disabled").eq("id", id).single().then(function(res){
+    sb.from("recipes").select("id,owner_id,title,author_label,memo,grid,is_public,is_sample,share_url,methods,comments_disabled").eq("id", id).single().then(function(res){
       if (res.error || !res.data){
         // RLSで0件＝非公開の他人/削除済み。ログイン状態で出し分け（本人ならログインで見られると案内）
         var vb = document.getElementById("viewBody");
@@ -3602,8 +4106,12 @@ const safePhoto = u => {
       // せっかくの正規化が無意味になる。安全な空stateに落とす。
       try { state = migrate(rec.grid || {}); } catch(_){ try { state = migrate({}); } catch(__){ state = newState(); } }
       state.methods = Array.isArray(rec.methods) ? rec.methods : [];   // タグを復元（編集チップ初期選択・閲覧表示に使う）
+      // 一覧での切り取り位置。列に持っている値なので grid からは復元できない。
+      // これを入れ忘れると、編集して保存し直した瞬間に「中央」へ戻る（誰も気づけない）。
+      if (typeof rec.cover_pos === "string" && /^\d{1,3}% \d{1,3}%$/.test(rec.cover_pos)) state.cover_pos = rec.cover_pos;
       currentRecipeId = rec.id; currentOwnerId = rec.owner_id;
-      currentCoverUrl = rec.cover_url || null;   // 削除時にカバー画像もStorageから消すため
+      currentCoverUrl = rec.cover_url || null; currentShareUrl = rec.share_url || null;   // 削除時にカバー画像もStorageから消すため
+      window.__IS_SAMPLE__ = !!rec.is_sample;   // HOWTO: 見本投稿の最後に「作り方」を出すため
       // 既存投稿の編集：ボタンは「更新する」のみ（下書き保存は隠す）
       var pbs = document.querySelectorAll(".js-publish");
       for (var k=0;k<pbs.length;k++) pbs[k].textContent = "更新する";
@@ -3621,7 +4129,12 @@ const safePhoto = u => {
       showPage("view");                 // 投稿閲覧は必ず「閲覧（読み取り）」で開く
       setPublishCard(false);            // 既存投稿の閲覧では公開設定/投稿ボタン・プレビューバナーを出さない
       ensureBackBtn();                  // 「← 戻る」を表示
-      ensureAuthorChip(rec.owner_id);   // 投稿者チップ（タップでその人のプロフィールへ）
+      // ★見本投稿には投稿者を出さない。
+      //   これはサイトが置いた案内であって、誰かの作品自慢ではない。
+      //   所有者アカウントは「投稿には持ち主が要る」という仕組み上の都合で存在するだけなので、
+      //   その名前もIDもアイコンも読者には見せない。
+      //   （ここに実際のアカウント名を書かないこと。このファイルはそのまま配信される）
+      if (!rec.is_sample) ensureAuthorChip(rec.owner_id);
       // コメントセクション
       // ★高速表示(Worker埋め込み)ではこのapplyRecipeがコメントscript読込より先に走るため、
       //   renderComments未定義なら読込完了後(次tick)にやり直す（他人の投稿でコメント欄が空になる不具合の修正）。
@@ -3765,7 +4278,12 @@ const safePhoto = u => {
       var row = document.createElement("div"); row.id = "vAuthorRow"; row.className = "v-authorrow";
       var a = document.createElement("a"); a.id = "vAuthor"; a.className = "v-authorchip";
       if (p.user_id) a.href = "/index.html#u/" + encodeURIComponent(p.user_id);
-      var av = p.avatar_url ? '<img src="'+esc(p.avatar_url)+'" alt="">' : '<span class="vac-ini">'+esc((p.display_name||"?").charAt(0))+'</span>';
+      // ★アイコンも safePhoto を通す。ここを通していなかったため、
+      //   誰でも自分のアイコンURLに外部サーバーのアドレスを入れられ、
+      //   その人が写っている画面を開いた閲覧者のIP・端末・時刻が第三者に送られていた。
+      //   出どころが自分のStorageでなければ、頭文字の表示に落とす。
+      var pav = safePhoto(p.avatar_url);
+      var av = pav ? '<img src="'+esc(pav)+'" alt="">' : '<span class="vac-ini">'+esc((p.display_name||"?").charAt(0))+'</span>';
       a.innerHTML = '<span class="vac-av">'+av+'</span><span class="vac-meta"><b>'+esc(p.display_name||"ユーザー")+'</b>'
         + (p.user_id ? '<span class="vac-id">@'+esc(p.user_id)+'</span>' : '') + '</span>';
       row.appendChild(a);
@@ -3814,7 +4332,7 @@ const safePhoto = u => {
       // ★ただしRPCだけだと Storage API を通らずCDNの複製が残るので、先に Storage API でも消す。
       //   共有中の画像は消さない・失敗しても本文削除は続行（詳細は unusedStoragePaths / purgeStorage）。
       var rid = currentRecipeId;
-      unusedStoragePaths(imageUrlsOf(state, currentCoverUrl), rid, null)
+      unusedStoragePaths(imageUrlsOf(state, currentCoverUrl, currentShareUrl), rid, null)
         .then(purgeStorage)
         .then(function(){ return sb.rpc("delete_recipe_with_images", { rid: rid }); })
         .then(function(res){
@@ -3882,8 +4400,19 @@ const safePhoto = u => {
         photosSrc.forEach(function(p, i){ jobs.push(ensureUrl(uid, p, "p"+i).then(function(u){ photoUrls[i] = u; })); });
         rowPhotos.forEach(function(p, ri){ if (p) jobs.push(ensureUrl(uid, p, "r"+ri).then(function(u){ rowUrls[ri] = u; })); });
         return Promise.all(jobs).then(function(){
-          // カバー画像も snap から描く（ライブの state を読ませない＝本文と必ず同じ内容になる）
-          return makeCover(uid, snap).then(function(cover){
+          // ★表紙は2種類を使い分ける。
+          //   ・サイト内の一覧 … サムネイルの写真そのもの（何の作品かが一目で分かる）
+          //   ・SNSでの共有   … 「塗装レシピ録」の文字入り合成カード（見栄えがよく、出所も伝わる）
+          //   以前は一覧も合成カードだったため、どれも同じ見た目で埋まっていた。
+          //   写真が1枚も無い投稿だけは一覧でも合成カードを使う
+          //   （表紙が無い投稿は、おすすめ・塗料ページ・タグ結果から丸ごと消えるため）。
+          var firstPhoto = photoUrls.filter(Boolean)[0] || null;
+          // ★引数名を card にしてはいけない。
+          //   この関数の外に「投稿カードのDOM要素」を指す card があり、名前が衝突して
+          //   card.querySelector(...) が文字列に対する呼び出しになり、保存が必ず失敗した。
+          //   エラーは保存の瞬間にしか出ないので、画面を見ているだけでは気づけない。
+          return makeCover(uid, snap).then(function(shareCard){
+            var cover = firstPhoto || shareCard;
             // 2) URL化したgridを作る（base64は保存しない）
             // ライブの state ではなくスナップショットから作る（上記の添字ズレ防止）
             var g = JSON.parse(JSON.stringify(snap));
@@ -3904,6 +4433,11 @@ const safePhoto = u => {
             //   新規投稿では入れようがないので null（表紙なしで作られ、次回の保存で付く）。
             if (cover !== false) payload.cover_url = cover;
             else if (!currentRecipeId) payload.cover_url = null;
+            // SNS共有用のカード。作れなかった(false)ときは今の値に触らない。
+            if (shareCard !== false) payload.share_url = shareCard;
+            // 一覧での切り取り位置。未設定なら中央。
+            payload.cover_pos = (typeof snap.cover_pos === "string" && /^\d{1,3}% \d{1,3}%$/.test(snap.cover_pos))
+              ? snap.cover_pos : null;
 
             var q;
             if (currentRecipeId){ q = sb.from("recipes").update(payload).eq("id", currentRecipeId); }
@@ -4176,11 +4710,15 @@ const safePhoto = u => {
         if (tr.classList.contains('acc-closed')){ tr.classList.remove('acc-closed'); refreshBtnLabel(); }
       });
     });
-    // 初期：全て閉じる（描画後1回だけ）
+    // 初期：全て開く（描画後1回だけ）
+    // ★STEP1で「閉じた状態」から「開いた状態」に変えた。
+    //   初見の人がレシピの存在に気づけず「どこで見れるの?」で止まる事故が実際に起きたため。
+    //   畳む機能そのものは残してあるので、見出しをタップすれば今まで通り閉じられる。
+    //   元に戻すなら add('acc-closed') に書き換えるだけでよい。
     trs.forEach(function(tr){
       if (!tr.hasAttribute('data-acc-init')){
         tr.setAttribute('data-acc-init','1');
-        tr.classList.add('acc-closed');
+        tr.classList.remove('acc-closed');
       }
     });
     // 「すべて開く／閉じる」ボタンを vsection-label の右に1度だけ追加
@@ -4222,6 +4760,525 @@ const safePhoto = u => {
 </script>
 <!-- ACCORDION:END -->
 
+<!-- STEP1:START — 写真をタップして拡大する。戻すときはこの<script>ブロックを消すだけ -->
+<script>
+(function(){
+  // ★なぜ必要か
+  //   初めて触った人が完成写真をタップして拡大しようとし、何も起きずに止まった。
+  //   スマホでは写真の細部（塗り分けの境目・質感）が小さすぎて読み取れないため、
+  //   拡大は「あると便利」ではなく「無いと情報が届かない」機能。
+  var lb = null;
+
+  function close(){
+    if (!lb) return;
+    lb.classList.remove('open');
+    lb.querySelector('img').src = '';           // 画面外の大きい画像を持ち続けない
+    document.body.style.overflow = '';
+  }
+
+  function open(src, alt){
+    if (!lb){
+      lb = document.createElement('div');
+      lb.className = 'zoomlb';
+      lb.innerHTML = '<img alt=""><button type="button" class="zoomclose" aria-label="閉じる">&times;</button>';
+      // 背景・画像・×のどこを押しても閉じる（閉じ方が分からず戻れなくなるのを防ぐ）
+      lb.addEventListener('click', close);
+      document.body.appendChild(lb);
+    }
+    var img = lb.querySelector('img');
+    img.src = src; img.alt = alt || '';
+    lb.classList.add('open');
+    document.body.style.overflow = 'hidden';    // 後ろのページが動かないようにする
+  }
+
+  // 個別に登録せず、まとめて受け取る。
+  // ★レシピは描画のたびに作り直されるので、要素ごとに登録すると付け直しが要る。
+  //   ここで受ければ、あとから増えた写真にも自動で効く。
+  document.addEventListener('click', function(e){
+    if (lb && lb.classList.contains('open')) return;
+    var img = e.target.closest('#viewHero.vhero-photos img, .vr-photo img');
+    if (!img) return;
+    e.preventDefault();
+    e.stopPropagation();                        // 行の開閉が同時に起きないようにする
+    open(img.dataset.zoomSrc || img.currentSrc || img.src, img.alt);
+  }, true);
+
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+})();
+</script>
+<!-- STEP1:END -->
+
+<!-- STEP2:START — 1枚の写真から引き出し線でラベルを出し、押すとカードが出る。戻すときはこのブロックを消すだけ -->
+<script>
+(function(){
+  // ★2026-08-12、オーナー判断で「一旦なし」。カード式で進めることにした。
+  //   コードを消していないのは「後で呼び戻すかもしれない」と言われているため。
+  //   復活させるときは、次の false を true に変えるだけでよい（他は何も触らなくていい）。
+  var ENABLED = false;
+  if (!ENABLED){ window.buildHeroLabels = function(){}; return; }
+
+  var PAD = 6, GAP = 4, LH = 30;      // 余白 / ラベル同士の最小すき間 / ラベルの高さ
+  var sheet = null, sel = -1, items = [];
+
+  // その部位を代表する色を選ぶ。
+  // ★トップコートやスミ入れの色ではなく「本塗装」の色でないと、
+  //   どの行も同じ透明色・黒になって見分けが付かない。
+  function rowColor(row){
+    var procs = (state.procs || []);
+    var order = [];
+    procs.forEach(function(p){ if (/本塗装|本塗/.test(p.name || "")) order.push(p.id); });
+    procs.forEach(function(p){
+      if (order.indexOf(p.id) < 0 && !/クリア|トップ|スミ入れ|サフ|下地/.test(p.name || "")) order.push(p.id);
+    });
+    procs.forEach(function(p){ if (order.indexOf(p.id) < 0) order.push(p.id); });
+    for (var i = 0; i < order.length; i++){
+      var c = row.cells && row.cells[order[i]];
+      if (!c) continue;
+      var p = paintOf(c);
+      if (p && p[3]) return p[3];
+    }
+    return (row.photo_mark && row.photo_mark.c) || "#8A8F96";
+  }
+
+  function closeSheet(){
+    if (sheet) sheet.classList.remove("open");
+    sel = -1;
+    items.forEach(function(it){ it.lab.classList.remove("on"); it.dot.classList.remove("on"); });
+    draw();
+  }
+
+  function openSheet(i){
+    var it = items[i]; if (!it) return;
+    if (!sheet){
+      sheet = document.createElement("div");
+      sheet.className = "vcard-sheet";
+      document.body.appendChild(sheet);
+      sheet.addEventListener("click", function(e){
+        if (e.target.closest(".vcard-close")) closeSheet();
+      });
+      document.addEventListener("click", function(e){
+        if (!sheet.classList.contains("open")) return;
+        if (e.target.closest(".vcard-sheet") || e.target.closest(".vhero-lab")) return;
+        closeSheet();
+      });
+    }
+    var row = it.row, procs = (state.procs || []);
+    var steps = procs.filter(function(p){ return row.cells && row.cells[p.id]; }).map(function(p){
+      var c = row.cells[p.id], q = paintOf(c);
+      return '<div class="st"><span class="k">' + esc(p.name) + '</span>'
+           + '<span class="v"><i style="background:' + safeColor(q ? q[3] : '#ddd') + '"></i>'
+           + esc(q ? q[2] : (c.c || "")) + '</span></div>';
+    }).join("");
+    sheet.innerHTML = '<button type="button" class="vcard-close" aria-label="閉じる">&times;</button>'
+      + '<h4>' + esc(row.part || "—") + '</h4>'
+      + '<p class="cap">' + (steps ? procs.filter(function(p){ return row.cells[p.id]; }).length + "工程" : "工程は未設定です") + '</p>'
+      + steps
+      + '<button type="button" class="goto">レシピの一覧でこの部位を見る</button>';
+    sheet.querySelector(".goto").addEventListener("click", function(){
+      closeSheet();
+      var tr = document.querySelectorAll("#viewTable tbody tr")[it.idx];
+      if (tr){ tr.classList.remove("acc-closed"); tr.scrollIntoView({behavior:"smooth", block:"center"}); }
+    });
+    sheet.classList.add("open");
+    sel = i;
+    items.forEach(function(o, k){
+      o.lab.classList.toggle("on", k === i);
+      o.dot.classList.toggle("on", k === i);
+    });
+    draw();
+  }
+
+  // ラベルを余白へ並べる。
+  // ★重ならないことを「後から直す」のではなく、順に押し下げることで構造的に保証する。
+  //   重なりを目視で調整する作りにすると、行数や画面幅が変わった瞬間に破綻する。
+  function draw(){
+    var host = document.querySelector("#viewHero .vhero-item");
+    if (!host || !items.length) return;
+    var W = host.clientWidth, H = host.clientHeight;
+    var svg = host.querySelector(".vhero-lines");
+    if (!W || !H || !svg) return;
+
+    var left = [], right = [];
+    items.forEach(function(it, i){ (it.x < 50 ? left : right).push(i); });
+
+    // 片側に入り切らない分は、写真の中央に近いものから反対側へ移す
+    var cap = Math.max(1, Math.floor((H - PAD * 2 + GAP) / (LH + GAP)));
+    function rebalance(a, b){
+      while (a.length > cap && b.length < cap){
+        a.sort(function(p, q){ return Math.abs(50 - items[p].x) - Math.abs(50 - items[q].x); });
+        b.push(a.shift());
+      }
+    }
+    rebalance(left, right); rebalance(right, left);
+
+    function place(idxs){
+      idxs.sort(function(p, q){ return items[p].y - items[q].y; });
+      var ys = idxs.map(function(i){ return H * items[i].y / 100 - LH / 2; });
+      for (var i = 1; i < ys.length; i++) if (ys[i] < ys[i-1] + LH + GAP) ys[i] = ys[i-1] + LH + GAP;
+      var over = (ys.length ? ys[ys.length-1] + LH : 0) - (H - PAD);
+      if (over > 0) for (var j = ys.length - 1; j >= 0; j--){
+        ys[j] -= over;
+        if (j > 0 && ys[j] < ys[j-1] + LH + GAP) over = ys[j-1] + LH + GAP - ys[j]; else break;
+      }
+      ys.forEach(function(y, k){ ys[k] = Math.max(PAD, Math.min(H - LH - PAD, y)); });
+      return ys;
+    }
+    var ly = place(left), ry = place(right), seg = [];
+
+    function apply(idxs, ys, isLeft){
+      idxs.forEach(function(i, k){
+        var it = items[i];
+        it.lab.style.top = ys[k] + "px";
+        it.lab.style.left  = isLeft ? PAD + "px" : "auto";
+        it.lab.style.right = isLeft ? "auto" : PAD + "px";
+        var ax = W * it.x / 100, ay = H * it.y / 100;
+        it.dot.style.left = ax + "px";
+        it.dot.style.top  = ay + "px";
+        var lw = it.lab.offsetWidth || 90;
+        seg.push({ sx: isLeft ? PAD + lw : W - PAD - lw, sy: ys[k] + LH / 2, ax: ax, ay: ay, on: i === sel });
+      });
+    }
+    apply(left, ly, true); apply(right, ry, false);
+
+    // ★線は「白い縁取り＋濃い芯」の2重で描く。
+    //   1本だけだと、暗い写真では濃い線が、明るい写真では白い線が消える。
+    //   投稿者がどんな写真を上げるか選べない以上、どちらでも見える描き方でないと成立しない。
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.innerHTML = seg.map(function(s){
+      var mx = (s.sx + s.ax) / 2;
+      var d = "M" + s.sx + " " + s.sy + " C" + mx + " " + s.sy + "," + mx + " " + s.ay + "," + s.ax + " " + s.ay;
+      var w = s.on ? 2.2 : 1.5;
+      return '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="' + (w + 2.4) + '" stroke-linecap="round"/>'
+           + '<path d="' + d + '" fill="none" stroke="' + (s.on ? "#14161A" : "rgba(20,22,26,.62)") + '" stroke-width="' + w + '" stroke-linecap="round"/>';
+    }).join("");
+  }
+
+  window.buildHeroLabels = function(){
+    var host = document.querySelector("#viewHero .vhero-item");
+    items = []; sel = -1;
+    if (!host) return;
+    host.querySelectorAll(".vhero-lab,.vhero-dot,.vhero-lines").forEach(function(n){ n.remove(); });
+
+    // 引き出し元の座標は、いま各行が持っている photo_mark をそのまま使っている。
+    // ※本来は「この完成写真のどこか」を投稿時に指定してもらう値。今は仮の位置。
+    var rows = (state.rows || []);
+    rows.forEach(function(row, idx){
+      var m = row.photo_mark;
+      if (!m || typeof m.x !== "number" || typeof m.y !== "number") return;
+      if (!(row.part || "").trim()) return;
+      var lab = document.createElement("div");
+      lab.className = "vhero-lab";
+      lab.innerHTML = '<span class="sw" style="background:' + safeColor(rowColor(row)) + '"></span>' + esc(row.part);
+      var i = items.length;
+      lab.addEventListener("click", function(ev){
+        ev.stopPropagation(); ev.preventDefault();
+        if (sel === i) closeSheet(); else openSheet(i);
+      });
+      var dot = document.createElement("div");
+      dot.className = "vhero-dot";
+      host.appendChild(lab); host.appendChild(dot);
+      items.push({ lab: lab, dot: dot, row: row, idx: idx, x: +m.x, y: +m.y });
+    });
+    if (!items.length) return;
+
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "vhero-lines");
+    host.insertBefore(svg, host.querySelector(".vhero-lab"));
+
+    var img = host.querySelector("img");
+    if (img && !img.complete) img.addEventListener("load", draw);
+    draw();
+    setTimeout(draw, 300);      // 画像の高さが確定してから引き直す
+  };
+
+  window.addEventListener("resize", function(){ if (items.length) draw(); });
+
+  // ★描画のたびに自分で作り直す。
+  //   renderViewMode 側からも呼んでいるが、この<script>はページの末尾にあるため、
+  //   先に描画が走った回では window.buildHeroLabels がまだ存在せず、黙って何も起きない。
+  //   （コメント欄で同じ壊れ方を一度やっている。エラーも出ないので気づけない。）
+  //   写真の入れ替わりを見張って、こちら側からも必ず組み立てる。
+  function watch(){
+    var hero = document.getElementById("viewHero");
+    if (!hero){ setTimeout(watch, 100); return; }
+    var timer = null;
+    new MutationObserver(function(){
+      clearTimeout(timer);
+      timer = setTimeout(function(){
+        if (hero.querySelector(".vhero-item") && !hero.querySelector(".vhero-lab")) window.buildHeroLabels();
+      }, 50);
+    }).observe(hero, { childList: true, subtree: true });
+    if (hero.querySelector(".vhero-item")) window.buildHeroLabels();
+  }
+  watch();
+})();
+</script>
+<!-- STEP2:END -->
+
+<!-- HOWTO:START — 投稿の作り方（画面写真）。戻すときはこのブロックとCSSの "HOWTO:" を消すだけ -->
+<div class="howto-ov" id="howtoOv" role="dialog" aria-modal="true" aria-label="投稿の作り方">
+  <div class="howto-head">
+    <b>投稿の作り方</b>
+    <button type="button" class="howto-close" id="howtoClose" aria-label="閉じる">&times;</button>
+  </div>
+  <div class="howto-track" id="howtoTrack"></div>
+  <button type="button" class="howto-nav prev" id="howtoPrev" aria-label="前へ">&#8249;</button>
+  <button type="button" class="howto-nav next" id="howtoNext" aria-label="次へ">&#8250;</button>
+  <div class="howto-foot" id="howtoDots"></div>
+</div>
+<script>
+(function(){
+  // ★説明は1つだけ作り、2か所から開く。
+  //   同じ内容を2つ持つと、片方だけ古くなって食い違う（このサイトで何度も起きている型）。
+  var STEPS = [
+    { img: "/assets/howto-1.jpg", t: "① 下の「＋」から始める",
+      s: "どの画面からでも、真ん中のボタンで作成に入れます" },
+    { img: "/assets/howto-2.jpg", t: "② 作品名を入れる　③ サムネイルを選ぶ",
+      s: "サムネイルは一覧に出る「顔」になる1枚です" },
+    { img: "/assets/howto-3.jpg", t: "④ 部位の名前　⑤ 使った塗料　⑥ その部位の写真",
+      s: "色グループごとに、サフ→本塗装→仕上げまでを残せます" },
+    { img: "/assets/howto-4.jpg", t: "⑦ 写真のどこの部位かを指せる",
+      s: "点をつまんで動かすと、指す場所を変えられます" },
+    { img: "/assets/howto-5.jpg", t: "⑧ 公開／非公開を選んで投稿",
+      s: "非公開なら自分だけの記録として残せます" }
+  ];
+  var ov = document.getElementById("howtoOv");
+  if (!ov) return;
+  var track = document.getElementById("howtoTrack");
+  var dots  = document.getElementById("howtoDots");
+  var built = false;
+
+  function build(){
+    if (built) return; built = true;
+    STEPS.forEach(function(st, i){
+      var sl = document.createElement("div");
+      sl.className = "howto-slide";
+      sl.innerHTML = '<p class="howto-cap">' + st.t + '<span>' + st.s + '</span></p>'
+        // ★遅延読み込みにしない。この5枚は「開いたときに初めて」組み立てるので、
+        //   開くまでは通信が発生しない。一方 loading="lazy" にすると、横スクロールの
+        //   箱の中では画面外扱いのまま読み込まれず、白いままになる。
+        + '<img src="' + st.img + '" alt="手順' + (i+1) + '" decoding="async">';
+      track.appendChild(sl);
+      var d = document.createElement("span");
+      d.className = "howto-dot" + (i === 0 ? " on" : "");
+      dots.appendChild(d);
+    });
+    track.addEventListener("scroll", function(){
+      var i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      [].forEach.call(dots.children, function(d, k){ d.classList.toggle("on", k === i); });
+    }, { passive: true });
+  }
+  function go(dir){
+    track.scrollBy({ left: dir * track.clientWidth, behavior: "smooth" });
+  }
+  function open(){ build(); ov.classList.add("show"); document.body.style.overflow = "hidden"; track.scrollLeft = 0; }
+  function close(){ ov.classList.remove("show"); document.body.style.overflow = ""; }
+  window.openHowto = open;
+
+  document.getElementById("howtoClose").addEventListener("click", close);
+  document.getElementById("howtoPrev").addEventListener("click", function(){ go(-1); });
+  document.getElementById("howtoNext").addEventListener("click", function(){ go(1); });
+  ov.addEventListener("click", function(e){ if (e.target === ov) close(); });
+  document.addEventListener("keydown", function(e){
+    if (!ov.classList.contains("show")) return;
+    if (e.key === "Escape") close();
+    if (e.key === "ArrowRight") go(1);
+    if (e.key === "ArrowLeft") go(-1);
+  });
+
+  function makeBtn(id, label){
+    var b = document.createElement("button");
+    b.type = "button"; b.id = id; b.className = "howto-cta";
+    b.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/>'
+      + '<path d="M9.5 9.2a2.6 2.6 0 015 .9c0 1.7-2.5 2-2.5 3.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg>'
+      + '<span>' + label + '</span>';
+    b.addEventListener("click", open);
+    return b;
+  }
+
+  // ① 投稿作成画面のいちばん上
+  (function onEdit(){
+    var em = document.getElementById("editMode");
+    if (!em){ setTimeout(onEdit, 200); return; }
+    if (document.getElementById("howtoOpenEdit")) return;
+    em.insertBefore(makeBtn("howtoOpenEdit", "はじめての方へ — 投稿の作り方を見る"), em.firstChild);
+  })();
+
+  // ② 見本投稿。レシピのカードを読み終えた直後（「使用塗料」の見出しの前）に置く。
+  //   ★最初は末尾に置いて気づかれず、次にレシピの前へ出したが、
+  //     今度は本文とレシピの間に割り込んで読む流れを切っていた。
+  //     「どんな記録が残るのか」を実際に見終えた直後が、いちばん自然に
+  //     「自分でも作ってみよう」と思える位置。
+  //   ★描画のたびに消えるので、見張って毎回入れ直す。
+  //     一度入れて終わりにすると、編集↔プレビューを往復した回で消えたまま戻らない。
+  (function onView(){
+    var vb = document.getElementById("viewBody");
+    if (!vb){ setTimeout(onView, 200); return; }
+    function place(){
+      if (!window.__IS_SAMPLE__) return;                  // 見本投稿だけに出す
+      if (document.getElementById("howtoOpenView")) return;
+      var btn = makeBtn("howtoOpenView", "投稿の作り方を見る");
+      btn.classList.add("howto-cta-big");
+      // 「使用塗料」の見出しの直前へ（＝レシピのカードの下）
+      var head = null;
+      [].forEach.call(vb.querySelectorAll(".vsection-label"), function(el){
+        if (!head && /使用塗料/.test(el.textContent)) head = el;
+      });
+      if (head) vb.insertBefore(btn, head); else vb.appendChild(btn);
+    }
+    new MutationObserver(place).observe(vb, { childList: true });
+    place();
+    setTimeout(place, 800);
+  })();
+})();
+</script>
+<!-- HOWTO:END -->
+
+<!-- LEAD:START — 写真の目印を「引き出し線＋枠」で描く。表示側と投稿画面で同じ関数を使う -->
+<script>
+(function(){
+  // window.drawLead(host, {x,y,side,text,color})
+  //   host … 写真の上に重ねる箱（position:absolute; inset:0）。親の大きさを基準に描く。
+  //   x,y  … 引き出し元の位置（写真に対する％）
+  //   side … "L"/"R"。枠を左右どちらに出すか。空なら空いている側を自動で選ぶ。
+  //
+  // ★線は「白い縁取り＋色の芯」の2重で描く。
+  //   1本だけだと、暗い写真では色の線が、明るい写真では白い線が沈んで見えなくなる。
+  //   投稿者がどんな写真を上げるかは選べないので、どちらでも見える描き方にする。
+  var HEX = /^#[0-9A-Fa-f]{3,8}$/;
+  window.drawLead = function(host, opt){
+    var box = host.parentElement;
+    if (!box) return false;
+    var W = box.clientWidth, H = box.clientHeight;
+    if (!W || !H) return false;
+
+    var x = Math.max(0, Math.min(100, +opt.x || 0));
+    var y = Math.max(0, Math.min(100, +opt.y || 0));
+    var color = HEX.test(String(opt.color || "").trim()) ? String(opt.color).trim() : "#E01E28";
+    var text = String(opt.text == null ? "" : opt.text).trim() || "ここ";
+
+    host.style.setProperty("--mc", color);
+    host.innerHTML = "";
+
+    var lab = document.createElement("span");
+    lab.className = "lead-lab";
+    lab.textContent = text;
+    host.appendChild(lab);                 // 幅を測るため先に入れる
+
+    // 余白 / 枠の高さ26pxの半分 / 点と枠のすき間
+    // ★すき間を広めに取る。狭いと、指で点を動かしている最中に枠が指の下に隠れて、
+    //   何を選んでいるのか見えなくなる。
+    var PAD = 6, HALF = 13, GAP = 60;
+    var lw = lab.offsetWidth || 60;
+    var ax = W * x / 100, ay = H * y / 100;
+
+    // ★枠は「写真の端」ではなく「点のすぐ横」に置く。
+    //   端に固定すると、点が端に寄ったときに線が不自然に長く伸びる。
+    //
+    // ★側は原則ずっと右。右が本当に一杯になったときだけ左へ回す。
+    //   「空いている側を選ぶ」にしたら、点が中央を越えるたびに左右が入れ替わって落ち着かなかった。
+    //   さらに、すき間を固定したまま判定すると、まだ右に余裕があるのに早々と左へ飛ぶ。
+    //   そこで **先にすき間を詰めて右に収まらないか試し、それでも無理なときだけ反転** する。
+    //   結果、入れ替わるのは本当に必要な一度だけになる。
+    var MINGAP = 14;
+
+    // ★どちらの側にも入り切らないときは、枠を縮めてでも必ず点の横に置く。
+    //   縮めずに枠内へ押し込むと、枠が点の真上に乗って線が1本も見えなくなる。
+    //   実測: 部位名13文字(163px)を321px幅の写真の中央に置くと完全に重なった。
+    //   名前が少し省略されるのは我慢できるが、どこを指しているか分からないのは機能の死。
+    var room = Math.max(W - PAD - (ax + MINGAP), (ax - MINGAP) - PAD);
+    if (lw > room && room >= 34){
+      lab.style.maxWidth = Math.floor(room) + "px";
+      lw = lab.offsetWidth || lw;
+    }
+
+    function leftEdge(s, g){ return (s === "L") ? (ax - g - lw) : (ax + g); }
+    function fits(s, g){ var v = leftEdge(s, g); return v >= PAD && v + lw <= W - PAD; }
+    function squeeze(s){                       // その側に収まる最大のすき間（無理なら null）
+      for (var g = GAP; g >= MINGAP; g -= 2) if (fits(s, g)) return g;
+      return null;
+    }
+    var side = (opt.side === "L" || opt.side === "R") ? opt.side : "R";
+    var gap = squeeze(side);
+    if (gap === null && !(opt.side === "L" || opt.side === "R")){
+      var other = (side === "L") ? "R" : "L";
+      var g2 = squeeze(other);
+      if (g2 !== null){ side = other; gap = g2; }
+    }
+    if (gap === null) gap = MINGAP;
+    var lx = Math.max(PAD, Math.min(W - PAD - lw, leftEdge(side, gap)));
+    var ly = Math.max(PAD + HALF, Math.min(H - PAD - HALF, ay));
+    lab.style.left = lx + "px";
+    lab.style.right = "auto";
+    lab.style.top = ly + "px";
+
+    var sx = (side === "L") ? (lx + lw) : lx;   // 線は枠の点に近い側の辺から出す
+    var mx = (sx + ax) / 2;
+    var d = "M" + sx + " " + ly + " C" + mx + " " + ly + "," + mx + " " + ay + "," + ax + " " + ay;
+
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "lead-svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.innerHTML = '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="4.6" stroke-linecap="round"/>'
+                  + '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round"/>';
+    host.insertBefore(svg, lab);
+
+    var dot = document.createElement("span");
+    dot.className = "lead-dot";
+    dot.style.left = x + "%"; dot.style.top = y + "%";
+    host.appendChild(dot);
+
+    var hit = document.createElement("span");
+    hit.className = "lead-hit";
+    hit.style.left = x + "%"; hit.style.top = y + "%";
+    host.appendChild(hit);
+    return true;
+  };
+
+  // ★「必要なものだけ描く」。全部描き直す作りだと止まらなくなる。
+  //   drawLead は中身を作り直すので、それ自体が下の MutationObserver を叩く。
+  //   毎回無条件に描くと「描く→監視が反応→また描く」で永久に回り続ける
+  //   （実測で3秒あたり72回、増加傾向。画面は正常に見えるので気づけない）。
+  //   ここで「すでに正しい大きさで描けているものは触らない」ようにすると、
+  //   1周で必ず何もしなくなり、ループが構造的に止まる。
+  //   同時に、畳まれていた行が開いて大きさが0から変わったときは描き直せる。
+  function drawAll(){
+    document.querySelectorAll(".vr-lead").forEach(function(el){
+      var box = el.parentElement;
+      var w = box ? box.clientWidth : 0, h = box ? box.clientHeight : 0;
+      if (!w || !h) return;                                   // まだ見えていない（畳まれている等）
+      var key = w + "x" + h;
+      if (el.dataset.key === key && el.querySelector(".lead-svg")) return;   // 既に正しい
+      if (window.drawLead(el, {
+        x: el.dataset.x, y: el.dataset.y, side: el.dataset.side,
+        text: el.dataset.text, color: el.style.getPropertyValue("--mc")
+      })) el.dataset.key = key;
+    });
+  }
+
+  // ★描画のたびに自分で引き直す。
+  //   レシピ表は編集↔閲覧の行き来で作り直されるので、1回描いて終わりにすると
+  //   2回目以降だけ線が消える（エラーも出ないので気づけない）。
+  function watch(){
+    var t = document.getElementById("viewTable");
+    if (!t){ setTimeout(watch, 120); return; }
+    var timer = null;
+    // class も見る。行を畳む／開くは class の付け外しなので、これが無いと
+    // 「閉じている間は大きさ0で描けず、開いても描き直されない」＝線が出ないままになる。
+    new MutationObserver(function(){
+      clearTimeout(timer); timer = setTimeout(drawAll, 60);
+    }).observe(t, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    drawAll();
+  }
+  watch();
+  window.addEventListener("resize", function(){ clearTimeout(window.__leadT); window.__leadT = setTimeout(drawAll, 120); });
+  window.addEventListener("load", drawAll);
+})();
+</script>
+<!-- LEAD:END -->
+
 <!-- CROPPER:START — 戻すときはこの<div>と<script id="cropperScript">、CSSの "CROPPER:START〜END" を削除 -->
 <div class="crop-overlay" id="cropOverlay" hidden>
   <div class="crop-card">
@@ -4229,17 +5286,14 @@ const safePhoto = u => {
     <p class="crop-hint" id="cropHint">画像をドラッグして中心に来る位置を決めてください</p>
     <div class="crop-frame" id="cropFrame">
       <img id="cropImg" alt="">
-      <div class="crop-marker" id="cropMarker" hidden></div>
+      <div class="lead-layer" id="cropLead" hidden></div>
     </div>
     <label class="crop-marker-toggle">
       <input type="checkbox" id="cropMarkerOn">
-      <span>目印（赤丸）を付ける</span>
+      <span>矢印で目印を付ける</span>
     </label>
     <div class="crop-marker-controls" id="cropMarkerControls" hidden>
-      <div class="crop-mc-row">
-        <span class="crop-mc-label">大きさ</span>
-        <input type="range" id="cropMarkerSize" min="5" max="45" step="1" value="14">
-      </div>
+      <p class="crop-lead-tip"><b>赤い点か枠をつまんで動かす</b>と、指す場所を変えられます。写真そのものはドラッグで上下できます。</p>
       <div class="crop-mc-row">
         <span class="crop-mc-label">色</span>
         <div class="crop-mc-colors" id="cropMarkerColors">
@@ -4249,6 +5303,7 @@ const safePhoto = u => {
           <button type="button" data-color="#1E2430" style="background:#1E2430" title="黒"></button>
           <button type="button" data-color="#FFFFFF" style="background:#FFFFFF;border-color:#aaa" title="白"></button>
         </div>
+        <button type="button" class="crop-flip" id="cropFlip">枠を反対側へ</button>
       </div>
     </div>
     <div class="crop-actions">
@@ -4265,11 +5320,15 @@ const safePhoto = u => {
   var ov = document.getElementById('cropOverlay');
   var frame = document.getElementById('cropFrame');
   var img = document.getElementById('cropImg');
-  var marker = document.getElementById('cropMarker');
+  var marker = document.getElementById('cropLead');
   var markerOn = document.getElementById('cropMarkerOn');
   var markerCtrl = document.getElementById('cropMarkerControls');
-  var markerSize = document.getElementById('cropMarkerSize');
   var markerColors = document.getElementById('cropMarkerColors');
+  var flipBtn = document.getElementById('cropFlip');
+  var mS = '';                       // 枠を出す側 "L"/"R"。空なら自動
+  var leadText = '';                 // 枠に出す文字（部位名）
+  var hideMark = false;              // サムネの位置決めでは目印を出さない
+  var fixedHint = '';                // その場合の案内文
   var okBtn = document.getElementById('cropOk');
   var cancelBtn = document.getElementById('cropCancel');
   var hint = document.getElementById('cropHint');
@@ -4286,11 +5345,10 @@ const safePhoto = u => {
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
   function applyImage(){ frame.style.setProperty('--pp', posX+'% '+posY+'%'); }
   function applyMarker(){
-    var size = mR * 2;
-    marker.style.left = mX + '%';
-    marker.style.top  = mY + '%';
-    marker.style.width  = size + '%';
-    marker.style.height = size + '%';
+    if (!markerOn.checked) return;
+    // 表示側とまったく同じ関数で描く。別々に書くと、投稿画面で見た位置と
+    // 実際の投稿での位置がずれても誰も気づけない。
+    if (window.drawLead) window.drawLead(marker, { x: mX, y: mY, side: mS, text: leadText, color: mC });
   }
   function applyColor(){
     card.style.setProperty('--mc', mC);
@@ -4299,29 +5357,49 @@ const safePhoto = u => {
     });
   }
   function updateMarkerUI(){
-    var on = markerOn.checked;
+    var on = markerOn.checked && !hideMark;
     marker.hidden = !on;
     markerCtrl.hidden = !on;
-    hint.textContent = on
-      ? '画像と目印（◯）をそれぞれドラッグで位置を決められます'
-      : '画像をドラッグして中心に来る位置を決めてください';
+    hint.textContent = fixedHint || (on
+      ? '赤い点をつまんで動かす。写真はドラッグで位置を決められます'
+      : '画像をドラッグして中心に来る位置を決めてください');
+    if (on) applyMarker();
   }
 
-  window.openPhotoCropper = function(src, initialPos, initialMark, done){
+  // opts: { hideMark:true, ratio:"4/3", title, hint }
+  //   サムネイルの表示位置を決めるときは目印が要らないので、その場合だけ隠せるようにする。
+  window.openPhotoCropper = function(src, initialPos, initialMark, done, labelText, opts){
+    opts = opts || {};
     onDoneCb = done || function(){};
+    leadText = labelText || '';
+    var titleEl = ov.querySelector('h3');
+    if (titleEl) titleEl.textContent = opts.title || '画像の位置と目印';
+    frame.style.aspectRatio = opts.ratio || '1 / 1';
+    var toggleWrap = ov.querySelector('.crop-marker-toggle');
+    if (toggleWrap) toggleWrap.style.display = opts.hideMark ? 'none' : '';
+    if (opts.hideMark) markerOn.checked = false;
+    hideMark = !!opts.hideMark;
+    fixedHint = opts.hint || '';
     if (initialPos && /\d+%\s+\d+%/.test(initialPos)){
       var m = initialPos.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
       posX = parseFloat(m[1]); posY = parseFloat(m[2]);
     } else { posX = 50; posY = 50; }
     if (initialMark && typeof initialMark.x === 'number'){
       mX = initialMark.x; mY = initialMark.y; mR = initialMark.r || 14; mC = initialMark.c || '#E01E28';
+      mS = (initialMark.s === 'L' || initialMark.s === 'R') ? initialMark.s : '';
       markerOn.checked = true;
-    } else { mX = 50; mY = 50; mR = 14; mC = '#E01E28'; markerOn.checked = false; }
-    markerSize.value = mR;
-    applyImage(); applyMarker(); applyColor(); updateMarkerUI();
-    img.onload = function(){ imgRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1); };
+    } else { mX = 50; mY = 50; mR = 14; mC = '#E01E28'; mS = ''; markerOn.checked = false; }
+    applyImage(); applyColor(); updateMarkerUI();
+    img.onload = function(){
+      imgRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+      applyMarker();                 // 画像が入って枠の大きさが決まってから引き直す
+    };
     img.src = src;
     ov.hidden = false;
+    // ★必ず「画面を出したあと」に描く。
+    //   隠れている間は枠の幅も高さも0なので、線を引こうとしても何も描けずに終わる
+    //   （エラーは出ないので、気づかないまま「目印が出ない」状態になる）。
+    applyMarker();
   };
   function closeAndReset(){ ov.hidden = true; img.src = ''; onDoneCb = null; dragMode = null; activePointerId = null; }
 
@@ -4330,34 +5408,73 @@ const safePhoto = u => {
   okBtn.addEventListener('click', function(){
     var cb = onDoneCb;
     var pos = Math.round(posX)+'% '+Math.round(posY)+'%';
-    var mark = markerOn.checked ? { x: Math.round(mX), y: Math.round(mY), r: Math.round(mR), c: mC } : null;
+    // r は使わなくなったが、古い投稿との行き来で消えないようそのまま持ち続ける
+    var mark = markerOn.checked ? { x: Math.round(mX), y: Math.round(mY), r: Math.round(mR), c: mC, s: mS || undefined } : null;
     closeAndReset(); if (cb) cb(pos, mark);
   });
 
-  markerOn.addEventListener('change', function(){ applyMarker(); updateMarkerUI(); });
-  // input/change両方で連続更新（環境差を吸収）
-  function onSize(){ mR = parseFloat(markerSize.value); applyMarker(); }
-  markerSize.addEventListener('input', onSize);
-  markerSize.addEventListener('change', onSize);
+  markerOn.addEventListener('change', updateMarkerUI);
   // 色ボタン
   markerColors.addEventListener('click', function(e){
     var b = e.target.closest('button[data-color]'); if (!b) return;
-    mC = b.getAttribute('data-color'); applyColor();
+    mC = b.getAttribute('data-color'); applyColor(); applyMarker();
+  });
+  // 枠を左右どちらに出すか。自動で決めた側が模型に重なったとき用の逃げ道。
+  flipBtn.addEventListener('click', function(){
+    var cur = mS || (mX > 50 ? 'L' : 'R');
+    mS = (cur === 'L') ? 'R' : 'L';
+    applyMarker();
   });
 
   // pointer events に統一（mouse/touch二重登録を廃止し、スライダーと干渉しないよう要素単位に bind）
-  function startMarker(e){
-    if (!markerOn.checked) return;
-    dragMode = 'marker'; marker.classList.add('dragging');
-    activePointerId = e.pointerId;
-    try{ marker.setPointerCapture(e.pointerId); }catch(_){}
-    startCX = e.clientX; startCY = e.clientY; startA = mX; startB = mY;
-    e.preventDefault(); e.stopPropagation();
+  // ★旧「赤丸をドラッグする」処理は削除した。
+  //   矢印方式に変えたあとも残していたが、これが pointerdown を横取りして
+  //   stopPropagation していたため、新しい処理（指より上に点をずらす）が一切走っていなかった。
+  //   見た目には動いていたので気づきにくく、実測して初めて分かった。
+  //   使われていないつもりのコードでも、イベントを掴んでいる限り無害ではない。
+  // 指と点のずれ。掴んだ瞬間の位置関係をそのまま保つための値。
+  var grabDX = 0, grabDY = 0, grabbedDot = false;
+  var LIFT = 30;                    // 点を指より上にずらす最小量(px)
+  var lifted = false;               // 動かし始めたか（動かすまで位置を変えない）
+
+  function setMarkFrom(e){
+    var r = frame.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    mX = clamp((e.clientX - r.left + grabDX) / r.width * 100, 0, 100);
+    mY = clamp((e.clientY - r.top  + grabDY) / r.height * 100, 0, 100);
+    applyMarker();
   }
   function startImage(e){
-    // マーカー上でのpointerdownは startMarker が捕まえる（stopPropagation済）
-    dragMode = 'image'; frame.classList.add('dragging');
     activePointerId = e.pointerId;
+    // ★矢印を動かすのは「矢印そのものを掴んだとき」だけ。
+    //   写真のどこを触っても矢印が飛んでくる作りにしたら、
+    //   ①写真の位置調整ができなくなり ②矢印が必ず指の下に入って見えなくなった。
+    //   掴む場所を限れば、写真のドラッグ（上下の位置決め）はそのまま残る。
+    var onMark = markerOn.checked && e.target &&
+      (e.target.classList.contains('lead-hit') || e.target.closest('.lead-lab'));
+    if (onMark){
+      dragMode = 'marker';
+      // ★持ち上げるのは「点そのものを掴んだとき」だけ。
+      //   枠(ラベル)を掴んだときは、点は指から離れた場所にあって既に見えている。
+      //   それも持ち上げると、横に少し動かしただけで点が30px飛び上がり、
+      //   指していた場所がずれる。案内文は「枠をつまんで動かせます」と書いてあるので、
+      //   普通に操作した人が必ず踏む。
+      grabbedDot = !!(e.target.classList && e.target.classList.contains('lead-hit'));
+      var r = frame.getBoundingClientRect();
+      var dotX = r.width  * mX / 100, dotY = r.height * mY / 100;
+      grabDX = dotX - (e.clientX - r.left);
+      grabDY = dotY - (e.clientY - r.top);
+      lifted = false;
+      startCX = e.clientX; startCY = e.clientY;
+      marker.classList.add('grabbing');
+      try{ frame.setPointerCapture(e.pointerId); }catch(_){}
+      // ★掴んだだけでは動かさない。
+      //   押した瞬間に位置を書き換えると、触っただけで目印がずれ、
+      //   左右の指定まで勝手に戻ってしまう。動かし始めてから初めて追従させる。
+      e.preventDefault();
+      return;
+    }
+    dragMode = 'image'; frame.classList.add('dragging');
     try{ frame.setPointerCapture(e.pointerId); }catch(_){}
     startCX = e.clientX; startCY = e.clientY; startA = posX; startB = posY;
     e.preventDefault();
@@ -4367,14 +5484,23 @@ const safePhoto = u => {
     var r = frame.getBoundingClientRect();
     var fw = r.width, fh = r.height;
     if (dragMode === 'marker'){
-      var dx = ((e.clientX - startCX) / fw) * 100;
-      var dy = ((e.clientY - startCY) / fh) * 100;
-      mX = clamp(startA + dx, 0, 100);
-      mY = clamp(startB + dy, 0, 100);
-      applyMarker();
+      // 指が実際に動き出してから追従を始める（触っただけでは動かさない）
+      if (!lifted){
+        if (Math.abs(e.clientX - startCX) < 4 && Math.abs(e.clientY - startCY) < 4) return;
+        lifted = true;
+        mS = '';                                  // 動かし始めたら左右の指定は自動に戻す
+        if (grabbedDot && grabDY > -LIFT) grabDY = -LIFT;   // 点を掴んだときだけ、指の下に隠れないよう持ち上げる
+      }
+      setMarkFrom(e);                              // 指のある場所を指す（ずれを積み上げない）
     } else {
+      // ★比べる相手は「1」ではなく「枠の縦横比」。
+      //   枠を正方形から4:3に変えたとき、ここを1のままにしていたため、
+      //   縦横比が1.0〜1.33の写真（正方形に近いもの）は、はみ出し量が縦横とも0になり、
+      //   指でいくらドラッグしても1ミリも動かなかった。エラーは出ないので
+      //   「壊れている」と気づけず、投稿者は諦めるだけになる。
+      var frameRatio = fh > 0 ? (fw / fh) : 1;
       var dispW, dispH;
-      if (imgRatio >= 1){ dispH = fh; dispW = fh * imgRatio; }
+      if (imgRatio >= frameRatio){ dispH = fh; dispW = fh * imgRatio; }
       else { dispW = fw; dispH = fw / imgRatio; }
       var overX = Math.max(0, dispW - fw);
       var overY = Math.max(0, dispH - fh);
@@ -4389,14 +5515,13 @@ const safePhoto = u => {
   function end(e){
     if (e && e.pointerId !== activePointerId && activePointerId !== null) return;
     dragMode = null; activePointerId = null;
+    grabDX = 0; grabDY = 0; lifted = false;
     frame.classList.remove('dragging');
     marker.classList.remove('dragging');
+    marker.classList.remove('grabbing');
   }
   // 要素単位にbind（スライダー等への干渉なし。pointercapture でフレーム外まで追従）
-  marker.addEventListener('pointerdown', startMarker);
-  marker.addEventListener('pointermove', move);
-  marker.addEventListener('pointerup', end);
-  marker.addEventListener('pointercancel', end);
+  // 矢印も写真も frame 側で受ける（掴んだ相手は startImage が e.target で判定する）
   frame.addEventListener('pointerdown', startImage);
   frame.addEventListener('pointermove', move);
   frame.addEventListener('pointerup', end);
@@ -4524,7 +5649,10 @@ const safePhoto = u => {
     var prof = c.profiles || {};
     var name = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
     var av = document.createElement('span'); av.className = 'c-av';
-    if (prof.avatar_url){ av.innerHTML = '<img src="'+escHtml(prof.avatar_url)+'" alt="">'; }
+    // ★コメント欄のアイコンも safePhoto を通す。ここが素通しだと、
+    //   コメントを1件書くだけで、そのレシピを開いた全員の情報を外部サーバーへ送れてしまう。
+    var avSrc = safePhoto(prof.avatar_url);
+    if (avSrc){ av.innerHTML = '<img src="'+escHtml(avSrc)+'" alt="">'; }
     else { av.textContent = initial(name); }
     var main = document.createElement('div'); main.className = 'c-main';
     var head = '<div class="c-head"><span class="c-name" data-uid="'+escHtml(prof.user_id||'')+'">'+escHtml(name)+'</span>'
@@ -4594,7 +5722,10 @@ const safePhoto = u => {
     var prof = c.profiles || {};
     var name = (prof.display_name||'').trim() || prof.user_id || 'ユーザー';
     var av = document.createElement('span'); av.className = 'c-av';
-    if (prof.avatar_url){ av.innerHTML = '<img src="'+escHtml(prof.avatar_url)+'" alt="">'; }
+    // ★コメント欄のアイコンも safePhoto を通す。ここが素通しだと、
+    //   コメントを1件書くだけで、そのレシピを開いた全員の情報を外部サーバーへ送れてしまう。
+    var avSrc = safePhoto(prof.avatar_url);
+    if (avSrc){ av.innerHTML = '<img src="'+escHtml(avSrc)+'" alt="">'; }
     else { av.textContent = initial(name); }
     var main = document.createElement('div'); main.className = 'c-main';
     var head = '<div class="c-head"><span class="c-name" data-uid="'+escHtml(prof.user_id||'')+'">'+escHtml(name)+'</span>'
