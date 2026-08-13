@@ -1117,8 +1117,22 @@ body{background-image:none}
 .howto-cap{color:#fff;font-size:.86rem;font-weight:700;line-height:1.5;text-align:center;
   margin:0 0 10px;max-width:520px}
 .howto-cap span{display:block;font-weight:400;font-size:.76rem;color:#B9BFC8;margin-top:3px}
-.howto-slide img{max-width:100%;max-height:calc(100vh - 220px);width:auto;height:auto;
-  border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.5);display:block;background:#fff}
+/* ★画像が届くまでの入れ物。
+   これが無いと、読み込みが間に合わないスライドが真っ白のまま出て、
+   利用者には「壊れている」としか見えない（実際にそう報告を受けた）。
+   場所を先に確保し、読み込み中であることを文字で伝える。 */
+.howto-shot{position:relative;display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:min(58vh, 420px);max-height:calc(100vh - 220px);
+  border-radius:12px;overflow:hidden;background:rgba(255,255,255,.07)}
+.howto-shot::after{content:"読み込み中…";position:absolute;z-index:0;
+  color:#C4CAD3;font-size:.78rem;letter-spacing:.04em}
+.howto-shot.ready{background:none;min-height:0}
+.howto-shot.ready::after{content:none}
+.howto-slide img{position:relative;z-index:1;
+  max-width:100%;max-height:calc(100vh - 220px);width:auto;height:auto;
+  border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.5);display:block;background:#fff;
+  opacity:0;transition:opacity .18s ease}
+.howto-shot.ready img{opacity:1}
 .howto-foot{flex:none;display:flex;align-items:center;justify-content:center;gap:7px;
   padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px))}
 .howto-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.32)}
@@ -1128,6 +1142,14 @@ body{background-image:none}
   cursor:pointer;display:none}
 @media(min-width:641px){ .howto-nav{display:block} .howto-nav.prev{left:12px} .howto-nav.next{right:12px} }
 /* ===================== HOWTO:END ===================== */
+
+/* ===================== BRANDHOME:START =====================
+   上部の「塗装レシピ録」を押したらトップへ戻る。
+   戻すときは、このCSSと <script> の "BRANDHOME:" と、
+   #brandHome の role/tabindex を消せばよい。 */
+#brandHome{cursor:pointer; -webkit-tap-highlight-color:transparent}
+#brandHome:active{opacity:.6}
+/* ===================== BRANDHOME:END ===================== */
 
 /* ===================== NODIVIDER:START =====================
    【試験中】カードの中の工程（サフ／本塗装／スミ入れ…）の間の区切り線を消す。
@@ -1206,7 +1228,7 @@ window.PAINTLOG_ASSET_EXPECT = {
 <!-- v2: モバイル用 ❌ バー（メインへ戻る。三本線の代わり）。空なら確認なし／内容ありはダイアログ -->
 <header class="l-topbar">
   <button class="l-close" id="lClose" aria-label="閉じる" onclick="exitEditor()">×</button>
-  <div class="lt-brand-textword">
+  <div class="lt-brand-textword" id="brandHome" role="button" tabindex="0" title="トップへ戻る">
     <div class="b-title">塗装レシピ録</div>
     <div class="b-sub">Plamo-Paint</div>
   </div>
@@ -5016,6 +5038,44 @@ const safePhoto = u => {
 </script>
 <!-- STEP2:END -->
 
+<!-- BRANDHOME:START — 上部の「塗装レシピ録」でトップへ戻る。戻すときはこの<script>とCSSの "BRANDHOME:" を消すだけ -->
+<script>
+(function(){
+  // 投稿を作りかけのときに黙って移動すると、書いた内容が消える。
+  // 押せなくする案もあったが、押しても何も起きない部品は「壊れている」と見えるので、
+  // 確認をはさんで本人に決めてもらう形にした（❌ボタンと同じ考え方）。
+  function isEditingWithContent(){
+    try {
+      var em = document.getElementById("editMode");
+      if (!em || em.style.display === "none") return false;
+      return typeof editorHasContent === "function" ? !!editorHasContent() : false;
+    } catch (_) { return false; }
+  }
+  function goHome(e){
+    if (isEditingWithContent()){
+      if (!confirm("作りかけの投稿があります。\n保存していない内容は失われます。\n\nトップへ戻りますか？")){
+        if (e) e.preventDefault();
+        return;
+      }
+    }
+    if (e) e.preventDefault();
+    location.href = "/index.html";
+  }
+  var el = document.getElementById("brandHome");
+  if (el){
+    el.addEventListener("click", goHome);
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); goHome(); }
+    });
+  }
+  // ★PCの左サイドバーのロゴは元から /index.html へのリンクだが、
+  //   作りかけでも確認なしで飛んでしまう。同じ確認を通す。
+  var side = document.querySelector("a.sb-logo");
+  if (side) side.addEventListener("click", goHome);
+})();
+</script>
+<!-- BRANDHOME:END -->
+
 <!-- HOWTO:START — 投稿の作り方（画面写真）。戻すときはこのブロックとCSSの "HOWTO:" を消すだけ -->
 <div class="howto-ov" id="howtoOv" role="dialog" aria-modal="true" aria-label="投稿の作り方">
   <div class="howto-head">
@@ -5054,11 +5114,23 @@ const safePhoto = u => {
     STEPS.forEach(function(st, i){
       var sl = document.createElement("div");
       sl.className = "howto-slide";
+      // ★遅延読み込みにしない。この5枚は「開いたときに初めて」組み立てるので、
+      //   開くまでは通信が発生しない。一方 loading="lazy" にすると、横スクロールの
+      //   箱の中では画面外扱いのまま読み込まれず、白いままになる。
       sl.innerHTML = '<p class="howto-cap">' + st.t + '<span>' + st.s + '</span></p>'
-        // ★遅延読み込みにしない。この5枚は「開いたときに初めて」組み立てるので、
-        //   開くまでは通信が発生しない。一方 loading="lazy" にすると、横スクロールの
-        //   箱の中では画面外扱いのまま読み込まれず、白いままになる。
-        + '<img src="' + st.img + '" alt="手順' + (i+1) + '" decoding="async">';
+        + '<span class="howto-shot">'
+        + '<img src="' + st.img + '" alt="手順' + (i+1) + '" decoding="async">'
+        + '</span>';
+      // 届いたら「読み込み中」を消して絵を出す。
+      // 失敗したときも入れ物を消さない（真っ白より、何か出ている方が状況が分かる）
+      var shot = sl.querySelector(".howto-shot"), im = sl.querySelector("img");
+      var done = function(){ shot.classList.add("ready"); };
+      if (im.complete && im.naturalWidth) done();
+      else { im.addEventListener("load", done); im.addEventListener("error", function(){
+        shot.classList.add("ready");
+        shot.insertAdjacentHTML("beforeend",
+          '<span style="position:absolute;color:#C4CAD3;font-size:.78rem">画像を読み込めませんでした</span>');
+      }); }
       track.appendChild(sl);
       var d = document.createElement("span");
       d.className = "howto-dot" + (i === 0 ? " on" : "");
