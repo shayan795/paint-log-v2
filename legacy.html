@@ -1155,6 +1155,30 @@ body{background-image:none}
 #brandHome:active{opacity:.6}
 /* ===================== BRANDHOME:END ===================== */
 
+/* ===================== XBTN:START =====================
+   ×を文字で描いている丸ボタンの中央そろえ。
+   ★line-height だけで中央を作ると、書体・文字の大きさ・端末の違いで簡単にずれる。
+     実際に「丸と×がずれている」という報告を複数の場所で受けた
+     （写真の削除ボタン → 作り方の閉じる → 画像拡大の閉じる）。
+     1つずつ直すと必ず取りこぼすので、同じ作りのものをまとめて指定する。
+   ★位置の指定（top/right など）はここでは触らない。中央そろえだけを足す。 */
+.zoomlb .zoomclose,
+.thumb-del,
+.rowphoto-del,
+.vcard-close,
+.proc-panel .pp-del,
+.l-close,
+.l-topbar .l-close,
+.howto-close{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  line-height:1 !important;
+  text-align:center;
+}
+/* ===================== XBTN:END ===================== */
+
 /* ===================== NODIVIDER:START =====================
    【試験中】カードの中の工程（サフ／本塗装／スミ入れ…）の間の区切り線を消す。
    戻すときは、このブロックを丸ごと削除するだけでよい。他は一切触っていない。
